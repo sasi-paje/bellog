@@ -1,0 +1,477 @@
+import { supabase, getEnvironment, TrxFiscalInvoice, RefFiscalInvoiceStatus, RefFiscalReceiptStatus, RefFiscalNfdStatus, RefFiscalTotalStatus, RelRouteInvoice } from '../lib/supabase'
+
+// Extended invoice type
+export interface FiscalInvoiceWithDetails extends TrxFiscalInvoice {
+  status?: RefFiscalInvoiceStatus
+  receipt_status?: RefFiscalReceiptStatus
+  nfd_status?: RefFiscalNfdStatus
+  total_status?: RefFiscalTotalStatus
+}
+
+export interface InvoiceListItem {
+  id: string
+  invoice_number: string
+  serie: string
+  value: number
+  weight: number
+  volume: number
+  issue_date: string
+  status: string
+  status_description: string
+  route_number?: string
+  supplier_name?: string
+  destination_name?: string
+  is_active: boolean
+}
+
+export interface CreateInvoiceDTO {
+  invoice_number?: string
+  serie?: string
+  value?: number
+  weight?: number
+  volume?: number
+  issue_date?: string
+}
+
+export interface UpdateInvoiceDTO extends Partial<CreateInvoiceDTO> {
+  id_fiscal_invoice_status?: string
+  id_receipt_status?: string
+  id_nfd_status?: string
+  id_total_status?: string
+}
+
+// Fiscal Invoice Service
+export const fiscalInvoiceService = {
+  // List all invoices with route and destination info
+  async list(params?: {
+    search?: string
+    isActive?: boolean
+    idRoute?: string
+    showCancelled?: boolean
+    page?: number
+    limit?: number
+  }): Promise<{ data: InvoiceListItem[]; total: number }> {
+    const { search, isActive, showCancelled = false, page = 1, limit = 20 } = params || {}
+    const isTest = getEnvironment() !== 'production'
+
+    // Use fallback method with separate queries
+    return this.listFallback(params)
+  },
+
+  // Fallback list method without embedded selects
+  async listFallback(params?: {
+    search?: string
+    isActive?: boolean
+    showCancelled?: boolean
+    page?: number
+    limit?: number
+  }): Promise<{ data: InvoiceListItem[]; total: number }> {
+    const { search, isActive, showCancelled = false, page = 1, limit = 20 } = params || {}
+    const isTest = getEnvironment() !== 'production'
+    console.log('[listFallback] isTest:', isTest)
+
+    let query = supabase
+      .from('trx_fiscal_invoice')
+      .select('*', { count: 'exact' })
+      .eq('is_test', isTest)
+
+    if (isActive !== undefined && !showCancelled) {
+      query = query.eq('is_active', isActive)
+    }
+
+    if (search) {
+      query = query.or(`invoice_number.ilike.%${search}%,serie.ilike.%${search}%`)
+    }
+
+    const offset = (page - 1) * limit
+    const limitEnd = offset + limit - 1
+    query = query.range(offset, limitEnd).order('created_at', { ascending: false })
+
+    const { data: invoices, error, count } = await query
+    console.log('[listFallback] invoices response:', { count: invoices?.length, error })
+    if (error) throw new Error(error.message)
+    if (!invoices || invoices.length === 0) {
+      return { data: [], total: count || 0 }
+    }
+
+    // Log first invoice to see structure
+    console.log('[listFallback] Sample invoice:', JSON.stringify(invoices[0], null, 2))
+
+    if (isActive !== undefined && !showCancelled) {
+      query = query.eq('is_active', isActive)
+    }
+
+    if (search) {
+      query = query.or(`invoice_number.ilike.%${search}%,serie.ilike.%${search}%`)
+    }
+
+    const offset = (page - 1) * limit
+    const limitEnd = offset + limit - 1
+    query = query.range(offset, limitEnd).order('created_at', { ascending: false })
+
+    const { data: invoices, error, count } = await query
+    if (error) throw new Error(error.message)
+    if (!invoices || invoices.length === 0) {
+      return { data: [], total: count || 0 }
+    }
+
+    // Get supplier company IDs
+    const supplierIds = [...new Set(invoices.map(i => String(i.id_supplier_company)).filter(Boolean))]
+    console.log('[listFallback] supplierIds:', supplierIds)
+    let supplierCompanies: { id: string; trade_name: string; legal_name: string }[] = []
+    if (supplierIds.length > 0) {
+      const { data, error: err } = await supabase
+        .from('master_person_company')
+        .select('id, trade_name, legal_name')
+        .in('id', supplierIds)
+        .eq('is_test', isTest)
+      console.log('[listFallback] suppliers response:', { count: data?.length, error: err })
+      if (err) console.error('[listFallback] Error fetching suppliers:', err)
+      supplierCompanies = data || []
+    }
+
+    // Get destination (customer) company IDs
+    const destCompanyIds = [...new Set(invoices.map(i => String(i.id_customer_company)).filter(Boolean))]
+    console.log('[listFallback] destCompanyIds:', destCompanyIds)
+    let destCompanies: { id: string; trade_name: string; legal_name: string }[] = []
+    if (destCompanyIds.length > 0) {
+      const { data, error: err } = await supabase
+        .from('master_person_company')
+        .select('id, trade_name, legal_name')
+        .in('id', destCompanyIds)
+        .eq('is_test', isTest)
+      console.log('[listFallback] destinations response:', { count: data?.length, error: err })
+      if (err) console.error('[listFallback] Error fetching destinations:', err)
+      destCompanies = data || []
+    }
+
+    // Get invoice IDs for route assignments
+    const invoiceIds = invoices.map(i => i.id)
+    let routeAssignments: { id_fiscal_invoice: string; id_route: string }[] = []
+    if (invoiceIds.length > 0) {
+      const { data, error: err } = await supabase
+        .from('rel_route_invoice')
+        .select('id_route, id_fiscal_invoice')
+        .in('id_fiscal_invoice', invoiceIds)
+        .eq('is_test', isTest)
+        .eq('is_active', true)
+      if (err) console.error('[listFallback] Error fetching route assignments:', err)
+      routeAssignments = data || []
+    }
+
+    const routeIds = [...new Set(routeAssignments.map(a => a.id_route).filter(Boolean))]
+    let routes: { id: string; route_number: string }[] = []
+    if (routeIds.length > 0) {
+      const { data, error: err } = await supabase
+        .from('trx_route')
+        .select('id, route_number')
+        .in('id', routeIds)
+        .eq('is_test', isTest)
+      if (err) console.error('[listFallback] Error fetching routes:', err)
+      routes = data || []
+    }
+
+    const result: InvoiceListItem[] = invoices.map(invoice => {
+      const assignment = routeAssignments.find(a => a.id_fiscal_invoice === invoice.id)
+      const route = routes.find(r => r.id === assignment?.id_route)
+      const supplier = supplierCompanies.find(c => c.id === String(invoice.id_supplier_company))
+      const destCompany = destCompanies.find(c => c.id === String(invoice.id_customer_company))
+
+      const supplierName = supplier?.trade_name ?? supplier?.legal_name ?? '-'
+      const destName = destCompany?.trade_name ?? destCompany?.legal_name ?? '-'
+      console.log('[listFallback] Mapping invoice:', invoice.id, { supplierName, destName, id_supplier_company: invoice.id_supplier_company, id_customer_company: invoice.id_customer_company })
+
+      return {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number || '',
+        serie: invoice.invoice_series || '',
+        value: Number(invoice.invoice_amount) || 0,
+        weight: Number(invoice.gross_weight) || 0,
+        volume: invoice.box_quantity || 0,
+        issue_date: invoice.invoice_issue_date || '',
+        status: String(invoice.id_status) || '',
+        status_description: '',
+        route_number: route?.route_number || undefined,
+        supplier_name: supplier?.trade_name ?? supplier?.legal_name,
+        destination_name: destCompany?.trade_name ?? destCompany?.legal_name,
+        is_active: invoice.is_active,
+      }
+    })
+
+    return { data: result, total: count || 0 }
+  },
+
+  // List invoices not assigned to any route
+  async listUnassigned(params?: {
+    search?: string
+    page?: number
+    limit?: number
+  }): Promise<{ data: InvoiceListItem[]; total: number }> {
+    const { search, page = 1, limit = 20 } = params || {}
+    const isTest = getEnvironment() !== 'production'
+
+    // Get invoices that are NOT in an active rel_route_invoice
+    let query = supabase
+      .from('trx_fiscal_invoice')
+      .select('*', { count: 'exact' })
+      .eq('is_test', isTest)
+      .eq('is_active', true)
+
+    if (search) {
+      query = query.or(`invoice_number.ilike.%${search}%,serie.ilike.%${search}%`)
+    }
+
+    const offset = (page - 1) * limit
+    const limitEnd = offset + limit - 1
+    query = query.range(offset, limitEnd).order('created_at', { ascending: false })
+
+    const { data: invoices, error, count } = await query
+
+    if (error) throw new Error(error.message)
+    if (!invoices || invoices.length === 0) {
+      return { data: [], total: count || 0 }
+    }
+
+    // Get active assignments
+    const invoiceIds = invoices.map(i => i.id)
+
+    // Handle empty array case
+    if (invoiceIds.length === 0) {
+      return { data: [], total: 0 }
+    }
+
+    const { data: activeAssignments } = await supabase
+      .from('rel_route_invoice')
+      .select('id_invoice')
+      .in('id_invoice', invoiceIds)
+      .eq('is_test', isTest)
+      .eq('is_active', true)
+
+    const assignedInvoiceIds = new Set(activeAssignments?.map(a => a.id_invoice) || [])
+
+    // Filter out assigned invoices
+    const unassignedInvoices = invoices.filter(i => !assignedInvoiceIds.has(i.id))
+
+    // Get status data
+    const statusIds = [...new Set(unassignedInvoices.map(i => i.id_status).filter(Boolean))]
+    const { data: statuses } = await supabase
+      .from('ref_fiscal_invoice_status')
+      .select('*')
+      .in('id', statusIds)
+      .eq('is_test', isTest)
+
+    const result: InvoiceListItem[] = unassignedInvoices.map(invoice => {
+      const status = statuses?.find(s => s.id === invoice.id_status)
+      return {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number || '',
+        serie: invoice.invoice_series || '',
+        value: Number(invoice.invoice_amount) || 0,
+        weight: Number(invoice.gross_weight) || 0,
+        volume: invoice.box_quantity || 0,
+        issue_date: invoice.invoice_issue_date || '',
+        status: String(invoice.id_status) || '',
+        status_description: status?.description || '',
+        is_active: invoice.is_active,
+      }
+    })
+
+    return { data: result, total: result.length }
+  },
+
+  // Get invoice by ID
+  async getById(id: string): Promise<FiscalInvoiceWithDetails | null> {
+    const isTest = getEnvironment() !== 'production'
+
+    const { data: invoice, error } = await supabase
+      .from('trx_fiscal_invoice')
+      .select('*')
+      .eq('id', id)
+      .eq('is_test', isTest)
+      .single()
+
+    if (error) throw new Error(error.message)
+    if (!invoice) return null
+
+    // Get related status data
+    const [status, receiptStatus, nfdStatus, totalStatus] = await Promise.all([
+      invoice.id_status ? supabase.from('ref_fiscal_invoice_status').select('*').eq('id', invoice.id_status).eq('is_test', isTest).single() : Promise.resolve({ data: null }),
+      invoice.id_receipt_status ? supabase.from('ref_fiscal_receipt_status').select('*').eq('id', invoice.id_receipt_status).eq('is_test', isTest).single() : Promise.resolve({ data: null }),
+      invoice.id_nfd_status ? supabase.from('ref_fiscal_nfd_status').select('*').eq('id', invoice.id_nfd_status).eq('is_test', isTest).single() : Promise.resolve({ data: null }),
+      invoice.id_total_status ? supabase.from('ref_fiscal_total_status').select('*').eq('id', invoice.id_total_status).eq('is_test', isTest).single() : Promise.resolve({ data: null }),
+    ])
+
+    return {
+      ...invoice,
+      status: status.data || undefined,
+      receipt_status: receiptStatus.data || undefined,
+      nfd_status: nfdStatus.data || undefined,
+      total_status: totalStatus.data || undefined,
+    }
+  },
+
+  // Get invoices assigned to a specific route
+  async getByRouteId(routeId: string): Promise<InvoiceListItem[]> {
+    const isTest = getEnvironment() !== 'production'
+
+    const { data: assignments, error } = await supabase
+      .from('rel_route_invoice')
+      .select('id_invoice')
+      .eq('id_route', routeId)
+      .eq('is_test', isTest)
+      .eq('is_active', true)
+
+    if (error) throw new Error(error.message)
+    if (!assignments || assignments.length === 0) return []
+
+    const invoiceIds = assignments.map(a => a.id_invoice)
+
+    const { data: invoices } = await supabase
+      .from('trx_fiscal_invoice')
+      .select('*')
+      .in('id', invoiceIds)
+      .eq('is_test', isTest)
+
+    // Get status data
+    const statusIds = [...new Set(invoices?.map(i => i.id_status).filter(Boolean) || [])]
+    const { data: statuses } = await supabase
+      .from('ref_fiscal_invoice_status')
+      .select('*')
+      .in('id', statusIds)
+      .eq('is_test', isTest)
+
+    return (invoices || []).map(invoice => {
+      const status = statuses?.find(s => s.id === invoice.id_status)
+      return {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number || '',
+        serie: invoice.invoice_series || '',
+        value: Number(invoice.invoice_amount) || 0,
+        weight: Number(invoice.gross_weight) || 0,
+        volume: invoice.box_quantity || 0,
+        issue_date: invoice.invoice_issue_date || '',
+        status: String(invoice.id_status) || '',
+        status_description: status?.description || '',
+        is_active: invoice.is_active,
+      }
+    })
+  },
+
+  // Get reference data
+  async getReferenceData() {
+    const isTest = getEnvironment() !== 'production'
+
+    const [statuses, receiptStatuses, nfdStatuses, totalStatuses] = await Promise.all([
+      supabase.from('ref_fiscal_invoice_status').select('*').eq('is_test', isTest).eq('is_active', true).order('description'),
+      supabase.from('ref_fiscal_receipt_status').select('*').eq('is_test', isTest).eq('is_active', true).order('description'),
+      supabase.from('ref_fiscal_nfd_status').select('*').eq('is_test', isTest).eq('is_active', true).order('description'),
+      supabase.from('ref_fiscal_total_status').select('*').eq('is_test', isTest).eq('is_active', true).order('description'),
+    ])
+
+    return {
+      statuses: statuses.data || [],
+      receiptStatuses: receiptStatuses.data || [],
+      nfdStatuses: nfdStatuses.data || [],
+      totalStatuses: totalStatuses.data || [],
+    }
+  },
+
+  // Create invoice from modal form
+  // Note: The trx_fiscal_invoice table only has columns: id, id_route, id_fiscal_invoice_status, id_receipt_status,
+  // id_nfd_status, id_total_status, invoice_number, serie, value, weight, volume, issue_date,
+  // is_active, is_test, created_at, updated_at
+  // Supplier and destination info cannot be stored directly - they would need separate tracking
+  async createFromForm(data: {
+    invoice_number: string
+    quantity: number
+    delivery_location: string
+    supplier: string
+    net_weight: number
+    gross_weight: number
+  }): Promise<InvoiceListItem> {
+    const isTest = getEnvironment() !== 'production'
+
+    const insertData = {
+      invoice_number: data.invoice_number,
+      box_quantity: data.quantity,
+      gross_weight: data.net_weight,
+      invoice_amount: 0,
+      id_supplier_company: data.supplier ? parseInt(data.supplier) : null,
+      id_customer_company: data.delivery_location ? parseInt(data.delivery_location) : null,
+      is_test: isTest,
+      is_active: true,
+    }
+
+    // First try a simple insert without .select() to see if it works
+    const { data: insertResult, error: insertError } = await supabase
+      .from('trx_fiscal_invoice')
+      .insert(insertData)
+
+    if (insertError) {
+      console.error('[fiscalInvoiceService.createFromForm] Insert error:', insertError)
+      throw new Error(insertError.message)
+    }
+
+    // Now fetch the created invoice
+    const { data: invoices, error } = await supabase
+      .from('trx_fiscal_invoice')
+      .select('*')
+      .eq('invoice_number', data.invoice_number)
+      .eq('is_test', isTest)
+      .limit(1)
+
+    if (error) {
+      console.error('[fiscalInvoiceService.createFromForm] Fetch error:', error)
+      throw new Error(error.message)
+    }
+
+    if (!invoices || invoices.length === 0) {
+      console.error('[fiscalInvoiceService.createFromForm] No invoice found after insert')
+      throw new Error('Falha ao criar nota: nota não encontrada após inserção')
+    }
+
+    const invoice = invoices[0]
+
+    // Fetch supplier and destination companies for the response
+    let supplierName: string | undefined
+    let destName: string | undefined
+
+    if (invoice.id_supplier_company) {
+      const { data: supplierData } = await supabase
+        .from('master_person_company')
+        .select('trade_name, legal_name')
+        .eq('id', String(invoice.id_supplier_company))
+        .single()
+      if (supplierData) {
+        supplierName = supplierData.trade_name || supplierData.legal_name
+      }
+    }
+
+    if (invoice.id_customer_company) {
+      const { data: destData } = await supabase
+        .from('master_person_company')
+        .select('trade_name, legal_name')
+        .eq('id', String(invoice.id_customer_company))
+        .single()
+      if (destData) {
+        destName = destData.trade_name || destData.legal_name
+      }
+    }
+
+    return {
+      id: String(invoice.id),
+      invoice_number: invoice.invoice_number || '',
+      serie: invoice.invoice_series || '',
+      value: Number(invoice.invoice_amount) || 0,
+      weight: Number(invoice.gross_weight) || 0,
+      volume: invoice.box_quantity || 0,
+      issue_date: invoice.invoice_issue_date || '',
+      status: String(invoice.id_status) || '',
+      status_description: '',
+      route_number: undefined,
+      supplier_name: supplierName,
+      destination_name: destName,
+      is_active: invoice.is_active,
+    }
+  },
+}

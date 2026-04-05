@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ícones SVG herdam cor do texto corretamente */
+svg[class*="w-"] path,
+svg[class*="h-"] path,
+.icon path {
+  fill: currentColor !important;
+}
+
+svg[class*="w-"] g,
+svg[class*="h-"] g {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}

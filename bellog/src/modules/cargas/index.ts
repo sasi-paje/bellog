@@ -1,0 +1,1 @@
+export { CargasPage } from './CargasPage'

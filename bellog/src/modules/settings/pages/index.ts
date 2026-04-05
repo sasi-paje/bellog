@@ -1,0 +1,8 @@
+export { VehiclePage } from './VehiclePage'
+export { SupplierPage } from './SupplierPage'
+export { SettingsHomePage } from './SettingsHomePage'
+export { CargosPage } from './CargosPage'
+export { RecusasPage } from './RecusasPage'
+export { AbortadasPage } from './AbortadasPage'
+export { DestinosPage } from './DestinosPage'
+export { MotoristasPage } from './MotoristasPage'

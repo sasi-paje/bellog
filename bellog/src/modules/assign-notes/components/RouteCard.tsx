@@ -1,29 +1,11 @@
 import { useState } from 'react'
 import { AppIcon } from '../../../shared/components'
-
-interface AssignedNote {
-  id: string
-  invoice_number: string
-  peso: number
-  destination_name?: string
-}
-
-interface RouteCardData {
-  id: string
-  tipoRota: string
-  numeroRota: string
-  veiculo: string
-  capacidade: number
-  cargaAtual: number
-  notasAtribuidas: AssignedNote[]
-  isEmpty?: boolean
-  id_vehicle?: string
-  route_status?: string
-}
+import { AssignedNote, RouteCardData, DivergenceInfo } from '../types/assign-notes.types'
 
 interface RouteCardProps {
   route: RouteCardData
   routeId: string
+  divergence?: DivergenceInfo
   onDropNote?: (noteId: string, routeId: string) => void
   onRemoveNote?: (routeId: string, noteId: string, invoiceNumber: string) => void
   onCreateRoute?: () => void
@@ -38,6 +20,7 @@ interface AssignedNoteItemProps {
   routeId: string
   onRemove?: (routeId: string, noteId: string, invoiceNumber: string) => void
   onViewNote?: (note: AssignedNote) => void
+  canRemove?: boolean
 }
 
 const AssignedNoteItem = ({
@@ -45,45 +28,82 @@ const AssignedNoteItem = ({
   routeId,
   onRemove,
   onViewNote,
+  canRemove = true,
 }: AssignedNoteItemProps) => {
   const normalizedNoteId = String(note.id)
+  const fornecedor = note.supplier_name || note.fornecedor
+  const cliente = note.customer_name
+  const destino = note.destination_name
 
   return (
-    <div className="flex gap-2 h-[47px] items-center pl-2 pr-3 py-2 rounded-[6px] border border-[#bdbdbd] bg-white w-full">
-      <div className="flex flex-col flex-1 justify-between">
-        <div className="flex gap-2 items-center">
-          <span className="font-bold text-[14px] text-[#2a2a2a]">
+    <div className="bg-white border border-[#bdbdbd] flex gap-[8px] items-center pl-[8px] pr-[12px] py-[8px] rounded-[6px] w-full">
+      {/* Infos */}
+      <div className="flex flex-[1_0_0] flex-col h-full items-start justify-between min-w-0">
+        {/* NF + ícone abrir */}
+        <div className="flex gap-[8px] items-end">
+          <span className="font-bold text-[14px] text-[#2a2a2a] whitespace-nowrap">
             NF {note.invoice_number}
           </span>
-
           <button
             type="button"
-            className="w-4 h-4 cursor-pointer flex items-center justify-center"
+            className="flex items-center justify-center w-[16px] h-[16px] shrink-0"
             onClick={(e) => {
               e.stopPropagation()
               onViewNote?.(note)
             }}
           >
-            <AppIcon name="open_in_new" size={16} />
+            <AppIcon name="open_in_new" size={16} color="#e67c26" />
           </button>
         </div>
 
-        <span className="font-medium text-[10px] text-[#919191]">
+        {/* Peso */}
+        <span className="font-medium text-[10px] text-[#919191] whitespace-nowrap">
           {note.peso} KG
         </span>
+
+        {/* Fornecedor */}
+        {fornecedor && (
+          <span className="font-medium text-[10px] text-[#919191] whitespace-nowrap truncate max-w-full">
+            {fornecedor}
+          </span>
+        )}
+
+        {/* Cliente */}
+        {cliente && (
+          <span className="font-medium text-[10px] text-[#919191] whitespace-nowrap truncate max-w-full">
+            {cliente}
+          </span>
+        )}
+
+        {/* Destino */}
+        {destino && (
+          <span className="font-medium text-[10px] text-[#919191] whitespace-nowrap truncate max-w-full">
+            {destino}
+          </span>
+        )}
+
+        {/* Tentativa */}
+        {(note.attempt_number ?? 0) > 0 && (
+          <span className="font-semibold text-[10px] text-[#e67c26] whitespace-nowrap">
+            Tentativa {note.attempt_number}
+          </span>
+        )}
       </div>
 
-      {onRemove && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove(routeId, normalizedNoteId, note.invoice_number || '')
-          }}
-          className="w-5 h-5 flex items-center justify-center hover:bg-[#fee2e2] rounded transition-colors"
-        >
-          <AppIcon name="close" size={18} className="text-[#dc2626]" />
-        </button>
+      {/* Botão remover */}
+      {onRemove && canRemove && (
+        <div className="flex flex-col h-full items-center justify-center shrink-0">
+          <button
+            type="button"
+            className="flex items-center justify-center w-[20px] h-[20px] hover:opacity-70 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove(routeId, normalizedNoteId, note.invoice_number || '')
+            }}
+          >
+            <AppIcon name="do_not_disturb_on" size={20} color="#C7392C" />
+          </button>
+        </div>
       )}
     </div>
   )
@@ -92,6 +112,7 @@ const AssignedNoteItem = ({
 export const RouteCard = ({
   route,
   routeId,
+  divergence: _divergence,
   onDropNote,
   onRemoveNote,
   onCreateRoute,
@@ -105,7 +126,10 @@ export const RouteCard = ({
   const normalizedRouteId = String(routeId || '')
   const notes = route.notasAtribuidas || []
   const isEmpty = notes.length === 0
-  const isRouteStarted = route.route_status === 'started'
+  const canEdit = route.allowsEdition === true
+  const canRemove = canEdit
+
+  const isOverCapacity = route.capacidade > 0 && route.cargaAtual > route.capacidade
 
   const capacidadePercent =
     route.capacidade > 0 ? (route.cargaAtual / route.capacidade) * 100 : 0
@@ -114,10 +138,7 @@ export const RouteCard = ({
     e.preventDefault()
     e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
-
-    if (isEmpty || !isRouteStarted) {
-      setIsDragOver(true)
-    }
+    if (canEdit) setIsDragOver(true)
   }
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -130,54 +151,41 @@ export const RouteCard = ({
     e.preventDefault()
     e.stopPropagation()
     setIsDragOver(false)
-
     const noteId = String(e.dataTransfer.getData('noteId') || '')
-
     if (!noteId || !normalizedRouteId) return
-
-    if (isEmpty || !isRouteStarted) {
-      onDropNote?.(noteId, normalizedRouteId)
-    }
+    if (canEdit) onDropNote?.(noteId, normalizedRouteId)
   }
 
   const buttonText = isTemporary ? 'Criar Rota' : 'Alterar Rota'
-  const isDisabled = isTemporary && isEmpty
+  const isLockedRoute = !isTemporary && !canEdit
+  const isDisabled = (isTemporary && isEmpty) || isLockedRoute || isOverCapacity
   const isButtonClickable = !isDisabled && !loading
-
-  const buttonStyle = isDisabled
-    ? 'bg-[#919191] cursor-not-allowed opacity-50'
-    : 'bg-[#e67c26] hover:bg-[#d06c1e]'
 
   const handleButtonClick = () => {
     if (!isButtonClickable) return
-
+    if (isOverCapacity) return
     if (isTemporary) {
       onCreateRoute?.()
       return
     }
-
     onAlterRoute?.()
   }
 
-  const handleRemoveClick = (routeId: string, noteId: string, invoiceNumber: string) => {
+  const handleRemoveClick = (rId: string, noteId: string, invoiceNumber: string) => {
     if (!onRemoveNote) return
-
-    onRemoveNote(
-      routeId,
-      noteId,
-      invoiceNumber
-    )
+    onRemoveNote(rId, noteId, invoiceNumber)
   }
 
   return (
     <div
-      className={`flex flex-col gap-2 p-2 rounded-[8px] border transition-all duration-200
-        ${isDragOver ? 'border-[#4077d9] bg-[#f0f7ff]' : 'border-[#bdbdbd] bg-white'}`}
+      className={`flex flex-col h-full p-3 rounded-[8px] border transition-all duration-200
+        ${isDragOver ? 'border-[#4077d9] bg-[#f0f7ff]' : 'border-[#e0e0e0] bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]'}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="flex gap-4 items-start justify-center w-full">
+      {/* Header: Tipo/Número + Veículo */}
+      <div className="flex gap-4 items-start justify-center w-full mb-2">
         {!isEmpty ? (
           <>
             <div className="flex flex-col flex-1 items-center">
@@ -188,47 +196,56 @@ export const RouteCard = ({
                 {route.numeroRota}
               </span>
             </div>
-
             <div className="flex flex-col flex-1 items-center">
-              <span className="font-medium text-[12px] text-[#bdbdbd]">
-                Veículo
-              </span>
-              <span className="font-semibold text-[16px] text-[#2a2a2a]">
-                {route.veiculo}
-              </span>
+              <span className="font-medium text-[12px] text-[#bdbdbd]">Veículo</span>
+              <span className="font-semibold text-[16px] text-[#2a2a2a]">{route.veiculo}</span>
             </div>
           </>
         ) : (
           <div className="flex flex-col flex-1 items-center">
-            <span className="font-medium text-[12px] text-[#bdbdbd]">
-              Veículo
-            </span>
-            <span className="font-semibold text-[16px] text-[#2a2a2a]">
-              {route.veiculo}
-            </span>
+            <span className="font-medium text-[12px] text-[#bdbdbd]">Veículo</span>
+            <span className="font-semibold text-[16px] text-[#2a2a2a]">{route.veiculo}</span>
           </div>
         )}
       </div>
 
-      <div className="flex flex-col gap-2 h-[42px] bg-white rounded-[8px]">
-        <div className="flex gap-2 items-center text-[12px]">
+      {/* Seção de carga */}
+      <div className="mb-3">
+        {/* Linha: label + peso */}
+        <div className="flex gap-2 items-center text-[12px] mb-1">
           <span className="flex-1 font-medium text-[#2b303b]">Carga</span>
-          <span className="font-bold text-[#2b303b]">
+          <span className={`font-bold ${isOverCapacity ? 'text-[#c7392c]' : 'text-[#2b303b]'}`}>
             {route.cargaAtual} kg / {route.capacidade} kg
           </span>
         </div>
 
-        <div className="flex-1 bg-[#eaecf0] rounded-[64px] overflow-hidden">
+        {/* Barra */}
+        <div className="bg-[#eaecf0] flex flex-[1_0_0] items-center overflow-clip relative rounded-[64px] w-full h-2">
           <div
-            className="h-full bg-[#e67c26] rounded-[64px] transition-all duration-300"
+            className={`h-full min-w-px rounded-[64px] transition-all duration-300 ${
+              isOverCapacity ? 'bg-[#c7392c]' : 'bg-[#e67c26]'
+            }`}
             style={{ width: `${Math.min(capacidadePercent, 100)}%` }}
           />
         </div>
+
+        {/* Mensagem de erro — igual ao Figma */}
+        {isOverCapacity && (
+          <div className="flex gap-[4px] items-center mt-1">
+            <span className="font-normal text-[12px] text-[#941c1e] whitespace-nowrap">
+              Carga máxima excedida
+            </span>
+            <div className="flex items-center shrink-0 w-[18px] h-[18px]">
+              <AppIcon name="error" size={18} color="#c7392c" />
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Área de drop */}
       {!isEmpty ? (
         <div
-          className={`flex flex-col gap-4 p-2 rounded-[4px] border-2 ${
+          className={`flex flex-col gap-2 p-[8px] rounded-[4px] border-2 min-h-[80px] max-h-[280px] overflow-y-auto mb-3 ${
             isDragOver ? 'border-[#4077d9] bg-[#f0f7ff]' : 'border-dashed border-[#bdbdbd]'
           }`}
         >
@@ -237,42 +254,32 @@ export const RouteCard = ({
               key={String(note.id)}
               note={note}
               routeId={normalizedRouteId}
-              onRemove={isRouteStarted ? undefined : handleRemoveClick}
-              onViewNote={(selectedNote) => onViewNote?.(selectedNote)}
+              onRemove={canRemove ? handleRemoveClick : undefined}
+              onViewNote={(n) => onViewNote?.(n)}
+              canRemove={canRemove}
             />
           ))}
         </div>
       ) : (
         <div
-          className={`flex flex-col gap-2 items-center justify-center p-2 rounded-[4px] border-2 transition-all duration-200 min-h-[100px]
-            ${
-              isDragOver
-                ? 'border-[#4077d9] bg-[#f0f7ff]'
-                : 'border-dashed border-[#bdbdbd]'
-            }`}
+          className={`flex flex-col gap-2 items-center justify-center p-4 rounded-[4px] border-2 min-h-[100px] mb-3 transition-all duration-200
+            ${isDragOver ? 'border-[#4077d9] bg-[#f0f7ff]' : 'border-dashed border-[#bdbdbd]'}`}
         >
           {isDragOver ? (
             <>
-              <span className="font-bold text-[12px] text-[#4077d9]">
-                Solte para adicionar
-              </span>
-              <div className="w-8 h-8">
-                <AppIcon name="add" size={32} color="#4077d9" />
-              </div>
+              <span className="font-bold text-[12px] text-[#4077d9]">Solte para adicionar</span>
+              <AppIcon name="add" size={32} color="#4077d9" />
             </>
           ) : (
             <>
-              <span className="font-bold text-[12px] text-[#e5d7bc]">
-                Arraste Notas aqui
-              </span>
-              <div className="w-8 h-8">
-                <AppIcon name="download" size={32} />
-              </div>
+              <span className="font-bold text-[12px] text-[#e5d7bc]">Arraste Notas aqui</span>
+              <AppIcon name="download" size={32} />
             </>
           )}
         </div>
       )}
 
+      {/* Botão rodapé */}
       <button
         type="button"
         onClick={(e) => {
@@ -280,10 +287,18 @@ export const RouteCard = ({
           handleButtonClick()
         }}
         disabled={!isButtonClickable}
-        className={`flex items-center justify-center h-[30px] px-2 py-[2px] rounded-[4px] ${buttonStyle} text-white font-bold text-[14px] disabled:opacity-50 transition-colors`}
+        className={`flex items-center justify-center h-[30px] px-[8px] py-[2px] rounded-[4px] text-white font-bold text-[14px] transition-colors mt-auto w-full ${
+          isLockedRoute
+            ? 'bg-[#919191] cursor-not-allowed'
+            : isDisabled
+              ? 'bg-[#919191] cursor-not-allowed'
+              : 'bg-[#e67c26] hover:bg-[#d06c1e]'
+        }`}
       >
-        {buttonText}
+        {isLockedRoute ? 'Em Andamento' : loading ? 'Salvando...' : buttonText}
       </button>
     </div>
   )
 }
+
+export default RouteCard

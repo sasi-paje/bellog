@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react'
-import { AppIcon, PageHeader, Pagination, PrimaryButton, SecondaryButton, Toggle } from '../../../shared/components'
+import { PageHeader, Pagination, Toggle } from '../../../shared/components'
+import { useToast, ToastContainer } from '../../../shared/components/Toast'
 import { DestinosTable } from '../components/DestinosTable'
 import { CompanyDrawer } from '../components/CompanyDrawer'
+import { InactivateConfirmModal } from '../components/InactivateConfirmModal'
+import { DestinosToolbar, DestinosFilterData, EMPTY_DESTINOS_FILTERS } from '../components/DestinosToolbar'
 import { useDestinations } from '../../../hooks/useDestinations'
-import { CompanyWithAddress, CompanyFormData } from '../../../services/company.service'
+import { companyService, CompanyWithAddress, CompanyFormData } from '../../../features/companies'
 
 interface DestinosPageProps {
   userName?: string
   userRole?: string
+  onLogout?: () => void
+  userEmail?: string
   onBack?: () => void
   isSidebarOpen?: boolean
   onToggleSidebar?: () => void
@@ -16,6 +21,8 @@ interface DestinosPageProps {
 export const DestinosPage = ({
   userName = 'Leon Kennedy',
   userRole = 'Usuário',
+  onLogout,
+  userEmail,
   onBack,
   isSidebarOpen = true,
   onToggleSidebar,
@@ -29,14 +36,18 @@ export const DestinosPage = ({
     createDestination,
     updateDestination,
     toggleActive,
+    groups,
+    fetchGroups,
   } = useDestinations()
+
+  const { toasts, showSuccess, showError, removeToast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [page, setPage] = useState(1)
+  const [activeFilters, setActiveFilters] = useState<DestinosFilterData>(EMPTY_DESTINOS_FILTERS)
   const limit = 20
 
-  // Calculate total pages
   const totalPages = Math.ceil(total / limit) || 1
 
   // Drawer state
@@ -45,18 +56,39 @@ export const DestinosPage = ({
   const [isEditing, setIsEditing] = useState(false)
   const [isNew, setIsNew] = useState(false)
 
-  // Fetch destinations when filters change
-  useEffect(() => {
+  // Confirm modal state (shared for activate and inactivate)
+  const [pendingAction, setPendingAction] = useState<'activate' | 'inactivate' | null>(null)
+  const [isValidating, setIsValidating] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
+
+  const refreshList = () =>
     fetchDestinations({
       search: searchTerm || undefined,
       isActive: showInactive ? undefined : true,
       page,
       limit,
+      groupId: activeFilters.groupId ? Number(activeFilters.groupId) : undefined,
+      cnpj: activeFilters.cnpj || undefined,
+      zipCode: activeFilters.zipCode || undefined,
+      street: activeFilters.street || undefined,
+      district: activeFilters.district || undefined,
     })
-  }, [searchTerm, showInactive, page])
+
+  useEffect(() => {
+    refreshList()
+  }, [searchTerm, showInactive, page, activeFilters])
+
+  useEffect(() => {
+    fetchGroups()
+  }, [])
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
+    setPage(1)
+  }
+
+  const handleFilter = (filters: DestinosFilterData) => {
+    setActiveFilters(filters)
     setPage(1)
   }
 
@@ -68,7 +100,6 @@ export const DestinosPage = ({
   }
 
   const handleRowClick = async (company: CompanyWithAddress) => {
-    // Get full company details with address
     const fullCompany = await getDestinationById(company.id)
     setSelectedCompany(fullCompany)
     setIsNew(false)
@@ -80,60 +111,61 @@ export const DestinosPage = ({
     setIsEditing(true)
   }
 
-  const handleCancelEdit = async () => {
-    if (isNew) {
-      setIsDrawerOpen(false)
-    } else {
-      // Reload company data
-      if (selectedCompany) {
-        const updated = await getDestinationById(selectedCompany.id)
-        setSelectedCompany(updated)
-      }
-    }
-    setIsEditing(false)
-  }
-
   const handleSave = async (formData: CompanyFormData) => {
-    console.log('[DestinosPage] handleSave called with:', formData)
-    try {
-      if (isNew) {
-        console.log('[DestinosPage] Creating new destination...')
-        await createDestination(formData)
-        console.log('[DestinosPage] Created successfully')
-      } else if (selectedCompany) {
-        console.log('[DestinosPage] Updating destination:', selectedCompany.id)
-        await updateDestination(selectedCompany.id, formData)
-        // Reload to get updated data
-        const updated = await getDestinationById(selectedCompany.id)
-        setSelectedCompany(updated)
-      }
-      setIsEditing(false)
-      // Refresh list
-      fetchDestinations({
-        search: searchTerm || undefined,
-        isActive: showInactive ? undefined : true,
-        page,
-        limit,
-      })
-    } catch (err) {
-      console.error('[DestinosPage] Error saving:', err)
-      throw err
+    const isEditingMode = !isNew && Boolean(selectedCompany)
+    if (isNew) {
+      await createDestination(formData)
+    } else if (selectedCompany) {
+      await updateDestination(selectedCompany.id, formData)
+      const updated = await getDestinationById(selectedCompany.id)
+      setSelectedCompany(updated)
     }
+    showSuccess(isEditingMode ? 'Destino atualizado com sucesso.' : 'Destino criado com sucesso.')
+    setIsEditing(false)
+    refreshList()
   }
 
   const handleToggleActive = async (isActive: boolean) => {
-    if (selectedCompany) {
-      await toggleActive(selectedCompany.id, isActive)
-      // Reload company
-      const updated = await getDestinationById(selectedCompany.id)
-      setSelectedCompany(updated)
-      // Refresh list
-      fetchDestinations({
-        search: searchTerm || undefined,
-        isActive: showInactive ? undefined : true,
-        page,
-        limit,
-      })
+    if (!selectedCompany) return
+
+    if (isActive) {
+      // Activation: just show confirmation
+      setPendingAction('activate')
+      return
+    }
+
+    // Inactivation: validate first, then show confirmation
+    setIsValidating(true)
+    try {
+      const { canInactivate, reason } = await companyService.canInactivateDestination(selectedCompany.id)
+      if (!canInactivate) {
+        showError(reason || 'Não é possível inativar este destino.')
+        return
+      }
+      setPendingAction('inactivate')
+    } catch (err) {
+      showError((err as Error).message || 'Erro ao validar inativação.')
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
+  const handleConfirmAction = async () => {
+    if (!selectedCompany || !pendingAction) return
+    setIsConfirming(true)
+    try {
+      const newActive = pendingAction === 'activate'
+      await toggleActive(selectedCompany.id, newActive)
+      setPendingAction(null)
+      setIsDrawerOpen(false)
+      setSelectedCompany(null)
+      refreshList()
+      showSuccess(newActive ? 'Destino ativado com sucesso.' : 'Destino inativado com sucesso.')
+    } catch (err) {
+      showError((err as Error).message || `Erro ao ${pendingAction === 'activate' ? 'ativar' : 'inativar'} destino.`)
+      setPendingAction(null)
+    } finally {
+      setIsConfirming(false)
     }
   }
 
@@ -153,53 +185,27 @@ export const DestinosPage = ({
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}
+        userEmail={userEmail}
         userRole={userRole}
+        onLogout={onLogout}
       />
 
       {/* Main Content */}
-      <div className="flex flex-col gap-4 p-4 flex-1 overflow-auto">
-        {/* Toolbar Row */}
-        <div className="flex items-center justify-between shrink-0 w-full">
-          {/* Left: Search */}
-          <div className="flex items-center">
-            {/* Search Input */}
-            <div className="bg-[#f9f9f9] border border-[#bdbdbd] flex items-center h-10 rounded-[5px] w-[526px]">
-              <div className="flex flex-1 items-center h-full px-[8px]">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Busque por uma razão social..."
-                  className="flex-1 bg-transparent outline-none text-[14px] text-[#2a2a2a]"
-                  style={{ fontFamily: 'Inter, sans-serif' }}
-                />
-              </div>
-              <div className="bg-[#e67c26] flex items-center justify-center h-full px-[8px] py-[2px] rounded-br-[4px] rounded-tr-[4px]">
-                <AppIcon name="search" size={24} className="w-6 h-6" />
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Actions */}
-          <div className="flex gap-4 items-center">
-            {/* Voltar para Configurações */}
-            <SecondaryButton
-              label="Voltar para Configurações"
-              onClick={onBack}
-            />
-
-            {/* Adicionar Novo */}
-            <PrimaryButton
-              label="Adicionar Novo"
-              icon="add_box"
-              onClick={handleAddNew}
-            />
-          </div>
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-4 gap-3">
+        {/* Toolbar Row — fixo */}
+        <div className="shrink-0">
+          <DestinosToolbar
+            initialSearch={searchTerm}
+            onSearch={handleSearch}
+            onFilter={handleFilter}
+            onBack={onBack}
+            onAddNew={handleAddNew}
+            groups={groups}
+          />
         </div>
 
-        {/* Toggle and Pagination Row */}
+        {/* Toggle and Pagination Row — fixo */}
         <div className="flex items-center justify-between shrink-0 w-full">
-          {/* Toggle Exibir Inativos */}
           <Toggle
             label="Exibir inativos"
             checked={showInactive}
@@ -208,8 +214,6 @@ export const DestinosPage = ({
               setPage(1)
             }}
           />
-
-          {/* Pagination */}
           <Pagination
             currentPage={page}
             totalPages={totalPages}
@@ -217,8 +221,8 @@ export const DestinosPage = ({
           />
         </div>
 
-        {/* Table */}
-        <div className="flex-1 w-full min-w-0">
+        {/* Table — scroll apenas aqui */}
+        <div className="flex-1 min-h-0 overflow-y-auto w-full">
           <DestinosTable
             data={destinations}
             onRowClick={handleRowClick}
@@ -233,11 +237,25 @@ export const DestinosPage = ({
         company={selectedCompany}
         isEditing={isEditing}
         isNew={isNew}
-        isLoading={loading}
+        isLoading={loading || isValidating || isConfirming}
         onSave={handleSave}
         onToggleActive={handleToggleActive}
         onEdit={handleEdit}
+        context="destination"
       />
+
+      {/* Activation / Inactivation confirmation modal */}
+      <InactivateConfirmModal
+        isOpen={pendingAction !== null}
+        action={pendingAction ?? 'inactivate'}
+        onClose={() => setPendingAction(null)}
+        onConfirm={handleConfirmAction}
+        isLoading={isConfirming}
+        companyName={selectedCompany?.trade_name || selectedCompany?.legal_name || 'este destino'}
+      />
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }

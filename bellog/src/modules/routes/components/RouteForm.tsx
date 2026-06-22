@@ -1,5 +1,4 @@
 import { FormInput, FormDropdown, MultiSelectDropdown } from '../../../shared/components'
-import { CargaMock } from '../../cargas/data/cargas.mock'
 
 interface RouteFormProps {
   data: {
@@ -19,21 +18,64 @@ interface RouteFormProps {
   }
   isEditing?: boolean
   onChange?: (field: string, value: any) => void
+  statusOptions: { value: string; label: string }[]
+  deliveryStatusOptions: { value: string; label: string }[]
+  vehicleOptions: { value: string; label: string; carga?: string }[]
+  driverOptions: { value: string; label: string; color?: string }[]
+  helperOptions: { value: string; label: string; color?: string }[]
+  responsibleOptions: { value: string; label: string; color?: string }[]
+  routeTypeOptions: { value: string; label: string }[]
 }
 
 const PRIMARY_DARK = '#161a36'
+const TEXT_DARK = '#2a2a2a'
 const TEXT_LIGHT75 = '#2a2a2a'
 const TEXT_LIGHT25 = '#919191'
 const SECONDARY_DEFAULT = '#e67c26'
 const PRIMARY_DEFAULT = '#4077d9'
 
+// Helper para formatar data para exibição (YYYY-MM-DD -> DD/MM/YYYY)
+const formatDateDisplay = (dateStr: string | undefined | null): string => {
+  if (!dateStr) return ''
+  try {
+    // Se já está em DD/MM/YYYY, retornar direto
+    if (dateStr.includes('/')) return dateStr
+    // Converter de YYYY-MM-DD para DD/MM/YYYY
+    const parts = dateStr.split('-')
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`
+    }
+    return dateStr
+  } catch {
+    return dateStr
+  }
+}
+
 // Campos que não podem ser editados (read-only)
 const READONLY_FIELDS = ['destinos', 'fimRota', 'cargaMaxima']
 
-export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps) => {
+export const RouteForm = ({
+  data,
+  isEditing = false,
+  onChange,
+  statusOptions,
+  deliveryStatusOptions,
+  vehicleOptions,
+  driverOptions,
+  helperOptions,
+  responsibleOptions,
+  routeTypeOptions,
+}: RouteFormProps) => {
   const handleChange = (field: string, value: any) => {
     if (onChange && !READONLY_FIELDS.includes(field)) {
       onChange(field, value)
+      // Sincronizar carga máxima quando mudar a placa do veículo
+      if (field === 'placaVeiculo') {
+        const vehicleData = vehicleOptions.find(v => v.value === value)
+        if (vehicleData) {
+          onChange('cargaMaxima', vehicleData.carga || '')
+        }
+      }
     }
   }
 
@@ -66,49 +108,37 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
         </h3>
 
         <div className="flex flex-col gap-[16px]">
-          {/* Status Row */}
-          <div className="flex gap-[16px] w-full">
-            <div className="flex-1">
-              {isEditing ? (
-                <FormDropdown
-                  label="Status"
-                  value={data.status}
-                  options={[
-                    { value: 'Aberta', label: 'Aberta' },
-                    { value: 'Fechada', label: 'Fechada' },
-                    { value: 'Em Andamento', label: 'Em Andamento' },
-                  ]}
-                  onChange={(value) => handleChange('status', value)}
-                />
-              ) : (
-                <FormInput
-                  label="Status"
-                  value={data.status}
-                  readOnly
-                />
-              )}
-            </div>
-            <div className="flex-1">
-              {isEditing ? (
-                <FormDropdown
-                  label="Status da Entrega"
-                  value={data.statusEntrega}
-                  options={[
-                    { value: 'Em Andamento', label: 'Em Andamento' },
-                    { value: 'Entregue', label: 'Entregue' },
-                    { value: 'Pendente', label: 'Pendente' },
-                  ]}
-                  onChange={(value) => handleChange('statusEntrega', value)}
-                />
-              ) : (
-                <FormInput
-                  label="Status da Entrega"
-                  value={data.statusEntrega}
-                  readOnly
-                />
-              )}
-            </div>
-          </div>
+          {/* Status */}
+          {isEditing ? (
+            <FormDropdown
+              label="Status"
+              value={data.status}
+              options={statusOptions}
+              onChange={(value) => handleChange('status', value)}
+            />
+          ) : (
+            <FormInput
+              label="Status"
+              value={data.status}
+              readOnly
+            />
+          )}
+
+          {/* Status da Entrega */}
+          {isEditing ? (
+            <FormDropdown
+              label="Status da Entrega"
+              value={data.statusEntrega}
+              options={deliveryStatusOptions}
+              onChange={(value) => handleChange('statusEntrega', value)}
+            />
+          ) : (
+            <FormInput
+              label="Status da Entrega"
+              value={data.statusEntrega}
+              readOnly
+            />
+          )}
 
           {/* Número da Rota */}
           <FormInput
@@ -130,10 +160,7 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
           {isEditing ? (
             <MultiSelectDropdown
               label="Responsável"
-              options={[
-                { value: 'jose-dias', label: 'José Dias', color: SECONDARY_DEFAULT },
-                { value: 'antonio-simas', label: 'Antônio Simas', color: SECONDARY_DEFAULT },
-              ]}
+              options={responsibleOptions}
               selectedOptions={data.responsaveis}
               onChange={(options) => handleChange('responsaveis', options)}
             />
@@ -168,37 +195,26 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
               Destino
             </label>
             <div className="flex gap-[8px] flex-wrap">
-              {data.destinos.map((dest, idx) => (
+              {data.destinos.length === 0 ? (
                 <span
-                  key={idx}
-                  className="px-2 py-1 rounded-[4px] text-[14px] text-white"
-                  style={{ fontFamily: 'Inter, sans-serif', backgroundColor: dest.color || PRIMARY_DEFAULT }}
+                  className="text-[14px]"
+                  style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25 }}
                 >
-                  {dest.label}
+                  Sem nota vinculada
                 </span>
-              ))}
+              ) : (
+                data.destinos.map((dest, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2 py-1 rounded-[4px] text-[14px] text-white"
+                    style={{ fontFamily: 'Inter, sans-serif', backgroundColor: dest.color || PRIMARY_DEFAULT }}
+                  >
+                    {dest.label}
+                  </span>
+                ))
+              )}
             </div>
           </div>
-
-          {/* Tipo da Rota */}
-          {isEditing ? (
-            <FormDropdown
-              label="Tipo da Rota"
-              value={data.tipoRota}
-              options={[
-                { value: 'Entrega', label: 'Entrega' },
-                { value: 'Coleta', label: 'Coleta' },
-                { value: 'Ambos', label: 'Ambos' },
-              ]}
-              onChange={(value) => handleChange('tipoRota', value)}
-            />
-          ) : (
-            <FormInput
-              label="Tipo da Rota"
-              value={data.tipoRota}
-              readOnly
-            />
-          )}
 
           {/* Datas Row */}
           <div className="flex gap-[16px] items-start w-full">
@@ -208,11 +224,12 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
                   label="Data de Saída"
                   value={data.dataSaida}
                   onChange={(value) => handleChange('dataSaida', value)}
+                  type="date"
                 />
               ) : (
                 <FormInput
                   label="Data de Saída"
-                  value={data.dataSaida}
+                  value={formatDateDisplay(data.dataSaida)}
                   readOnly
                 />
               )}
@@ -227,7 +244,7 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
                   Fim da Rota
                 </label>
                 <div
-                  className="flex h-[45px] items-center px-[16px] py-[12px] bg-white rounded-[5px] w-full border border-[#e0e0e0]"
+                  className="flex h-[45px] items-center px-[16px] py-[12px] bg-white rounded-[5px] w-full"
                 >
                   <div className="flex flex-[1_0_0] items-center gap-[4px]">
                     <span
@@ -254,16 +271,16 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
         </h3>
 
         <div className="flex flex-col gap-[16px]">
-          {/* Motorista - Multi Select */}
+          {/* Motorista - Dropdown único */}
           {isEditing ? (
-            <MultiSelectDropdown
+            <FormDropdown
               label="Motorista"
-              options={[
-                { value: 'andre-pereira', label: 'André Pereira', color: SECONDARY_DEFAULT },
-                { value: 'manuel', label: 'Manuel', color: SECONDARY_DEFAULT },
-              ]}
-              selectedOptions={data.motorista}
-              onChange={(options) => handleChange('motorista', options)}
+              value={data.motorista?.[0]?.label || ''}
+              options={driverOptions.map(d => ({ value: d.label, label: d.label }))}
+              onChange={(value) => {
+                const selectedDriver = driverOptions.find(d => d.label === value)
+                handleChange('motorista', selectedDriver ? [selectedDriver] : [])
+              }}
             />
           ) : (
             <div className="flex flex-col gap-[8px]">
@@ -274,7 +291,7 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
                 Motorista
               </label>
               <div className="flex gap-[8px] flex-wrap">
-                {data.motorista.map((motor, idx) => (
+                {data.motorista?.map((motor: any, idx: number) => (
                   <span
                     key={idx}
                     className="px-2 py-1 rounded-[4px] text-[14px] text-white"
@@ -287,17 +304,73 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
             </div>
           )}
 
-          {/* Ajudante - Multi Select */}
+          {/* Ajudante - Tag Input */}
           {isEditing ? (
-            <MultiSelectDropdown
-              label="Ajudante"
-              options={[
-                { value: 'rafael', label: 'Rafael', color: SECONDARY_DEFAULT },
-                { value: 'gabriel', label: 'Gabriel', color: SECONDARY_DEFAULT },
-              ]}
-              selectedOptions={data.ajudante}
-              onChange={(options) => handleChange('ajudante', options)}
-            />
+            <div className="flex flex-col gap-[8px]">
+              <label
+                className="font-semibold text-[14px]"
+                style={{ fontFamily: 'Inter, sans-serif', color: PRIMARY_DARK }}
+              >
+                Ajudante
+              </label>
+              {/* Tag Input Container */}
+              <div className="flex flex-wrap gap-[8px] p-2 border border-[#0f3255] rounded-[5px] min-h-[45px] items-center">
+                {/* Render existing tags */}
+                {(data.ajudante || []).map((ajud: any, idx: number) => (
+                  <span
+                    key={idx}
+                    className="flex items-center gap-1 px-2 py-1 rounded-[4px] text-[14px] text-white"
+                    style={{ fontFamily: 'Inter, sans-serif', backgroundColor: SECONDARY_DEFAULT }}
+                  >
+                    <span>{ajud.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newAjudantes = (data.ajudante || []).filter((_: any, i: number) => i !== idx)
+                        handleChange('ajudante', newAjudantes)
+                      }}
+                      className="ml-1 text-white hover:text-gray-200 font-bold"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {/* Input field */}
+                <input
+                  type="text"
+                  placeholder="Digite nomes separados por vírgula"
+                  className="flex-1 min-w-[150px] border-none outline-none text-[14px]"
+                  style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}
+                  onKeyDown={(e) => {
+                    const target = e.target as HTMLInputElement
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault()
+                      const value = target.value.trim()
+                      if (value) {
+                        // Split by comma if key is comma, otherwise use the whole value
+                        const names = e.key === ',' ? value.split(',').map(n => n.trim()).filter(n => n) : [value]
+                        const newAjudantes = [
+                          ...(data.ajudante || []),
+                          ...names.map((name: string) => ({
+                            value: name.toLowerCase().replace(/\s+/g, '-'),
+                            label: name,
+                            color: SECONDARY_DEFAULT,
+                          }))
+                        ]
+                        handleChange('ajudante', newAjudantes)
+                        target.value = ''
+                      }
+                    } else if (e.key === 'Backspace' && target.value === '' && (data.ajudante || []).length > 0) {
+                      // Remove last chip on Backspace when input is empty
+                      handleChange('ajudante', (data.ajudante || []).slice(0, -1))
+                    }
+                  }}
+                />
+              </div>
+              <span className="text-[12px]" style={{ color: TEXT_LIGHT25 }}>
+                Digite nomes e pressione Enter ou vírgula para adicionar
+              </span>
+            </div>
           ) : (
             <div className="flex flex-col gap-[8px]">
               <label
@@ -307,7 +380,7 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
                 Ajudante
               </label>
               <div className="flex gap-[8px] flex-wrap">
-                {data.ajudante.map((ajud, idx) => (
+                {data.ajudante?.map((ajud: any, idx: number) => (
                   <span
                     key={idx}
                     className="px-2 py-1 rounded-[4px] text-[14px] text-white"
@@ -328,10 +401,7 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
                 <FormDropdown
                   label="Placa do Veículo"
                   value={data.placaVeiculo}
-                  options={[
-                    { value: 'B1AHSJ2', label: 'B1AHSJ2' },
-                    { value: 'XYZ1234', label: 'XYZ1234' },
-                  ]}
+                  options={vehicleOptions}
                   onChange={(value) => handleChange('placaVeiculo', value)}
                 />
               ) : (
@@ -352,14 +422,14 @@ export const RouteForm = ({ data, isEditing = false, onChange }: RouteFormProps)
                   Carga Máxima
                 </label>
                 <div
-                  className="flex h-[45px] items-center px-[16px] py-[12px] bg-white rounded-[5px] w-full border border-[#e0e0e0]"
+                  className="flex h-[45px] items-center px-[16px] py-[12px] bg-white rounded-[5px] w-full"
                 >
                   <div className="flex flex-[1_0_0] items-center gap-[4px]">
                     <span
                       className="font-normal text-[14px]"
                       style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25, lineHeight: '24px' }}
                     >
-                      {data.cargaMaxima}
+                      {data.cargaMaxima ? `${data.cargaMaxima} kg` : '-'}
                     </span>
                   </div>
                 </div>

@@ -226,7 +226,7 @@ async function loadRouteForEdit(routeId: string): Promise<any> {
     ayudante: routeDetails.assistant || routeDetails.helpers?.[0]?.name || '',
     // Dados do veículo vem da rota
     placaVeiculo: '',
-    cargaMaxima: '500',
+    cargaMaxima: '0',
   }
 }
 
@@ -248,7 +248,7 @@ function buildRouteCard(
   // Determinar notas do card
   const notasAtribuidas = localNotes.length > 0 ? localNotes : dbNotes
   const cargaAtual = notasAtribuidas.reduce((sum, n) => sum + (n.peso || 0), 0)
-  const capacidade = vehicle?.max_capacity || 500
+  const capacidade = vehicle?.nominal_capacity ?? 0
 
   // Regras de negócio para botões
   let buttonLabel: string
@@ -591,7 +591,7 @@ export const AssignNotesPage = ({ userName = 'Leon', userRole = 'Usuário' }: As
       motorista: '',
       ajudante: '',
       placaVeiculo: vehicle.plate || '',
-      cargaMaxima: String(vehicle.max_capacity || 500),
+      cargaMaxima: String(vehicle.nominal_capacity ?? 0),
     })
     setSelectedVehicleId(vehicleId)
     setIsCreateDrawerOpen(true)

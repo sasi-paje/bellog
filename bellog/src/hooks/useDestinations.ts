@@ -1,17 +1,24 @@
 import { useState, useEffect, useCallback } from 'react'
-import { companyService, CompanyWithAddress, CompanyFormData } from '../services/company.service'
+import { companyService, CompanyWithAddress, CompanyFormData } from '../features/companies'
 
 interface UseDestinationsResult {
   destinations: CompanyWithAddress[]
   total: number
   loading: boolean
   error: string | null
+  groups: { id: number; name: string }[]
   fetchDestinations: (params?: {
     search?: string
     isActive?: boolean
     page?: number
     limit?: number
+    groupId?: number | null
+    cnpj?: string
+    zipCode?: string
+    street?: string
+    district?: string
   }) => Promise<void>
+  fetchGroups: () => Promise<void>
   getDestinationById: (id: string) => Promise<CompanyWithAddress | null>
   createDestination: (formData: CompanyFormData) => Promise<CompanyWithAddress>
   updateDestination: (id: string, formData: CompanyFormData) => Promise<CompanyWithAddress>
@@ -29,12 +36,18 @@ export const useDestinations = (initialParams?: {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [groups, setGroups] = useState<{ id: number; name: string }[]>([])
 
   const fetchDestinations = useCallback(async (params?: {
     search?: string
     isActive?: boolean
     page?: number
     limit?: number
+    groupId?: number | null
+    cnpj?: string
+    zipCode?: string
+    street?: string
+    district?: string
   }) => {
     setLoading(true)
     setError(null)
@@ -49,6 +62,15 @@ export const useDestinations = (initialParams?: {
     }
   }, [])
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const data = await companyService.listGroups('destination')
+      setGroups(data.map(g => ({ id: g.id, name: g.name ?? '' })))
+    } catch {
+      setGroups([])
+    }
+  }, [])
+
   const getDestinationById = useCallback(async (id: string) => {
     try {
       return await companyService.getById(id)
@@ -59,13 +81,9 @@ export const useDestinations = (initialParams?: {
   }, [])
 
   const createDestination = useCallback(async (formData: CompanyFormData) => {
-    console.log('[useDestinations] createDestination called:', formData)
     try {
-      // Pass 'DESTINATION' role type when creating
       const result = await companyService.createWithAddress(formData, 'DELIVERY', 'DESTINATION')
-      console.log('[useDestinations] createWithAddress result:', result)
       const full = await companyService.getById(result.id)
-      console.log('[useDestinations] getById result:', full)
       return full as CompanyWithAddress
     } catch (err) {
       console.error('[useDestinations] Error creating destination:', err)
@@ -95,7 +113,9 @@ export const useDestinations = (initialParams?: {
     total,
     loading,
     error,
+    groups,
     fetchDestinations,
+    fetchGroups,
     getDestinationById,
     createDestination,
     updateDestination,

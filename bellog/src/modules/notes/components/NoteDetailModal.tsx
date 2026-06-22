@@ -1,5 +1,5 @@
 import { Modal, StatusBadge } from '../../../shared/components'
-import { InvoiceListItem } from '../../../services/fiscal-invoice.service'
+import { InvoiceListItem } from '../../../features/notes'
 import { NoteStatus } from '../../../shared/components'
 
 interface NoteDetailModalProps {
@@ -71,7 +71,7 @@ export const NoteDetailModal = ({
             </div>
           </div>
 
-          <ViewField label="Nº Viagem" value={note.route_number || '-'} />
+          <ViewField label="Nº Viagem" value={note.tripNumber || '-'} />
 
           <div className="flex flex-col gap-[8px]">
             <span className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>

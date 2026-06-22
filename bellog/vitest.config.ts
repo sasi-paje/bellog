@@ -11,6 +11,20 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      reportsDirectory: './coverage',
+      exclude: [
+        'node_modules/**',
+        'dist/**',
+        'coverage/**',
+        '**/*.d.ts',
+        '**/*.config.*',
+        'src/testing/**',
+        '**/*.test.*',
+        '**/*.spec.*',
+        'src/test/**',
+        'src/main.tsx',
+        'src/App.tsx',
+      ],
     },
   },
 })

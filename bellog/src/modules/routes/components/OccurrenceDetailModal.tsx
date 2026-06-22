@@ -1,17 +1,95 @@
+import { useState, useEffect } from 'react'
 import { AppIcon } from '../../../shared/components'
-import { OccurrenceDetail } from '../data/historico.mock'
+import { attachmentService, Attachment } from '../../../features/attachments'
 
 interface OccurrenceDetailModalProps {
   isOpen: boolean
   onClose: () => void
-  detail: OccurrenceDetail | null
+  // Dados da ocorrência (mock ou real)
+  detail: {
+    titulo?: string
+    local?: string
+    observacao?: string
+    anexos?: Array<{
+      id: string
+      nome: string
+      url?: string
+      file_name?: string
+      file_path?: string
+    }>
+  } | null
+  // ID da rota para buscar anexos reais (opcional)
+  routeId?: string | null
 }
 
 const TEXT_DARK = '#2a2a2a'
 const TEXT_LIGHT25 = '#919191'
 const SECONDARY_DEFAULT = '#e67c26'
 
-export const OccurrenceDetailModal = ({ isOpen, onClose, detail }: OccurrenceDetailModalProps) => {
+export const OccurrenceDetailModal = ({ isOpen, onClose, detail, routeId }: OccurrenceDetailModalProps) => {
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [loading, setLoading] = useState(false)
+
+  // Buscar anexos reais quando routeId mudar
+  useEffect(() => {
+    if (!routeId || !isOpen) {
+      setAttachments([])
+      return
+    }
+
+    const fetchAttachments = async () => {
+      setLoading(true)
+      try {
+        const routeIdNum = parseInt(routeId, 10)
+        if (!isNaN(routeIdNum)) {
+          const files = await attachmentService.listByEntity('route', routeIdNum)
+          setAttachments(files)
+        }
+      } catch (err) {
+        console.error('[OccurrenceDetailModal] Error fetching attachments:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAttachments()
+  }, [routeId, isOpen])
+
+  // Usar anexos do detail (mock) se não houver routeId
+  const displayAttachments = routeId ? attachments : (detail?.anexos || [])
+
+  // Handler para visualizar arquivo
+  const handleView = (attachment: Attachment) => {
+    if (attachment.file_url) {
+      window.open(attachment.file_url, '_blank')
+    }
+  }
+
+  // Handler para fazer download
+  const handleDownload = async (attachment: Attachment) => {
+    if (attachment.file_url) {
+      await attachmentService.download(attachment.file_url, attachment.file_name)
+    }
+  }
+
+  // Handler para deletar arquivo
+  const handleDelete = async (attachment: Attachment) => {
+    if (!attachment.id) return
+
+    if (!confirm(`Tem certeza que deseja excluir o arquivo "${attachment.file_name}"?`)) {
+      return
+    }
+
+    try {
+      const success = await attachmentService.delete(attachment.id)
+      if (success) {
+        setAttachments(prev => prev.filter(a => a.id !== attachment.id))
+      }
+    } catch (err) {
+      console.error('[OccurrenceDetailModal] Error deleting attachment:', err)
+    }
+  }
+
   if (!isOpen || !detail) return null
 
   return (
@@ -21,7 +99,7 @@ export const OccurrenceDetailModal = ({ isOpen, onClose, detail }: OccurrenceDet
 
       {/* Modal */}
       <div className="fixed inset-0 flex items-center justify-center z-50">
-        <div className="bg-white border border-[#bdbdbd] rounded-[6px] p-6 flex flex-col gap-4 w-[878px] max-h-[90vh]">
+        <div className="bg-white border border-[#bdbdbd] rounded-[6px] p-6 flex flex-col gap-4 min-w-[50vw] max-h-[90vh]">
           {/* Header */}
           <div className="flex items-center justify-between">
             <p className="text-[20px] font-bold" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
@@ -70,36 +148,51 @@ export const OccurrenceDetailModal = ({ isOpen, onClose, detail }: OccurrenceDet
 
             {/* Lista de anexos */}
             <div className="flex flex-col gap-2">
-              {detail.anexos.map((anexo) => (
-                <div
-                  key={anexo.id}
-                  className="border border-[#919191] rounded-[6px] flex items-center justify-between px-4 py-3"
-                >
-                  <p className="text-[16px] font-semibold" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
-                    {anexo.nome}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="w-8 h-8 rounded-[4px] bg-[#c7392c] flex items-center justify-center"
-                    >
-                      <AppIcon name="delete_forever" size={20} color="white" />
-                    </button>
-                    <button
-                      type="button"
-                      className="w-8 h-8 rounded-[4px] bg-[#e67c26] flex items-center justify-center"
-                    >
-                      <AppIcon name="visibility" size={20} color="white" />
-                    </button>
-                    <button
-                      type="button"
-                      className="w-8 h-8 rounded-[4px] bg-[#e67c26] flex items-center justify-center"
-                    >
-                      <AppIcon name="download" size={20} color="white" />
-                    </button>
+              {loading ? (
+                <p className="text-[14px]" style={{ color: TEXT_LIGHT25 }}>Carregando anexos...</p>
+              ) : displayAttachments.length === 0 ? (
+                <p className="text-[14px]" style={{ color: TEXT_LIGHT25 }}>Nenhum anexo encontrado.</p>
+              ) : (
+                displayAttachments.map((anexo, index) => (
+                  <div
+                    key={routeId ? (anexo as Attachment).id || index : (anexo as any).id || index}
+                    className="border border-[#919191] rounded-[6px] flex items-center justify-between px-4 py-3"
+                  >
+                    <p className="text-[16px] font-semibold" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
+                      {routeId ? (anexo as Attachment).file_name : (anexo as any).nome}
+                    </p>
+                    <div className="flex gap-2">
+                      {/* Botão Deletar */}
+                      <button
+                        type="button"
+                        onClick={() => routeId ? handleDelete(anexo as Attachment) : undefined}
+                        className="w-8 h-8 rounded-[4px] bg-[#c7392c] flex items-center justify-center"
+                        title="Excluir"
+                      >
+                        <AppIcon name="delete_forever" size={20} color="white" />
+                      </button>
+                      {/* Botão Visualizar */}
+                      <button
+                        type="button"
+                        onClick={() => routeId ? handleView(anexo as Attachment) : undefined}
+                        className="w-8 h-8 rounded-[4px] bg-[#e67c26] flex items-center justify-center"
+                        title="Visualizar"
+                      >
+                        <AppIcon name="visibility" size={20} color="white" />
+                      </button>
+                      {/* Botão Download */}
+                      <button
+                        type="button"
+                        onClick={() => routeId ? handleDownload(anexo as Attachment) : undefined}
+                        className="w-8 h-8 rounded-[4px] bg-[#e67c26] flex items-center justify-center"
+                        title="Baixar"
+                      >
+                        <AppIcon name="download" size={20} color="white" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 

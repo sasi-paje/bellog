@@ -6,6 +6,8 @@ type IconName =
   | 'left_panel_close'
   | 'left_panel_open'
   | 'keyboard_arrow_down'
+  | 'arrow_back'
+  | 'arrow_drop_down'
   | 'chevron_left'
   | 'chevron_right'
   | 'chevrons_left'
@@ -20,12 +22,16 @@ type IconName =
   | 'delete_forever'
   | 'open_in_new'
   | 'download'
+  | 'upload'
   | 'publish'
   | 'attach_file'
   // User Interaction
   | 'person'
   | 'group'
+  | 'lock'
+  | 'lock_open'
   | 'visibility'
+  | 'visibility_off'
   | 'error'
   | 'info'
   // Business
@@ -53,6 +59,19 @@ type IconName =
   | 'image'
   | 'add_a_photo'
   | 'file_copy'
+  | 'article'
+  | 'logout'
+  // Toggle
+  | 'toggle_on'
+  | 'toggle_off'
+  // Actions
+  | 'check'
+  | 'check_box'
+  | 'check_box_outline_blank'
+  | 'check_circle'
+  | 'error'
+  | 'info'
+  | 'warning'
 
 interface AppIconProps extends Omit<LucideProps, 'ref'> {
   name: IconName
@@ -67,10 +86,12 @@ const iconMap: Record<IconName, string> = {
   left_panel_close: 'left_panel_close',
   left_panel_open: 'left_panel_open',
   keyboard_arrow_down: 'keyboard_arrow_down',
+  arrow_back: 'arrow_back',
+  arrow_drop_down: 'arrow_drop_down',
   chevron_left: 'chevron_left',
   chevron_right: 'chevron_right',
-  chevrons_left: 'double_arrow',
-  chevrons_right: 'double_arrow',
+  chevrons_left: 'keyboard_double_arrow_left',
+  chevrons_right: 'keyboard_double_arrow_right',
   close: 'close',
   // Action
   search: 'search',
@@ -81,14 +102,19 @@ const iconMap: Record<IconName, string> = {
   delete_forever: 'delete_forever',
   open_in_new: 'open_in_new',
   download: 'download',
+  upload: 'upload',
   publish: 'publish',
   attach_file: 'attach_file',
   // User Interaction
   person: 'person',
   group: 'group',
+  lock: 'lock',
+  lock_open: 'lock_open',
   visibility: 'visibility',
+  visibility_off: 'visibility_off',
   error: 'error',
   info: 'info',
+  warning: 'warning',
   // Business
   work: 'work',
   location_off: 'location_off',
@@ -114,6 +140,16 @@ const iconMap: Record<IconName, string> = {
   image: 'image',
   add_a_photo: 'add_a_photo',
   file_copy: 'file_copy',
+  article: 'article',
+  logout: 'logout',
+  // Toggle
+  toggle_on: 'toggle_on',
+  toggle_off: 'toggle_off',
+  // Actions
+  check: 'check',
+  check_box: 'check_box',
+  check_box_outline_blank: 'check_box_outline_blank',
+  check_circle: 'check_circle',
 }
 
 export const AppIcon = ({ name, size = 24, className = '', color }: AppIconProps) => {

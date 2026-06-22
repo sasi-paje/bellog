@@ -7,7 +7,7 @@ import { AssignNotesPage } from '../AssignNotesPage'
 // ============================================================================
 
 // Mock services
-vi.mock('../../services/route.service', () => ({
+vi.mock('../../features/routes', () => ({
   routeService: {
     list: vi.fn().mockResolvedValue({ data: [], total: 0 }),
     getById: vi.fn().mockResolvedValue(null),
@@ -22,21 +22,21 @@ vi.mock('../../services/route.service', () => ({
   },
 }))
 
-vi.mock('../../services/fiscal-invoice.service', () => ({
+vi.mock('../../features/notes', () => ({
   fiscalInvoiceService: {
     list: vi.fn().mockResolvedValue({ data: [], total: 0 }),
     getByRouteId: vi.fn().mockResolvedValue([]),
   },
 }))
 
-vi.mock('../../services/assignment.service', () => ({
+vi.mock('../../features/assignments', () => ({
   assignmentService: {
     syncRouteInvoices: vi.fn().mockResolvedValue(undefined),
     unassignInvoiceFromRoute: vi.fn().mockResolvedValue(undefined),
   },
 }))
 
-vi.mock('../../services/driver.service', () => ({
+vi.mock('../../features/drivers', () => ({
   driverService: {
     list: vi.fn().mockResolvedValue({ data: [] }),
   },
@@ -379,6 +379,78 @@ describe('AssignNotesPage - Regras de Negócio', () => {
     })
   })
 
+  describe('7. allows_route_edition — fail-closed', () => {
+    it('Pendente (allows_route_edition = true) permite edição', () => {
+      const statuses = [{ id: 'status-pendente', allows_route_edition: true }]
+      expect(isRouteEditable(statuses, 'status-pendente')).toBe(true)
+    })
+
+    it('Em Andamento (allows_route_edition = false) bloqueia edição', () => {
+      const statuses = [{ id: 'status-andamento', allows_route_edition: false }]
+      expect(isRouteEditable(statuses, 'status-andamento')).toBe(false)
+    })
+
+    it('Finalizada (allows_route_edition = false) bloqueia edição', () => {
+      const statuses = [{ id: 'status-finalizada', allows_route_edition: false }]
+      expect(isRouteEditable(statuses, 'status-finalizada')).toBe(false)
+    })
+
+    it('status ausente na lista bloqueia edição (fail-closed)', () => {
+      const statuses = [{ id: 'status-outro', allows_route_edition: true }]
+      expect(isRouteEditable(statuses, 'status-inexistente')).toBe(false)
+    })
+
+    it('id_delivery_status null bloqueia edição (fail-closed)', () => {
+      const statuses = [{ id: 'status-1', allows_route_edition: true }]
+      expect(isRouteEditable(statuses, null)).toBe(false)
+    })
+
+    it('id_delivery_status undefined bloqueia edição (fail-closed)', () => {
+      const statuses = [{ id: 'status-1', allows_route_edition: true }]
+      expect(isRouteEditable(statuses, undefined)).toBe(false)
+    })
+
+    it('allows_route_edition = null bloqueia edição (fail-closed — não trata null como permissivo)', () => {
+      const statuses = [{ id: 'status-null', allows_route_edition: null }]
+      expect(isRouteEditable(statuses, 'status-null')).toBe(false)
+    })
+
+    it('allows_route_edition = undefined bloqueia edição (fail-closed)', () => {
+      const statuses = [{ id: 'status-undef' }]
+      expect(isRouteEditable(statuses, 'status-undef')).toBe(false)
+    })
+
+    it('lista vazia de statuses bloqueia edição', () => {
+      expect(isRouteEditable([], 'status-qualquer')).toBe(false)
+    })
+  })
+
+  describe('8. Capacidade — verificação de carga máxima', () => {
+    it('carga abaixo da capacidade permite criar rota', () => {
+      expect(isCapacidadeExcedida(800, 1000)).toBe(false)
+    })
+
+    it('carga igual à capacidade permite criar rota (limite exato não bloqueia)', () => {
+      expect(isCapacidadeExcedida(1000, 1000)).toBe(false)
+    })
+
+    it('carga acima da capacidade bloqueia criação da rota', () => {
+      expect(isCapacidadeExcedida(1001, 1000)).toBe(true)
+    })
+
+    it('capacidade 0 não aplica limite (veículo sem restrição)', () => {
+      expect(isCapacidadeExcedida(99999, 0)).toBe(false)
+    })
+
+    it('capacidade negativa não aplica limite', () => {
+      expect(isCapacidadeExcedida(100, -1)).toBe(false)
+    })
+
+    it('carga zero sempre permite', () => {
+      expect(isCapacidadeExcedida(0, 1000)).toBe(false)
+    })
+  })
+
   describe('Nomes de Campos Padronizados', () => {
     it('deve usar "ajudante" no formulário (não "ayudante")', () => {
       const formData = {
@@ -481,6 +553,27 @@ function mapFimRota(routeDetails: any): { fimRota: string } {
   return {
     fimRota: routeDetails.ends_at || '',
   }
+}
+
+// ──────────────────────────────────────────────
+// Simula lógica allows_route_edition (fail-closed)
+// ──────────────────────────────────────────────
+
+function isRouteEditable(
+  deliveryStatuses: { id: string; allows_route_edition?: boolean | null }[],
+  routeDeliveryStatusId: string | null | undefined
+): boolean {
+  if (!routeDeliveryStatusId) return false
+  const ds = deliveryStatuses.find(s => s.id === routeDeliveryStatusId)
+  return ds?.allows_route_edition === true
+}
+
+// ──────────────────────────────────────────────
+// Simula verificação de capacidade
+// ──────────────────────────────────────────────
+
+function isCapacidadeExcedida(cargaAtual: number, capacidade: number): boolean {
+  return capacidade > 0 && cargaAtual > capacidade
 }
 
 // Simula handleRemoveNote - cria override filtrado

@@ -36,7 +36,7 @@ export const FormInput = ({
       </div>
       <div
         className={`flex h-[45px] items-center px-[16px] py-[12px] bg-white border rounded-[5px] w-full ${
-          readOnly ? 'border-[#e0e0e0] cursor-not-allowed' : 'border-[#0f3255]'
+          readOnly ? 'border-transparent' : 'border-[#0f3255]'
         }`}
         data-name="Input"
       >
@@ -53,7 +53,10 @@ export const FormInput = ({
             }`}
             style={{
               fontFamily: 'Inter, sans-serif',
-              color: readOnly ? TEXT_LIGHT25 : TEXT_LIGHT75,
+              fontSize: '14px',
+              fontStyle: 'normal',
+              fontWeight: 400,
+              color: (readOnly || value) ? TEXT_LIGHT75 : TEXT_LIGHT25,
               lineHeight: '24px',
             }}
           />

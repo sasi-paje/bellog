@@ -1,6 +1,6 @@
 import React from 'react'
-import { UserAvatar } from './UserAvatar'
 import { AppIcon } from './AppIcon'
+import { UserMenu } from './UserMenu'
 
 export interface PageHeaderProps {
   title: string
@@ -8,7 +8,9 @@ export interface PageHeaderProps {
   isSidebarOpen: boolean
   onToggleSidebar: () => void
   userName?: string
+  userEmail?: string
   userRole?: string
+  onLogout?: () => void
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -17,7 +19,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   isSidebarOpen,
   onToggleSidebar,
   userName = 'Leon Kennedy',
+  userEmail,
   userRole = 'Usuário',
+  onLogout,
 }) => {
   const ariaLabel = isSidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'
 
@@ -58,18 +62,13 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {/* Central area - flexible */}
       <div className="flex-1" />
 
-      {/* Right: User */}
-      <div className="flex shrink-0 items-center gap-2">
-        <UserAvatar />
-        <div className="flex flex-col leading-tight">
-          <span className="text-[12px] font-semibold text-[#4c4c4c]">
-            {userName}
-          </span>
-          <span className="text-[10px] font-normal text-[#4c4c4c]">
-            {userRole}
-          </span>
-        </div>
-      </div>
+      {/* Right: User Menu */}
+      <UserMenu
+        userName={userName}
+        userEmail={userEmail}
+        userRole={userRole}
+        onLogout={onLogout}
+      />
     </div>
   )
 }

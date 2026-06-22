@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Modal, StatusBadge } from '../../../shared/components'
-import { companyService, CompanyOption } from '../../../services/company.service'
+import { companyService, CompanyOption } from '../../../features/companies'
 
 interface CreateNoteModalProps {
   isOpen: boolean
@@ -11,11 +11,13 @@ interface CreateNoteModalProps {
 
 export interface CreateNoteFormData {
   invoice_number: string
-  quantity: number
-  delivery_location: string
-  supplier: string
+  volume: number
+  id_customer_company: number | null
+  id_supplier_company: number | null
+  attempt_number: number
   net_weight: number
   gross_weight: number
+  invoice_amount: number
 }
 
 const PRIMARY_DARK = '#0f3255'
@@ -30,11 +32,13 @@ export const CreateNoteModal = ({
 }: CreateNoteModalProps) => {
   const [formData, setFormData] = useState<CreateNoteFormData>({
     invoice_number: '',
-    quantity: 0,
-    delivery_location: '',
-    supplier: '',
+    volume: 0,
+    id_customer_company: null,
+    id_supplier_company: null,
+    attempt_number: 0,
     net_weight: 0,
     gross_weight: 0,
+    invoice_amount: 0,
   })
 
   const [deliveryLocations, setDeliveryLocations] = useState<CompanyOption[]>([])
@@ -46,11 +50,13 @@ export const CreateNoteModal = ({
       setIsLoadingOptions(true)
       setFormData({
         invoice_number: '',
-        quantity: 0,
-        delivery_location: '',
-        supplier: '',
+        volume: 0,
+        id_customer_company: null,
+        id_supplier_company: null,
+        attempt_number: 0,
         net_weight: 0,
         gross_weight: 0,
+        invoice_amount: 0,
       })
       Promise.all([
         companyService.listDeliveryLocations(),
@@ -115,11 +121,11 @@ export const CreateNoteModal = ({
             <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
               <input
                 type="number"
-                value={formData.quantity || ''}
-                onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+                value={formData.volume || ''}
+                onChange={(e) => setFormData({ ...formData, volume: parseInt(e.target.value) || 0 })}
                 placeholder="Insira a quantidade de caixas"
                 className="flex-1 bg-transparent outline-none text-[14px] w-full"
-                style={{ fontFamily: 'Inter, sans-serif', color: formData.quantity ? TEXT_COLOR : PLACEHOLDER_COLOR }}
+                style={{ fontFamily: 'Inter, sans-serif', color: formData.volume ? TEXT_COLOR : PLACEHOLDER_COLOR }}
               />
             </div>
           </div>
@@ -131,10 +137,10 @@ export const CreateNoteModal = ({
               </label>
               <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
                 <select
-                  value={formData.delivery_location}
-                  onChange={(e) => setFormData({ ...formData, delivery_location: e.target.value })}
+                  value={formData.id_customer_company ? String(formData.id_customer_company) : ''}
+                  onChange={(e) => setFormData({ ...formData, id_customer_company: e.target.value ? parseInt(e.target.value) : null })}
                   className="flex-1 bg-transparent outline-none text-[14px] w-full"
-                  style={{ fontFamily: 'Inter, sans-serif', color: formData.delivery_location ? TEXT_COLOR : PLACEHOLDER_COLOR }}
+                  style={{ fontFamily: 'Inter, sans-serif', color: formData.id_customer_company ? TEXT_COLOR : PLACEHOLDER_COLOR }}
                   disabled={isLoadingOptions}
                 >
                   <option value="" disabled>
@@ -154,10 +160,10 @@ export const CreateNoteModal = ({
               </label>
               <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
                 <select
-                  value={formData.supplier}
-                  onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                  value={formData.id_supplier_company ? String(formData.id_supplier_company) : ''}
+                  onChange={(e) => setFormData({ ...formData, id_supplier_company: e.target.value ? parseInt(e.target.value) : null })}
                   className="flex-1 bg-transparent outline-none text-[14px] w-full"
-                  style={{ fontFamily: 'Inter, sans-serif', color: formData.supplier ? TEXT_COLOR : PLACEHOLDER_COLOR }}
+                  style={{ fontFamily: 'Inter, sans-serif', color: formData.id_supplier_company ? TEXT_COLOR : PLACEHOLDER_COLOR }}
                   disabled={isLoadingOptions}
                 >
                   <option value="" disabled>
@@ -172,6 +178,24 @@ export const CreateNoteModal = ({
               </div>
             </div>
           </div>
+
+          <div className="flex gap-4">
+            <div className="flex-1 flex flex-col gap-[8px]">
+              <label className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
+                Nº Tentativa
+              </label>
+              <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
+                <input
+                  type="number"
+                  value={formData.attempt_number || ''}
+                  onChange={(e) => setFormData({ ...formData, attempt_number: parseInt(e.target.value) || 0 })}
+                  placeholder="Insira o número da tentativa"
+                  className="flex-1 bg-transparent outline-none text-[14px] w-full"
+                  style={{ fontFamily: 'Inter, sans-serif', color: formData.attempt_number ? TEXT_COLOR : PLACEHOLDER_COLOR }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col gap-[16px]">
@@ -182,7 +206,7 @@ export const CreateNoteModal = ({
           <div className="flex gap-4">
             <div className="flex-1 flex flex-col gap-[8px]">
               <label className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
-                Peso Líquido
+                Peso Líquido (kg)
               </label>
               <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
                 <input
@@ -197,7 +221,7 @@ export const CreateNoteModal = ({
             </div>
             <div className="flex-1 flex flex-col gap-[8px]">
               <label className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
-                Peso Bruto
+                Peso Bruto (kg)
               </label>
               <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
                 <input
@@ -209,6 +233,28 @@ export const CreateNoteModal = ({
                   style={{ fontFamily: 'Inter, sans-serif', color: formData.gross_weight ? TEXT_COLOR : PLACEHOLDER_COLOR }}
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-[16px]">
+          <h3 className="font-semibold text-[20px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
+            Valor
+          </h3>
+
+          <div className="flex flex-col gap-[8px] w-full">
+            <label className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
+              Valor da Nota (R$)
+            </label>
+            <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
+              <input
+                type="number"
+                value={formData.invoice_amount || ''}
+                onChange={(e) => setFormData({ ...formData, invoice_amount: parseFloat(e.target.value) || 0 })}
+                placeholder="Insira o valor da nota"
+                className="flex-1 bg-transparent outline-none text-[14px] w-full"
+                style={{ fontFamily: 'Inter, sans-serif', color: formData.invoice_amount ? TEXT_COLOR : PLACEHOLDER_COLOR }}
+              />
             </div>
           </div>
         </div>

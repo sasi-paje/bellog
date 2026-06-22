@@ -25,9 +25,21 @@ export const setEnvironment = (env: Environment): void => {
   }
 }
 
-// Helper to add is_test filter to queries
+// Helper to add is_test filter to queries (trx_*, rel_*, master_*, stg_*)
 export const withTestFilter = (query: any, isTest: boolean = true) => {
   return query.eq('is_test', isTest)
+}
+
+/**
+ * Aplica filtro is_test em tabelas ref_*:
+ * - PROD: filtra is_test = false
+ * - DEV/TEST: sem filtro (traz todos os registros)
+ */
+export const applyRefFilter = (query: any): any => {
+  if (getEnvironment() === 'production') {
+    return query.eq('is_test', false)
+  }
+  return query
 }
 
 // Database types
@@ -35,6 +47,21 @@ export interface Database {
   public: {
     Tables: {
       // Master tables
+      master_person_company_group: {
+        Row: {
+          id: number
+          name: string
+          description: string | null
+          is_active: boolean
+          is_test: boolean
+          created_at: string
+          updated_at: string | null
+          created_by: string | null
+          updated_by: string | null
+        }
+        Insert: Omit<Database['public']['Tables']['master_person_company_group']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['master_person_company_group']['Insert']>
+      }
       master_person_company: {
         Row: {
           id: string
@@ -45,6 +72,7 @@ export interface Database {
           municipal_registration: string | null
           email: string | null
           phone: string | null
+          id_company_group: number | null
           is_active: boolean
           is_test: boolean
           created_at: string
@@ -95,13 +123,15 @@ export interface Database {
         Row: {
           id: string
           plate: string | null
-          model: string | null
-          brand: string | null
-          max_capacity: number | null
+          code: string | null
+          name: string | null
+          nominal_capacity: number | null
+          responsible_name: string | null
+          responsible_type: string | null
           is_active: boolean
           is_test: boolean
           created_at: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: Omit<Database['public']['Tables']['master_fleet_vehicle']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['master_fleet_vehicle']['Insert']>
@@ -153,6 +183,20 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['master_person_responsible']['Insert']>
       }
       // Reference tables
+      ref_route_responsible: {
+        Row: {
+          id: number
+          name: string
+          slug: string | null
+          description: string | null
+          is_active: boolean
+          is_test: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: Omit<Database['public']['Tables']['ref_route_responsible']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['ref_route_responsible']['Insert']>
+      }
       ref_person_company_role_type: {
         Row: {
           id: string
@@ -186,6 +230,7 @@ export interface Database {
           description: string | null
           is_active: boolean
           is_test: boolean
+          is_initial: boolean
           created_at: string
           updated_at: string
         }
@@ -199,6 +244,8 @@ export interface Database {
           description: string | null
           is_active: boolean
           is_test: boolean
+          is_initial: boolean
+          allows_route_edition: boolean
           created_at: string
           updated_at: string
         }
@@ -303,8 +350,9 @@ export interface Database {
           nominal_capacity: number | null
           utilization_percent: number | null
           area: string | null
+          id_route_responsible: number
           responsible: string | null
-          assistant: string | null
+          assistant: string[] | null
           is_active: boolean
           is_test: boolean
           created_at: string
@@ -330,6 +378,44 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['trx_route_history']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['trx_route_history']['Insert']>
       }
+      trx_route_stop: {
+        Row: {
+          id: number
+          id_route: number
+          id_company: number
+          stop_sequence: number | null
+          arrived_at: string | null
+          departed_at: string | null
+          arrival_photo_path: string | null
+          arrival_observation: string | null
+          is_active: boolean
+          is_test: boolean
+          created_at: string
+          updated_at: string | null
+          created_by: number | null
+          updated_by: number | null
+        }
+        Insert: Omit<Database['public']['Tables']['trx_route_stop']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['trx_route_stop']['Insert']>
+      }
+      trx_fiscal_invoice_import: {
+        Row: {
+          id: number
+          id_supplier_company: number
+          trip_number: string
+          bellog_arrival_date: string
+          original_file_name: string | null
+          file_path: string | null
+          is_active: boolean
+          is_test: boolean
+          created_at: string
+          updated_at: string | null
+          created_by: number | null
+          updated_by: number | null
+        }
+        Insert: Omit<Database['public']['Tables']['trx_fiscal_invoice_import']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['trx_fiscal_invoice_import']['Insert']>
+      }
       trx_fiscal_invoice: {
         Row: {
           id: string
@@ -346,6 +432,7 @@ export interface Database {
           id_fiscal_receipt_status: string | null
           id_fiscal_nfd_status: string | null
           id_fiscal_total_status: string | null
+          id_fiscal_invoice_import: number | null
           xml_file_path: string | null
           id_route: string | null
           id_status: string | null
@@ -356,7 +443,6 @@ export interface Database {
           weight: number | null
           volume: number | null
           issue_date: string | null
-          created_at: string | null
           is_active: boolean
           is_test: boolean
           created_at: string
@@ -373,14 +459,13 @@ export interface Database {
           id: string
           id_company: string
           id_company_role_type: string
-          is_active: boolean
           is_test: boolean
           created_at: string
-          updated_at: string
+          updated_at: string | null
           created_by: string | null
           updated_by: string | null
         }
-        Insert: Omit<Database['public']['Tables']['rel_person_company_role_type']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Insert: Omit<Database['public']['Tables']['rel_person_company_role_type']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['rel_person_company_role_type']['Insert']>
       }
       rel_route_invoice: {
@@ -388,6 +473,7 @@ export interface Database {
           id: string
           id_route: string
           id_fiscal_invoice: string
+          id_route_stop: string | null
           assigned_at: string
           assigned_by: string | null
           unassigned_at: string | null
@@ -398,6 +484,12 @@ export interface Database {
           updated_at: string | null
           created_by: string | null
           updated_by: string | null
+          attempt_number: number
+          released_at: string | null
+          release_reason: string | null
+          planned_box_quantity: number | null
+          planned_amount: number | null
+          id_previous_route_invoice: number | null
         }
         Insert: Omit<Database['public']['Tables']['rel_route_invoice']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['rel_route_invoice']['Insert']>
@@ -454,6 +546,63 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['rel_route_destination']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['rel_route_destination']['Insert']>
       }
+      trx_route_invoice_delivery: {
+        Row: {
+          id: string
+          id_route: string
+          id_fiscal_invoice: string
+          id_route_invoice: string | null
+          id_delivery_type: number | null
+          id_reason: string | null
+          receipt_image_path: string | null
+          nfd_image_path: string | null
+          nfd_number: string | null
+          returned_box_quantity: number | null
+          returned_amount: number | null
+          observation: string | null
+          delivered_at: string | null
+          is_active: boolean
+          is_test: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: Omit<Database['public']['Tables']['trx_route_invoice_delivery']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['trx_route_invoice_delivery']['Insert']>
+      }
+      ref_delivery_reason_type: {
+        Row: {
+          id: string
+          code: string | null
+          name: string | null
+          description: string | null
+          id_result_invoice_status: number | null
+          releases_to_available: boolean
+          finalizes_invoice: boolean
+          uses_returned_balance: boolean
+          requires_reason: boolean
+          is_active: boolean
+          is_test: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: Omit<Database['public']['Tables']['ref_delivery_reason_type']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['ref_delivery_reason_type']['Insert']>
+      }
+      ref_delivery_reason: {
+        Row: {
+          id: string
+          name: string | null
+          id_reason_type: number | null
+          id_reason_category: number | null
+          sort_order: number | null
+          is_active: boolean
+          is_test: boolean
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: Omit<Database['public']['Tables']['ref_delivery_reason']['Row'], 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Database['public']['Tables']['ref_delivery_reason']['Insert']>
+      }
       // Staging / ETL tables
       stg_integration_route_csv: {
         Row: {
@@ -506,8 +655,16 @@ export interface Database {
         }
         Insert: Omit<Database['public']['Tables']['etl_integration_error']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['etl_integration_error']['Insert']>
-      }
-      // Staging tables for drag-drop route building
+}
+      // =====================================================
+      // STAGING TABLES - LEGACY
+      // =====================================================
+      // ATENÇÃO: stg_route_card e stg_route_card_notes são LEGACY
+      // Não usar em novos fluxos. Fonte oficial é:
+      //   - trx_route para rotas
+      //   - rel_route_invoice para notas vinculadas
+      //   - RPC get_assign_notes_board para dados da tela Atribuir Notas
+      // =====================================================
       stg_route_card: {
         Row: {
           id: string
@@ -541,6 +698,7 @@ export interface Database {
 // Type aliases for easier usage
 export type MasterPersonCompany = Database['public']['Tables']['master_person_company']['Row']
 export type MasterPersonCompanyAddress = Database['public']['Tables']['master_person_company_address']['Row']
+export type MasterPersonCompanyGroup = Database['public']['Tables']['master_person_company_group']['Row']
 export type MasterRouteArea = Database['public']['Tables']['master_route_area']['Row']
 export type MasterFleetVehicle = Database['public']['Tables']['master_fleet_vehicle']['Row']
 export type MasterPersonDriver = Database['public']['Tables']['master_person_driver']['Row']
@@ -549,6 +707,7 @@ export type MasterPersonResponsible = Database['public']['Tables']['master_perso
 
 export type RefPersonCompanyRoleType = Database['public']['Tables']['ref_person_company_role_type']['Row']
 export type RefPersonCompanyAddressType = Database['public']['Tables']['ref_person_company_address_type']['Row']
+export type RefRouteResponsible = Database['public']['Tables']['ref_route_responsible']['Row']
 export type RefRouteStatus = Database['public']['Tables']['ref_route_status']['Row']
 export type RefRouteDeliveryStatus = Database['public']['Tables']['ref_route_delivery_status']['Row']
 export type RefRouteType = Database['public']['Tables']['ref_route_type']['Row']
@@ -560,18 +719,34 @@ export type RefFiscalTotalStatus = Database['public']['Tables']['ref_fiscal_tota
 
 export type TrxRoute = Database['public']['Tables']['trx_route']['Row']
 export type TrxRouteHistory = Database['public']['Tables']['trx_route_history']['Row']
+export type TrxRouteStop = Database['public']['Tables']['trx_route_stop']['Row']
+export type TrxFiscalInvoiceImport = Database['public']['Tables']['trx_fiscal_invoice_import']['Row']
 export type TrxFiscalInvoice = Database['public']['Tables']['trx_fiscal_invoice']['Row']
 
 export type RelPersonCompanyRoleType = Database['public']['Tables']['rel_person_company_role_type']['Row']
 export type RelRouteInvoice = Database['public']['Tables']['rel_route_invoice']['Row']
+
+// =====================================================
+// REL TABLES - Status de uso (LEACY - não usar em novos fluxos)
+// =====================================================
+/** @deprecated LEGACY - Fonte oficial é trx_route.id_driver */
 export type RelRouteDriver = Database['public']['Tables']['rel_route_driver']['Row']
+/** @deprecated LEGACY - Não usado no código. Manter para possível uso futuro com trx_route.assistant text[] */
 export type RelRouteHelper = Database['public']['Tables']['rel_route_helper']['Row']
+/** @deprecated LEGACY - Fonte oficial é trx_route.id_route_responsible */
 export type RelRouteResponsible = Database['public']['Tables']['rel_route_responsible']['Row']
+/** @deprecated LEGACY - Fonte oficial é trx_route_stop */
 export type RelRouteDestination = Database['public']['Tables']['rel_route_destination']['Row']
 
 export type StgIntegrationRouteCsv = Database['public']['Tables']['stg_integration_route_csv']['Row']
 export type StgIntegrationFiscalInvoiceXml = Database['public']['Tables']['stg_integration_fiscal_invoice_xml']['Row']
 export type EtlIntegrationExecution = Database['public']['Tables']['etl_integration_execution']['Row']
 export type EtlIntegrationError = Database['public']['Tables']['etl_integration_error']['Row']
+
+// =====================================================
+// LEGACY TYPES - Não usar em novos fluxos
+// =====================================================
+/** @deprecated LEGACY - Use rel_route_invoice + get_assign_notes_board RPC */
 export type StgRouteCard = Database['public']['Tables']['stg_route_card']['Row']
+/** @deprecated LEGACY - Use rel_route_invoice */
 export type StgRouteCardNotes = Database['public']['Tables']['stg_route_card_notes']['Row']

@@ -1,21 +1,9 @@
 import { RouteCard } from './RouteCard'
-import { AssignedNote } from '../data/assign-notes.mock'
-
-interface RouteCardData {
-  id: string
-  tipoRota: string
-  numeroRota: string
-  veiculo: string
-  capacidade: number
-  cargaAtual: number
-  notasAtribuidas: AssignedNote[]
-  isEmpty?: boolean
-  id_vehicle?: string
-  route_status?: string
-}
+import { AssignedNote, RouteCardData, DivergenceInfo } from '../types/assign-notes.types'
 
 interface RoutesGridProps {
   routes: RouteCardData[]
+  divergences?: Record<string, DivergenceInfo>
   onDropNote?: (noteId: string, routeId: string) => void
   onRemoveNote?: (routeId: string, noteId: string, invoiceNumber: string) => void
   onCreateRoute?: (vehicleId: string) => void
@@ -26,6 +14,7 @@ interface RoutesGridProps {
 
 export const RoutesGrid = ({
   routes,
+  divergences = {},
   onDropNote,
   onRemoveNote,
   onCreateRoute,
@@ -34,41 +23,37 @@ export const RoutesGrid = ({
   loading = false,
 }: RoutesGridProps) => {
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-8 items-stretch w-full h-full overflow-visible">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4 w-full">
       {routes.map(route => {
         const notes = route.notasAtribuidas || []
         const isTemporary = String(route.id).startsWith('vehicle-')
+        const divergence = divergences[route.id]
 
-        // Para cards temporários, extrair o vehicleId do route.id
         const vehicleId = isTemporary ? route.id.replace('vehicle-', '') : undefined
 
         return (
-          <div
+          <RouteCard
             key={route.id}
-            className="min-w-[260px] lg:min-w-[240px] md:min-w-[220px] flex-1 max-w-[350px] lg:max-w-[320px] md:max-w-[280px]"
-          >
-            <RouteCard
-              route={{
-                ...route,
-                notasAtribuidas: notes,
-              }}
-              routeId={route.id}
-              isTemporary={isTemporary}
-              onDropNote={(noteId, routeId) => onDropNote?.(noteId, routeId)}
-              onRemoveNote={(routeId, noteId, invoiceNumber) =>
-                onRemoveNote?.(routeId, noteId, invoiceNumber)
-              }
-              onCreateRoute={() => vehicleId && onCreateRoute?.(vehicleId)}
-              onAlterRoute={() => {
-                console.log('[RoutesGrid] calling onAlterRoute for route:', route.id)
-                onAlterRoute?.(String(route.id))
-              }}
-              onViewNote={onViewNote}
-              loading={loading}
-            />
-          </div>
+            route={{
+              ...route,
+              notasAtribuidas: notes,
+            }}
+            routeId={route.id}
+            divergence={divergence}
+            isTemporary={isTemporary}
+            onDropNote={(noteId, routeId) => onDropNote?.(noteId, routeId)}
+            onRemoveNote={(routeId, noteId, invoiceNumber) =>
+              onRemoveNote?.(routeId, noteId, invoiceNumber)
+            }
+            onCreateRoute={() => vehicleId && onCreateRoute?.(vehicleId)}
+            onAlterRoute={() => onAlterRoute?.(String(route.id))}
+            onViewNote={onViewNote}
+            loading={loading}
+          />
         )
       })}
     </div>
   )
 }
+
+export default RoutesGrid

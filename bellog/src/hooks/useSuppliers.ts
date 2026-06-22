@@ -1,17 +1,24 @@
 import { useState, useEffect, useCallback } from 'react'
-import { companyService, CompanyWithAddress, CompanyFormData } from '../services/company.service'
+import { companyService, CompanyWithAddress, CompanyFormData } from '../features/companies'
 
 interface UseSuppliersResult {
   suppliers: CompanyWithAddress[]
   total: number
   loading: boolean
   error: string | null
+  groups: { id: number; name: string }[]
   fetchSuppliers: (params?: {
     search?: string
     isActive?: boolean
     page?: number
     limit?: number
+    groupId?: number | null
+    cnpj?: string
+    zipCode?: string
+    street?: string
+    district?: string
   }) => Promise<void>
+  fetchGroups: () => Promise<void>
   getSupplierById: (id: string) => Promise<CompanyWithAddress | null>
   createSupplier: (formData: CompanyFormData) => Promise<CompanyWithAddress>
   updateSupplier: (id: string, formData: CompanyFormData) => Promise<CompanyWithAddress>
@@ -29,12 +36,18 @@ export const useSuppliers = (initialParams?: {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [groups, setGroups] = useState<{ id: number; name: string }[]>([])
 
   const fetchSuppliers = useCallback(async (params?: {
     search?: string
     isActive?: boolean
     page?: number
     limit?: number
+    groupId?: number | null
+    cnpj?: string
+    zipCode?: string
+    street?: string
+    district?: string
   }) => {
     setLoading(true)
     setError(null)
@@ -49,6 +62,15 @@ export const useSuppliers = (initialParams?: {
     }
   }, [])
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const data = await companyService.listGroups('supplier')
+      setGroups(data.map(g => ({ id: g.id, name: g.name ?? '' })))
+    } catch {
+      setGroups([])
+    }
+  }, [])
+
   const getSupplierById = useCallback(async (id: string) => {
     try {
       return await companyService.getById(id)
@@ -59,7 +81,6 @@ export const useSuppliers = (initialParams?: {
   }, [])
 
   const createSupplier = useCallback(async (formData: CompanyFormData) => {
-    // Pass 'SUPPLIER' role type when creating
     const result = await companyService.createWithAddress(formData, 'DELIVERY', 'SUPPLIER')
     return companyService.getById(result.id) as Promise<CompanyWithAddress>
   }, [])
@@ -86,7 +107,9 @@ export const useSuppliers = (initialParams?: {
     total,
     loading,
     error,
+    groups,
     fetchSuppliers,
+    fetchGroups,
     getSupplierById,
     createSupplier,
     updateSupplier,

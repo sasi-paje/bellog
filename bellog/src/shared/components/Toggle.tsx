@@ -73,8 +73,8 @@ export const Toggle = ({
 
       {label && (
         <span
-          className="whitespace-nowrap text-[14px] font-normal"
-          style={{ fontFamily: 'Inter, sans-serif', color: GREY_LIGHTER }}
+          className={`whitespace-nowrap text-[14px] ${isOn ? 'font-bold' : 'font-normal'}`}
+          style={{ fontFamily: 'Inter, sans-serif', color: isOn ? '#2a2a2a' : GREY_LIGHTER }}
         >
           {label}
         </span>

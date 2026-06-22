@@ -1,216 +1,173 @@
 import { AppIcon } from '../../../shared/components'
-import { CompanyWithAddress } from '../../../services/company.service'
+import { CompanyWithAddress } from '../../../features/companies'
 
 interface FornecedoresTableProps {
   data?: CompanyWithAddress[]
   onRowClick?: (company: CompanyWithAddress) => void
 }
 
-// Column layout matching Figma - same as DestinosTable
-const TABLE_GRID = 'grid grid-cols-[2fr_1.5fr_1fr_1.2fr_0.8fr_0.8fr_64px]'
-const BG_HEADER = '#F0F4F9'
-const BG_OTHER = '#F0F4F9'
-const WHITE = '#FFFFFF'
-const TEXT = '#2A2A2A'
-
-interface TableRowProps {
-  data: CompanyWithAddress
-  index: number
-  onClick?: () => void
-}
-
-const TableRow = ({ data, index, onClick }: TableRowProps) => {
-  const rowBg = index % 2 === 0 ? WHITE : BG_OTHER
-  const address = data.addresses?.[0]
-
-  return (
-    <div
-      className={`${TABLE_GRID} h-[40px] w-full items-center cursor-pointer hover:opacity-80`}
-      style={{ backgroundColor: rowBg }}
-      onClick={onClick}
-    >
-      {/* Razão Social */}
-      <div className="flex h-full min-w-0 items-center px-[12px]">
-        <span
-          className="truncate font-medium text-[14px]"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.legal_name || '-'}
-        </span>
-      </div>
-
-      {/* Nome de Exibição */}
-      <div className="flex h-full min-w-0 items-center px-[12px]">
-        <span
-          className="truncate font-medium text-[14px]"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.trade_name || '-'}
-        </span>
-      </div>
-
-      {/* Rua */}
-      <div className="flex h-full min-w-0 items-center px-[12px]">
-        <span
-          className="truncate font-medium text-[14px]"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {address?.street || '-'}
-        </span>
-      </div>
-
-      {/* CEP */}
-      <div className="flex h-full items-center px-[12px]">
-        <span
-          className="font-medium text-[14px] whitespace-nowrap"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {address?.zip_code || '-'}
-        </span>
-      </div>
-
-      {/* Bairro */}
-      <div className="flex h-full items-center px-[12px]">
-        <span
-          className="truncate font-medium text-[14px]"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {address?.district || '-'}
-        </span>
-      </div>
-
-      {/* Número */}
-      <div className="flex h-full items-center px-[12px]">
-        <span
-          className="font-normal text-[14px] whitespace-nowrap"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {address?.street_number || '-'}
-        </span>
-      </div>
-
-      {/* Status */}
-      <div className="flex h-full items-center justify-center px-[12px]">
-        <span
-          className={`font-bold text-[14px] whitespace-nowrap ${data.is_active ? 'text-green-600' : 'text-red-500'}`}
-          style={{ fontFamily: 'Inter, sans-serif' }}
-        >
-          {data.is_active ? 'Ativo' : 'Inativo'}
-        </span>
-      </div>
-
-      {/* Actions */}
-      <div className="flex h-full items-center justify-center px-[12px] w-[64px]">
-        <div className="flex items-center justify-center w-[20px] h-[20px]">
-          <AppIcon name="edit" size={20} color={TEXT} />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const TableHeader = () => (
-  <div
-    className={`${TABLE_GRID} h-[32px] w-full items-center rounded-[6px]`}
-    style={{ backgroundColor: BG_HEADER }}
-  >
-    {/* Razão Social */}
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Razão Social
-      </span>
-    </div>
-
-    {/* Nome de Exibição */}
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Nome de Exibição
-      </span>
-    </div>
-
-    {/* Rua */}
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Rua
-      </span>
-    </div>
-
-    {/* CEP */}
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        CEP
-      </span>
-    </div>
-
-    {/* Bairro */}
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Bairro
-      </span>
-    </div>
-
-    {/* Número */}
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Número
-      </span>
-    </div>
-
-    {/* Status */}
-    <div className="flex h-full items-center justify-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Status
-      </span>
-    </div>
-
-    {/* Actions */}
-    <div className="flex h-full items-center justify-center px-[12px] w-[64px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Ações
-      </span>
-    </div>
-  </div>
-)
+const COLUMNS = [
+  { label: 'Razão Social', width: '220px' },
+  { label: 'Nome de Exibição', width: '190px' },
+  { label: 'Grupo', width: '160px' },
+  { label: 'E-mail', width: '190px' },
+  { label: 'Município', width: '160px' },
+  { label: 'Estado', width: '100px' },
+  { label: 'Status', width: '110px' },
+  { label: 'Ações', width: '70px' },
+]
 
 export const FornecedoresTable: React.FC<FornecedoresTableProps> = ({ data = [], onRowClick }) => {
-  return (
-    <div className="flex w-full flex-col items-start gap-0">
-      <TableHeader />
+  const getAddress = (row: CompanyWithAddress) => row.addresses?.[0]
 
-      <div className="flex w-full flex-col items-start">
-        {data.map((row, index) => (
-          <TableRow
-            key={row.id}
-            data={row}
-            index={index}
-            onClick={onRowClick ? () => onRowClick(row) : undefined}
-          />
-        ))}
-      </div>
+  return (
+    <div className="w-full rounded-md border border-[#E5E7EB]">
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col style={{ width: '18%' }} />
+          <col style={{ width: '16%' }} />
+          <col style={{ width: '13%' }} />
+          <col style={{ width: '16%' }} />
+          <col style={{ width: '13%' }} />
+          <col style={{ width: '8%' }} />
+          <col style={{ width: '9%' }} />
+          <col style={{ width: '7%' }} />
+        </colgroup>
+
+        <thead>
+          <tr style={{ backgroundColor: '#F3F6FA', height: '40px' }}>
+            {COLUMNS.map((col) => (
+              <th
+                key={col.label}
+                className="px-4 py-2 text-left text-[12px] font-semibold text-[#1F2937]"
+                style={{ fontFamily: 'Inter, sans-serif' }}
+              >
+                {col.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          {data.length === 0 ? (
+            <tr>
+              <td
+                colSpan={COLUMNS.length}
+                className="h-[100px] text-center text-[14px]"
+                style={{ color: '#9E9E9E', fontFamily: 'Inter, sans-serif' }}
+              >
+                Nenhum fornecedor encontrado.
+              </td>
+            </tr>
+          ) : (
+            data.map((row, index) => {
+              const addr = getAddress(row)
+              return (
+                <tr
+                  key={row.id}
+                  onClick={() => onRowClick?.(row)}
+                  className="cursor-pointer transition-colors hover:bg-[#E8F4FD]"
+                  style={{
+                    backgroundColor: index % 2 === 0 ? '#FFFFFF' : '#F3F6FA',
+                    height: '44px',
+                  }}
+                >
+                  {/* Razão Social */}
+                  <td
+                    className="px-4 py-2 text-[14px] font-medium text-[#1F2937]"
+                    style={{ fontFamily: 'Inter, sans-serif', borderBottom: '1px solid #E5E7EB' }}
+                  >
+                    <span className="block truncate" title={row.legal_name ?? ''}>
+                      {row.legal_name || '-'}
+                    </span>
+                  </td>
+
+                  {/* Nome de Exibição */}
+                  <td
+                    className="px-4 py-2 text-[14px] font-medium text-[#1F2937]"
+                    style={{ fontFamily: 'Inter, sans-serif', borderBottom: '1px solid #E5E7EB' }}
+                  >
+                    <span className="block truncate" title={row.trade_name ?? ''}>
+                      {row.trade_name || '-'}
+                    </span>
+                  </td>
+
+                  {/* Grupo */}
+                  <td
+                    className="px-4 py-2 text-[14px] font-medium text-[#1F2937]"
+                    style={{ fontFamily: 'Inter, sans-serif', borderBottom: '1px solid #E5E7EB' }}
+                  >
+                    <span className="block truncate" title={row.company_group?.name ?? ''}>
+                      {row.company_group?.name || '-'}
+                    </span>
+                  </td>
+
+                  {/* E-mail */}
+                  <td
+                    className="px-4 py-2 text-[14px] font-medium text-[#1F2937]"
+                    style={{ fontFamily: 'Inter, sans-serif', borderBottom: '1px solid #E5E7EB' }}
+                  >
+                    <span className="block truncate" title={row.email ?? ''}>
+                      {row.email || '-'}
+                    </span>
+                  </td>
+
+                  {/* Município */}
+                  <td
+                    className="px-4 py-2 text-[14px] font-medium text-[#1F2937]"
+                    style={{ fontFamily: 'Inter, sans-serif', borderBottom: '1px solid #E5E7EB' }}
+                  >
+                    <span className="block truncate" title={addr?.city ?? ''}>
+                      {addr?.city || '-'}
+                    </span>
+                  </td>
+
+                  {/* Estado */}
+                  <td
+                    className="px-4 py-2 text-[14px] font-medium text-[#1F2937]"
+                    style={{ fontFamily: 'Inter, sans-serif', borderBottom: '1px solid #E5E7EB' }}
+                  >
+                    {addr?.state || '-'}
+                  </td>
+
+                  {/* Status */}
+                  <td
+                    className="px-4 py-2 text-[14px] font-bold"
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontStyle: 'normal',
+                      lineHeight: 'normal',
+                      color: '#2A2A2A',
+                      borderBottom: '1px solid #E5E7EB',
+                    }}
+                  >
+                    {row.is_active ? 'Ativo' : 'Inativo'}
+                  </td>
+
+                  {/* Ações */}
+                  <td
+                    className="px-4 py-2 text-center"
+                    style={{ borderBottom: '1px solid #E5E7EB' }}
+                  >
+                    <div className="flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onRowClick?.(row)
+                        }}
+                        className="flex items-center justify-center w-8 h-8 rounded hover:bg-[#F0F4F9] transition-colors"
+                      >
+                        <AppIcon name="edit" size={18} color="#1F2937" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }

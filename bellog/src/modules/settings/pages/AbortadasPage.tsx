@@ -1,82 +1,138 @@
-import { AppIcon, PageHeader, Pagination, PrimaryButton, SecondaryButton, Toggle } from '../../../shared/components'
+import { useState, useEffect } from 'react'
+import { PageHeader, Pagination, PrimaryButton, SecondaryButton, Toggle, PageToolbar } from '../../../shared/components'
 import { AbortadasTable } from '../components/AbortadasTable'
-import { abortadasData } from '../data/abortadas.mock'
+import { useRefData } from '../../../hooks/useRefData'
 
 interface AbortadasPageProps {
-  data?: typeof abortadasData
   userName?: string
   userRole?: string
+  onLogout?: () => void
+  userEmail?: string
   onBack?: () => void
   isSidebarOpen?: boolean
   onToggleSidebar?: () => void
 }
 
 export const AbortadasPage = ({
-  data = abortadasData,
   userName = 'Leon Kennedy',
   userRole = 'Usuário',
+  onLogout,
+  userEmail,
   onBack,
   isSidebarOpen = true,
   onToggleSidebar,
-}: AbortadasPageProps) => (
-  <div className="flex flex-col flex-1 min-h-0">
-    {/* Page Header */}
-    <PageHeader
-      title="Abortadas"
-      breadcrumb="Configurações"
-      isSidebarOpen={isSidebarOpen}
-      onToggleSidebar={onToggleSidebar || (() => {})}
-      userName={userName}
-      userRole={userRole}
-    />
+}: AbortadasPageProps) => {
+  const { data: abortadas, total, fetchData, create, toggleActive } = useRefData('ref_abortadas')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
+  const [page, setPage] = useState(1)
+  const limit = 20
+  const totalPages = Math.ceil(total / limit) || 1
 
-    {/* Main Content */}
-    <div className="flex flex-col gap-4 p-4 flex-1 overflow-auto">
-      {/* Toolbar Row */}
-      <div className="flex items-center justify-between shrink-0 w-full">
-        {/* Left: Search */}
-        <div className="flex items-center">
-          {/* Search Input */}
-          <div className="bg-[#f9f9f9] border border-[#bdbdbd] flex items-center h-10 rounded-[5px] w-[526px]">
-            <div className="flex flex-1 items-center h-full px-[8px]">
-              <span className="font-normal text-[14px] text-[#bdbdbd]">Busque por motivos de Abortadas...</span>
-            </div>
-            <div className="bg-[#e67c26] flex items-center justify-center h-full px-[8px] py-[2px] rounded-br-[4px] rounded-tr-[4px]">
-              <AppIcon name="search" size={24} className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
+  useEffect(() => {
+    fetchData({
+      search: searchTerm || undefined,
+      isActive: showInactive ? undefined : true,
+      page,
+      limit,
+    })
+  }, [searchTerm, showInactive, page])
 
-        {/* Right: Actions */}
-        <div className="flex gap-4 items-center">
-          {/* Voltar para Configurações */}
-          <SecondaryButton
-            label="Voltar para Configurações"
-            onClick={onBack}
+  const handleSearch = (term: string) => {
+    setSearchTerm(term)
+    setPage(1)
+  }
+
+  const handleAddNew = async () => {
+    const description = prompt('Digite o motivo da abortada:')
+    if (description) {
+      try {
+        await create({ description })
+        fetchData({
+          search: searchTerm || undefined,
+          isActive: showInactive ? undefined : true,
+          page,
+          limit,
+        })
+      } catch (err) {
+        console.error('[AbortadasPage] Error creating abortada:', err)
+      }
+    }
+  }
+
+  const handleToggleActive = async (id: string, isActive: boolean) => {
+    try {
+      await toggleActive(id, isActive)
+      fetchData({
+        search: searchTerm || undefined,
+        isActive: showInactive ? undefined : true,
+        page,
+        limit,
+      })
+    } catch (err) {
+      console.error('[AbortadasPage] Error toggling abortada:', err)
+    }
+  }
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* Page Header */}
+      <PageHeader
+        title="Abortadas"
+        breadcrumb="Configurações"
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={onToggleSidebar || (() => {})}
+        userName={userName}
+        userEmail={userEmail}
+        userRole={userRole}
+        onLogout={onLogout}
+      />
+
+      {/* Main Content */}
+      <div className="flex flex-col gap-4 p-4 flex-1 overflow-auto">
+        {/* Toolbar Row */}
+        <PageToolbar
+          search={{
+            placeholder: 'Busque por motivos de Abortadas...',
+            value: searchTerm,
+            onChange: handleSearch,
+            onSearch: handleSearch,
+            width: '360px',
+          }}
+          actions={[
+            { label: 'Voltar para Configurações', variant: 'secondary', onClick: onBack || (() => {}) },
+            { label: 'Adicionar Novo', icon: 'add_box', variant: 'primary', onClick: handleAddNew },
+          ]}
+        />
+
+        {/* Toggle and Pagination Row */}
+        <div className="flex items-center justify-between shrink-0 w-full">
+          {/* Toggle Exibir Inativos */}
+          <Toggle
+            label="Exibir inativos"
+            checked={showInactive}
+            onChange={(checked) => {
+              setShowInactive(checked)
+              setPage(1)
+            }}
           />
 
-          {/* Adicionar Novo */}
-          <PrimaryButton
-            label="Adicionar Novo"
-            icon="add_box"
-            onClick={() => {}}
+          {/* Pagination */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
           />
         </div>
-      </div>
 
-      {/* Toggle and Pagination Row */}
-      <div className="flex items-center justify-between shrink-0 w-full">
-        {/* Toggle Exibir Inativos */}
-        <Toggle label="Exibir inativos" />
-
-        {/* Pagination */}
-        <Pagination />
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 w-full min-w-0">
-        <AbortadasTable data={data} />
+        {/* Table */}
+        <div className="flex-1 w-full min-w-0">
+          <AbortadasTable
+            data={abortadas}
+            onToggleActive={handleToggleActive}
+          />
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
+}

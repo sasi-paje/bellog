@@ -1,103 +1,59 @@
-import { AppIcon } from '../../../shared/components'
-import { recusasData, RecusaMock } from '../data/recusas.mock'
+import { SharedTable, AppIcon } from '../../../shared/components'
+import { MotivosData } from '../../../hooks/useMotivos'
 
-interface RecusasTableProps {
-  data?: RecusaMock[]
-}
+const TEXT_COLOR = '#2A2A2A'
 
-const TABLE_GRID = 'grid grid-cols-[minmax(0,1fr)_220px_80px]'
-const BG_OTHER = '#F0F4F9'
-const WHITE = '#FFFFFF'
-const TEXT = '#2A2A2A'
-
-interface TableRowProps {
-  data: {
-    motivo: string
-    status: string
-  }
-  index: number
-}
-
-const TableRow = ({ data, index }: TableRowProps) => {
-  const rowBg = index % 2 === 0 ? WHITE : BG_OTHER
-
-  return (
-    <div
-      className={`${TABLE_GRID} h-[40px] w-full items-center`}
-      style={{ backgroundColor: rowBg }}
-    >
-      <div className="flex h-full min-w-0 items-center px-[12px]">
-        <span
-          className="truncate font-medium text-[14px]"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.motivo}
-        </span>
-      </div>
-
-      <div className="flex h-full items-center px-[12px]">
-        <span
-          className="font-bold text-[14px] whitespace-nowrap"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.status}
-        </span>
-      </div>
-
-      <div className="flex h-full items-center justify-end px-[12px]">
-        <button
-          type="button"
-          className="flex h-5 w-5 items-center justify-center rounded hover:bg-black/5"
-        >
-          <AppIcon name="edit" size={20} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-const TableHeader = () => (
-  <div
-    className={`${TABLE_GRID} h-[32px] w-full items-center rounded-[6px]`}
-    style={{ backgroundColor: BG_OTHER }}
-  >
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Motivo
-      </span>
-    </div>
-
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Status
-      </span>
-    </div>
-
-    <div className="flex h-full items-center justify-end px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Actions
-      </span>
-    </div>
-  </div>
+const renderText = (value: string | undefined) => (
+  <span className="font-medium text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
+    {value || '-'}
+  </span>
 )
 
-export const RecusasTable: React.FC<RecusasTableProps> = ({ data = recusasData }) => (
-  <div className="flex w-full flex-col items-start gap-0">
-    <TableHeader />
+const renderStatus = (row: MotivosData) => (
+  <span
+    className="font-bold text-[14px] whitespace-nowrap"
+    style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}
+  >
+    {row.isActive ? 'Ativo' : 'Inativo'}
+  </span>
+)
 
-    <div className="flex w-full flex-col items-start">
-      {data.map((row, index) => (
-        <TableRow key={index} data={row} index={index} />
-      ))}
-    </div>
-  </div>
+interface RecusasTableProps {
+  data: MotivosData[]
+  onToggleActive?: (id: string, isActive: boolean) => void
+  onEdit?: (row: MotivosData) => void
+}
+
+export const RecusasTable = ({ data, onEdit }: RecusasTableProps) => (
+  <SharedTable<MotivosData>
+    onRowClick={onEdit}
+    columns={[
+      { key: 'motivo', label: 'Motivo', render: (row) => renderText(row.motivo) },
+      { key: 'categoria', label: 'Categoria', render: (row) => renderText(row.categoria) },
+      { key: 'tipoEntrega', label: 'Tipo de Entrega', render: (row) => renderText(row.tipoEntrega) },
+      { key: 'status', label: 'Status', render: renderStatus },
+      {
+        key: 'acoes',
+        label: 'Ações',
+        width: '70px',
+        align: 'center',
+        render: (row) => (
+          <div className="flex items-center justify-center">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit?.(row)
+              }}
+              className="flex items-center justify-center w-8 h-8 rounded hover:bg-[#F0F4F9] transition-colors"
+            >
+              <AppIcon name="edit" size={18} color="#1F2937" />
+            </button>
+          </div>
+        ),
+      },
+    ]}
+    data={data}
+    emptyMessage="Nenhum motivo encontrado."
+  />
 )

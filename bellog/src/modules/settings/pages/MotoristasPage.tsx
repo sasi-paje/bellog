@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react'
-import { AppIcon, PageHeader, Pagination, PrimaryButton, SecondaryButton, Toggle } from '../../../shared/components'
+import { PageHeader, Pagination, Toggle } from '../../../shared/components'
+import { useToast, ToastContainer } from '../../../shared/components/Toast'
 import { MotoristasTable } from '../components/MotoristasTable'
 import { DriverDrawer } from '../components/DriverDrawer'
+import { InactivateConfirmModal } from '../components/InactivateConfirmModal'
+import { MotoristasToolbar, MotoristasFilterData, EMPTY_MOTORISTAS_FILTERS } from '../components/MotoristasToolbar'
 import { useDrivers } from '../../../hooks/useDrivers'
-import { DriverWithAddress, DriverFormData } from '../../../services/driver.service'
+import { driverService, DriverWithAddress, DriverFormData } from '../../../features/drivers'
 
 interface MotoristasPageProps {
   userName?: string
   userRole?: string
+  onLogout?: () => void
+  userEmail?: string
   onBack?: () => void
   isSidebarOpen?: boolean
   onToggleSidebar?: () => void
@@ -16,6 +21,8 @@ interface MotoristasPageProps {
 export const MotoristasPage = ({
   userName = 'Leon Kennedy',
   userRole = 'Usuário',
+  onLogout,
+  userEmail,
   onBack,
   isSidebarOpen = true,
   onToggleSidebar,
@@ -31,12 +38,13 @@ export const MotoristasPage = ({
     toggleActive,
   } = useDrivers()
 
+  const { toasts, showSuccess, showError, removeToast } = useToast()
+
   const [searchTerm, setSearchTerm] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [page, setPage] = useState(1)
+  const [activeFilters, setActiveFilters] = useState<MotoristasFilterData>(EMPTY_MOTORISTAS_FILTERS)
   const limit = 20
-
-  // Calculate total pages
   const totalPages = Math.ceil(total / limit) || 1
 
   // Drawer state
@@ -45,18 +53,33 @@ export const MotoristasPage = ({
   const [isEditing, setIsEditing] = useState(false)
   const [isNew, setIsNew] = useState(false)
 
-  // Fetch drivers when filters change
-  useEffect(() => {
+  // Confirm modal state (shared for activate and inactivate)
+  const [pendingAction, setPendingAction] = useState<'activate' | 'inactivate' | null>(null)
+  const [isValidating, setIsValidating] = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
+
+  const refreshList = () =>
     fetchDrivers({
       search: searchTerm || undefined,
       isActive: showInactive ? undefined : true,
       page,
       limit,
+      taxId: activeFilters.taxId || undefined,
+      email: activeFilters.email || undefined,
+      phone: activeFilters.phone || undefined,
     })
-  }, [searchTerm, showInactive, page])
+
+  useEffect(() => {
+    refreshList()
+  }, [searchTerm, showInactive, page, activeFilters])
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
+    setPage(1)
+  }
+
+  const handleFilter = (filters: MotoristasFilterData) => {
+    setActiveFilters(filters)
     setPage(1)
   }
 
@@ -68,7 +91,6 @@ export const MotoristasPage = ({
   }
 
   const handleRowClick = async (driver: DriverWithAddress) => {
-    // Get full driver details
     const fullDriver = await getDriverById(driver.id)
     setSelectedDriver(fullDriver)
     setIsNew(false)
@@ -80,60 +102,59 @@ export const MotoristasPage = ({
     setIsEditing(true)
   }
 
-  const handleCancelEdit = async () => {
-    if (isNew) {
-      setIsDrawerOpen(false)
-    } else {
-      // Reload driver data
-      if (selectedDriver) {
-        const updated = await getDriverById(selectedDriver.id)
-        setSelectedDriver(updated)
-      }
-    }
-    setIsEditing(false)
-  }
-
   const handleSave = async (formData: DriverFormData) => {
-    console.log('[MotoristasPage] handleSave called with:', formData)
-    try {
-      if (isNew) {
-        console.log('[MotoristasPage] Creating new driver...')
-        await createDriver(formData)
-        console.log('[MotoristasPage] Created successfully')
-      } else if (selectedDriver) {
-        console.log('[MotoristasPage] Updating driver:', selectedDriver.id)
-        await updateDriver(selectedDriver.id, formData)
-        // Reload to get updated data
-        const updated = await getDriverById(selectedDriver.id)
-        setSelectedDriver(updated)
-      }
-      setIsEditing(false)
-      // Refresh list
-      fetchDrivers({
-        search: searchTerm || undefined,
-        isActive: showInactive ? undefined : true,
-        page,
-        limit,
-      })
-    } catch (err) {
-      console.error('[MotoristasPage] Error saving:', err)
-      throw err
+    const isEditingMode = !isNew && Boolean(selectedDriver)
+    if (isNew) {
+      await createDriver(formData)
+    } else if (selectedDriver) {
+      await updateDriver(selectedDriver.id, formData)
+      const updated = await getDriverById(selectedDriver.id)
+      setSelectedDriver(updated)
     }
+    showSuccess(isEditingMode ? 'Motorista atualizado com sucesso.' : 'Motorista criado com sucesso.')
+    setIsEditing(false)
+    refreshList()
   }
 
   const handleToggleActive = async (isActive: boolean) => {
-    if (selectedDriver) {
-      await toggleActive(selectedDriver.id, isActive)
-      // Reload driver
-      const updated = await getDriverById(selectedDriver.id)
-      setSelectedDriver(updated)
-      // Refresh list
-      fetchDrivers({
-        search: searchTerm || undefined,
-        isActive: showInactive ? undefined : true,
-        page,
-        limit,
-      })
+    if (!selectedDriver) return
+
+    if (isActive) {
+      setPendingAction('activate')
+      return
+    }
+
+    setIsValidating(true)
+    try {
+      const { canInactivate, reason } = await driverService.canInactivateDriver(selectedDriver.id)
+      if (!canInactivate) {
+        showError(reason || 'Não é possível inativar este motorista.')
+        return
+      }
+      setPendingAction('inactivate')
+    } catch (err) {
+      showError((err as Error).message || 'Erro ao validar inativação.')
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
+  const handleConfirmAction = async () => {
+    if (!selectedDriver || !pendingAction) return
+    setIsConfirming(true)
+    try {
+      const newActive = pendingAction === 'activate'
+      await toggleActive(selectedDriver.id, newActive)
+      setPendingAction(null)
+      setIsDrawerOpen(false)
+      setSelectedDriver(null)
+      refreshList()
+      showSuccess(newActive ? 'Motorista ativado com sucesso.' : 'Motorista inativado com sucesso.')
+    } catch (err) {
+      showError((err as Error).message || `Erro ao ${pendingAction === 'activate' ? 'ativar' : 'inativar'} motorista.`)
+      setPendingAction(null)
+    } finally {
+      setIsConfirming(false)
     }
   }
 
@@ -153,53 +174,26 @@ export const MotoristasPage = ({
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}
+        userEmail={userEmail}
         userRole={userRole}
+        onLogout={onLogout}
       />
 
       {/* Main Content */}
-      <div className="flex flex-col gap-4 p-4 flex-1 overflow-auto">
-        {/* Toolbar Row */}
-        <div className="flex items-center justify-between shrink-0 w-full">
-          {/* Left: Search */}
-          <div className="flex items-center">
-            {/* Search Input */}
-            <div className="bg-[#f9f9f9] border border-[#bdbdbd] flex items-center h-10 rounded-[5px] w-[526px]">
-              <div className="flex flex-1 items-center h-full px-[8px]">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Busque por um motorista..."
-                  className="flex-1 bg-transparent outline-none text-[14px] text-[#2a2a2a]"
-                  style={{ fontFamily: 'Inter, sans-serif' }}
-                />
-              </div>
-              <div className="bg-[#e67c26] flex items-center justify-center h-full px-[8px] py-[2px] rounded-br-[4px] rounded-tr-[4px]">
-                <AppIcon name="search" size={24} className="w-6 h-6" />
-              </div>
-            </div>
-          </div>
-
-          {/* Right: Actions */}
-          <div className="flex gap-4 items-center">
-            {/* Voltar para Configurações */}
-            <SecondaryButton
-              label="Voltar para Configurações"
-              onClick={onBack}
-            />
-
-            {/* Adicionar Novo */}
-            <PrimaryButton
-              label="Adicionar Novo"
-              icon="add_box"
-              onClick={handleAddNew}
-            />
-          </div>
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-4 gap-3">
+        {/* Toolbar Row — fixo */}
+        <div className="shrink-0">
+          <MotoristasToolbar
+            initialSearch={searchTerm}
+            onSearch={handleSearch}
+            onFilter={handleFilter}
+            onBack={onBack}
+            onAddNew={handleAddNew}
+          />
         </div>
 
-        {/* Toggle and Pagination Row */}
+        {/* Toggle and Pagination Row — fixo */}
         <div className="flex items-center justify-between shrink-0 w-full">
-          {/* Toggle Exibir Inativos */}
           <Toggle
             label="Exibir inativos"
             checked={showInactive}
@@ -208,8 +202,6 @@ export const MotoristasPage = ({
               setPage(1)
             }}
           />
-
-          {/* Pagination */}
           <Pagination
             currentPage={page}
             totalPages={totalPages}
@@ -217,8 +209,8 @@ export const MotoristasPage = ({
           />
         </div>
 
-        {/* Table */}
-        <div className="flex-1 w-full min-w-0">
+        {/* Table — scroll apenas aqui */}
+        <div className="flex-1 min-h-0 overflow-y-auto w-full">
           <MotoristasTable
             data={drivers}
             onRowClick={handleRowClick}
@@ -233,11 +225,25 @@ export const MotoristasPage = ({
         driver={selectedDriver}
         isEditing={isEditing}
         isNew={isNew}
-        isLoading={loading}
+        isLoading={loading || isValidating || isConfirming}
         onSave={handleSave}
         onToggleActive={handleToggleActive}
         onEdit={handleEdit}
       />
+
+      {/* Activation / Inactivation confirmation modal */}
+      <InactivateConfirmModal
+        isOpen={pendingAction !== null}
+        action={pendingAction ?? 'inactivate'}
+        entityLabel="Motorista"
+        onClose={() => setPendingAction(null)}
+        onConfirm={handleConfirmAction}
+        isLoading={isConfirming}
+        companyName={selectedDriver?.name || 'este motorista'}
+      />
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   )
 }

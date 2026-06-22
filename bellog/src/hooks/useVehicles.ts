@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { vehicleService, VehicleListItem, CreateVehicleDTO, UpdateVehicleDTO } from '../services/vehicle.service'
+import { vehicleService, VehicleListItem, CreateVehicleDTO, UpdateVehicleDTO } from '../features/vehicles'
+import { useRealtimeVehicles } from './useRealtime'
 
 interface UseVehiclesResult {
   vehicles: VehicleListItem[]
@@ -12,10 +13,14 @@ interface UseVehiclesResult {
     showInactive?: boolean
     page?: number
     limit?: number
+    max_capacity?: number
+    responsible_name?: string
+    responsible_type?: string
   }) => Promise<void>
   createVehicle: (data: CreateVehicleDTO) => Promise<void>
   updateVehicle: (id: string, data: UpdateVehicleDTO) => Promise<void>
   toggleVehicleActive: (id: string) => Promise<void>
+  setVehicleActive: (id: string, isActive: boolean) => Promise<void>
   getVehicleById: (id: string) => Promise<VehicleListItem | null>
 }
 
@@ -37,6 +42,9 @@ export const useVehicles = (initialParams?: {
     showInactive?: boolean
     page?: number
     limit?: number
+    max_capacity?: number
+    responsible_name?: string
+    responsible_type?: string
   }) => {
     setLoading(true)
     setError(null)
@@ -90,7 +98,6 @@ export const useVehicles = (initialParams?: {
     setError(null)
     try {
       await vehicleService.toggleActive(id)
-      // Refresh the list
       const result = await vehicleService.list({ isActive: true, page: 1, limit: 20 })
       setVehicles(result.data)
       setTotal(result.total)
@@ -101,6 +108,31 @@ export const useVehicles = (initialParams?: {
       setLoading(false)
     }
   }, [])
+
+  const setVehicleActive = useCallback(async (id: string, isActive: boolean) => {
+    await vehicleService.setActive(id, isActive)
+  }, [])
+
+  const handleRealtimeUpdate = useCallback((payload: any) => {
+    const updated = payload.new
+    setVehicles(prev => prev.map(v => v.id === updated.id ? { ...v, plate: updated.plate, is_active: updated.is_active } : v))
+  }, [])
+
+  const handleRealtimeInsert = useCallback(() => {
+    fetchVehicles({ isActive: true, page: 1, limit: 20 })
+  }, [fetchVehicles])
+
+  const handleRealtimeDelete = useCallback((payload: any) => {
+    setVehicles(prev => prev.filter(v => v.id !== payload.old.id))
+    setTotal(prev => Math.max(0, prev - 1))
+  }, [])
+
+  useRealtimeVehicles({
+    onUpdate: handleRealtimeUpdate,
+    onInsert: handleRealtimeInsert,
+    onDelete: handleRealtimeDelete,
+    enabled: true,
+  })
 
   const getVehicleById = useCallback(async (id: string) => {
     try {
@@ -126,6 +158,7 @@ export const useVehicles = (initialParams?: {
     createVehicle,
     updateVehicle,
     toggleVehicleActive,
+    setVehicleActive,
     getVehicleById,
   }
 }

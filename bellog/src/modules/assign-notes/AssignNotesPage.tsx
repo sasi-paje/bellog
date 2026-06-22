@@ -1,412 +1,50 @@
 // =====================================================
-// ARQUITETURA DA PÁGINA ATRIBUIR NOTAS
+// ASSIGN-NOTES PAGE - Página principal de atribuição
 // =====================================================
-//
-// Este arquivo segue uma arquitetura limpa com estas camadas:
-//
-// 1. TIPOS           - Definições de interfaces e tipos
-// 2. ESTADO PERSISTIDO (usePersistedState) - Dados do banco
-// 3. ESTADO TEMPORÁRIO (useTemporaryState) - Alterações locais
-// 4. REGRAS DE NEGÓCIO - Funções de comando (commands)
-// 5. BUILDER - Funções de construção de cards
-// 6. UI - Componentes de apresentação
-// =====================================================
+// Arquivo: src/modules/assign-notes/AssignNotesPage.tsx
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { AppIcon, Drawer } from '../../shared/components'
+import { AppIcon, Drawer, UserMenu } from '../../shared/components'
 import { NotesList } from './components/NotesList'
 import { RoutesGrid } from './components/RoutesGrid'
 import { ConfirmRemoveModal } from './components/ConfirmRemoveModal'
-import { FilterModal } from './components/FilterModal'
-import { NoteDetailModal } from './components/NoteDetailModal'
+import { FilterPopover, FilterValues } from './components/FilterPopover'
+import { NoteDetailsDrawer } from '../notes/components/NoteDetailsDrawer'
 import { RouteEditForm } from '../routes/components/RouteEditForm'
-import { routeService, RouteListItem } from '../../services/route.service'
-import { fiscalInvoiceService } from '../../services/fiscal-invoice.service'
-import { assignmentService } from '../../services/assignment.service'
-import { driverService } from '../../services/driver.service'
-import { MasterFleetVehicle, supabase, getEnvironment } from '../../lib/supabase'
+import { assignNotesService, FilterOption } from './services/assign-notes.service'
+import {
+  NoteItem,
+  AssignedNote,
+  RouteCardData,
+  RouteFormData,
+  FleetVehicle,
+  RouteListItem,
+  DivergenceInfo,
+  ResponsibleOption,
+} from './types/assign-notes.types'
 
 // =====================================================
-// 1. TIPOS E INTERFACES
+// UTILITÁRIOS
 // =====================================================
 
-/** Nota disponível na lista da esquerda */
-interface NoteItem {
-  id: string
-  invoice_number: string
-  weight: number
-  volume: number
-  value?: number
-  destination_name?: string
-  issue_date?: string
-  is_active?: boolean
-}
-
-/** Nota atribuída a uma rota (formato interno) */
-interface AssignedNote {
-  id: string
-  invoice_number: string
-  peso: number
-  destination_name?: string
-}
-
-/** Dados do card de rota para renderização */
-interface RouteCardData {
-  id: string
-  tipoRota: string
-  numeroRota: string
-  veiculo: string
-  capacidade: number
-  cargaAtual: number
-  notasAtribuidas: AssignedNote[]
-  isTemporary: boolean
-  hasPendingChanges: boolean
-  buttonLabel: string
-  buttonColor: 'gray' | 'orange'
-  route_status?: string
-}
-
-/** Props do componente de página */
-interface AssignNotesPageProps {
-  userName?: string
-  userRole?: string
-}
-
-/** Dados do formulário de rota */
-interface RouteFormData {
-  status: string
-  statusEntrega: string
-  numeroRota: string
-  areaRota: string
-  responsaveis: string
-  destinos: { value: string; label: string }[]
-  tipoRota: string
-  dataSaida: string
-  fimRota: string
-  motorista: string
-  ajudante: string
-  placaVeiculo: string
-  cargaMaxima: string
+function getTodayDateOnly(): string {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // =====================================================
-// 2. ESTADO PERSISTIDO (usePersistedState)
-// =====================================================
-//
-// Responsabilidade: gerenciar dados que vêm do banco de dados
-// - rotas existentes
-// - notas vinculadas às rotas
-// - veículos disponíveis
-// - drivers, statuses de rota, statuses de entrega
-
-function usePersistedState() {
-  const [routes, setRoutes] = useState<RouteListItem[]>([])
-  const [routeNotes, setRouteNotes] = useState<Record<string, AssignedNote[]>>({})
-  const [vehicles, setVehicles] = useState<MasterFleetVehicle[]>([])
-  const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([])
-  const [routeStatuses, setRouteStatuses] = useState<{ id: string; description: string }[]>([])
-  const [deliveryStatuses, setDeliveryStatuses] = useState<{ id: string; description: string }[]>([])
-
-  /** Busca todas as rotas ativas e suas notas vinculadas */
-  const fetchRoutes = useCallback(async () => {
-    const result = await routeService.list({ isActive: true, limit: 50 })
-    setRoutes(result.data)
-
-    // Para cada rota, buscar suas notas vinculadas
-    const notesByRoute: Record<string, AssignedNote[]> = {}
-    const promises = result.data.map(async (r) => {
-      const invoices = await fiscalInvoiceService.getByRouteId(String(r.id))
-      return {
-        routeId: String(r.id),
-        notes: invoices.map((inv) => ({
-          id: String(inv.id),
-          invoice_number: inv.invoice_number,
-          peso: inv.weight,
-          destination_name: inv.destination_name,
-        })),
-      }
-    })
-
-    const results = await Promise.all(promises)
-    results.forEach(({ routeId, notes }) => {
-      notesByRoute[routeId] = notes
-    })
-
-    setRouteNotes(notesByRoute)
-  }, [])
-
-  /** Busca dados de referência: veículos, drivers, statuses */
-  const fetchReferenceData = useCallback(async () => {
-    const refData = await routeService.getReferenceData()
-
-    setVehicles(refData.vehicles)
-    setRouteStatuses(refData.statuses.map((s: any) => ({
-      id: String(s.id),
-      description: s.name || s.description || s.code,
-    })))
-    setDeliveryStatuses(refData.deliveryStatuses.map((s: any) => ({
-      id: String(s.id),
-      description: s.name || s.description || s.code,
-    })))
-
-    const driverData = await driverService.list()
-    setDrivers(driverData.data?.map((d: any) => ({ id: d.id, name: d.name })) || [])
-  }, [])
-
-  return {
-    routes,
-    routeNotes,
-    vehicles,
-    drivers,
-    routeStatuses,
-    deliveryStatuses,
-    fetchRoutes,
-    fetchReferenceData,
-  }
-}
-
-// =====================================================
-// 3. ESTADO TEMPORÁRIO (useTemporaryState)
-// =====================================================
-//
-// Responsabilidade: gerenciar alterações locais não persistidas
-// - notas atribuídas a veículos temporários (sem rota)
-// - notas adicionadas/removidas em rotas existentes (pendentes)
-// - notas disponíveis (não atribuídas a nenhuma rota/veículo)
-
-function useTemporaryState() {
-  /** Override local de notas por rota/veículo */
-  const [localRouteNotes, setLocalRouteNotes] = useState<Record<string, AssignedNote[]>>({})
-
-  /** Lista de notas disponíveis (não atribuídas) */
-  const [localUnassignedNotes, setLocalUnassignedNotes] = useState<NoteItem[]>([])
-
-  /** Rotas que têm alterações locais pendentes */
-  const [dirtyRoutes, setDirtyRoutes] = useState<Set<string>>(new Set())
-
-  /** Limpa todas as alterações locais de uma rota */
-  const clearChanges = useCallback((routeId: string) => {
-    setLocalRouteNotes((prev) => {
-      const next = { ...prev }
-      delete next[routeId]
-      return next
-    })
-    setDirtyRoutes((prev) => {
-      const next = new Set(prev)
-      next.delete(routeId)
-      return next
-    })
-  }, [])
-
-  /** Busca notas não atribuídas a nenhuma rota */
-  const fetchUnassignedNotes = useCallback(async (page = 1, search?: string, filters?: any) => {
-    const result = await fiscalInvoiceService.list({ page, search, isActive: true, ...filters })
-    setLocalUnassignedNotes(result.data.map((inv) => ({
-      id: String(inv.id),
-      invoice_number: inv.invoice_number,
-      weight: inv.weight,
-      volume: inv.volume,
-      value: inv.value,
-      destination_name: inv.destination_name,
-      issue_date: inv.issue_date,
-    })))
-  }, [])
-
-  return {
-    localRouteNotes,
-    setLocalRouteNotes,
-    localUnassignedNotes,
-    setLocalUnassignedNotes,
-    dirtyRoutes,
-    setDirtyRoutes,
-    clearChanges,
-    fetchUnassignedNotes,
-  }
-}
-
-// =====================================================
-// 4. REGRAS DE NEGÓCIO (COMMANDS)
+// COMPONENTES AUXILIARES
 // =====================================================
 
-/**
- * REGRA CENTRAL: Obtém a fonte final de notas para uma rota.
- *
- * Lógica:
- * - Se existir override local (incluindo array vazio []), usa-o
- * - Caso contrário, usa as notas do banco
- *
- * Isso permite que o usuário:
- * - Adicione notas localmente antes de salvar
- * - Remova todas as notas e salve (override = [])
- * - Veja alterações locais refletidas imediatamente
- */
-function getFinalNotes(
-  routeId: string,
-  localNotes: Record<string, AssignedNote[]>,
-  dbNotes: Record<string, AssignedNote[]>
-): AssignedNote[] {
-  const localOverride = localNotes[routeId]
-  if (localOverride !== undefined) {
-    return localOverride // Pode ser [] - override válido
-  }
-  return dbNotes[routeId] || [] // Notas do banco
-}
-
-/** Cria uma nova rota com suas notas vinculadas */
-async function createRouteWithInvoices(
-  vehicle: MasterFleetVehicle,
-  notes: AssignedNote[],
-  data: RouteFormData
-): Promise<void> {
-  const isTest = getEnvironment() !== 'production'
-
-  // 1. Criar a rota
-  const { data: newRoute, error } = await supabase
-    .from('trx_route')
-    .insert({
-      route_code: data.numeroRota,
-      departure_date: data.dataSaida,
-      id_route_status: data.status,
-      id_route_delivery_status: data.statusEntrega,
-      id_vehicle: vehicle.id,
-      id_driver: data.motorista || null,
-      observation: data.responsaveis || null,
-      area: data.areaRota || null,
-      responsible: data.responsaveis || null,
-      assistant: data.ajudante || null,
-      is_test: isTest,
-      is_active: true,
-    })
-    .select()
-    .single()
-
-  if (error) throw new Error(error.message)
-
-  // 2. Criar vínculos com as notas
-  if (notes.length > 0) {
-    await supabase.from('rel_route_invoice').insert(
-      notes.map((note) => ({
-        id_route: newRoute.id,
-        id_fiscal_invoice: parseInt(note.id, 10),
-        assigned_at: new Date().toISOString(),
-        is_test: isTest,
-        is_active: true,
-      }))
-    )
-  }
-}
-
-/** Atualiza dados da rota e sincroniza as notas vinculadas */
-async function updateRouteAndSyncInvoices(
-  routeId: string,
-  data: RouteFormData,
-  noteIds: string[]
-): Promise<void> {
-  // 1. Atualizar dados da rota (só passar campos com valores definidos)
-  const updateData: any = {}
-  if (data.status) updateData.id_route_status = data.status
-  if (data.statusEntrega) updateData.id_route_delivery_status = data.statusEntrega
-  if (data.dataSaida) updateData.departure_date = data.dataSaida
-  if (data.fimRota) updateData.arrival_date = data.fimRota
-  if (data.motorista) updateData.id_driver = data.motorista
-  if (data.ajudante) updateData.assistant = data.ajudante
-  if (data.responsaveis) {
-    updateData.observation = data.responsaveis
-    updateData.responsible = data.responsaveis
-  }
-
-  if (Object.keys(updateData).length > 0) {
-    await routeService.update(routeId, updateData)
-  }
-
-  // 2. Sincronizar notas (adicionar/remover/reativar)
-  await assignmentService.syncRouteInvoices(routeId, noteIds)
-}
-
-/** Carrega dados de uma rota para o formulário de edição */
-async function loadRouteForEdit(routeId: string): Promise<RouteFormData> {
-  const route = await routeService.getById(routeId)
-  if (!route) throw new Error('Rota não encontrada')
-
-  const invoices = await fiscalInvoiceService.getByRouteId(routeId)
-
-  return {
-    status: route.id_route_status ? String(route.id_route_status) : '',
-    statusEntrega: route.id_route_delivery_status ? String(route.id_route_delivery_status) : '',
-    numeroRota: route.route_code || '',
-    areaRota: (route as any).area || (route as any).route_area?.description || '',
-    responsaveis: (route as any).observation || (route as any).responsible || '',
-    destinos: invoices.map((inv) => ({
-      value: String(inv.id),
-      label: inv.destination_name || `NF ${inv.invoice_number}`,
-    })),
-    tipoRota: route.id_route_type ? String(route.id_route_type) : '',
-    dataSaida: route.departure_date || '',
-    fimRota: (route as any).arrival_date || (route as any).ends_at || '',
-    motorista: route.drivers?.[0]?.id ? String(route.drivers[0].id) : '',
-    ajudante: (route as any).assistant || (route as any).helpers?.[0]?.name || '',
-    placaVeiculo: '',
-    cargaMaxima: '500',
-  }
-}
-
-// =====================================================
-// 5. BUILDER DE CARDS
-// =====================================================
-
-/**
- * Constrói os dados de um card de rota para renderização.
- * Este builder centraliza toda a lógica de exibição do card.
- */
-function buildRouteCard(
-  route: RouteListItem | null,
-  vehicle: MasterFleetVehicle | null,
-  dbNotes: AssignedNote[],
-  localNotes: AssignedNote[] | undefined,
-  isTemporary: boolean,
-  isDirty: boolean
-): RouteCardData {
-  // Define as notas finais: local override ou banco
-  const notasAtribuidas = localNotes !== undefined ? localNotes : dbNotes
-
-  // Calcula carga atual (soma dos pesos)
-  const cargaAtual = notasAtribuidas.reduce((sum, n) => sum + (n.peso || 0), 0)
-  const capacidade = vehicle?.max_capacity || 500
-
-  // Define label e cor do botão
-  const buttonLabel = isTemporary ? 'Criar Rota' : 'Alterar Rota'
-  const buttonColor = isTemporary
-    ? (notasAtribuidas.length > 0 ? 'orange' : 'gray')
-    : (isDirty ? 'orange' : 'gray')
-
-  // ID do card: usa prefixo "vehicle-" para temporários
-  const cardId = isTemporary ? `vehicle-${vehicle?.id}` : String(route?.id || '')
-
-  return {
-    id: cardId,
-    tipoRota: route?.area_description || (isTemporary ? 'Nova Rota' : 'Rota'),
-    numeroRota: route?.route_code || '',
-    veiculo: vehicle?.plate || (isTemporary ? 'Sem veículo' : ''),
-    capacidade,
-    cargaAtual,
-    notasAtribuidas,
-    isTemporary,
-    hasPendingChanges: isDirty,
-    buttonLabel,
-    buttonColor,
-    route_status: route?.status,
-  }
-}
-
-// =====================================================
-// 6. COMPONENTES DE UI
-// =====================================================
-
-/** Cabeçalho da página com título e info do usuário */
-function PageHeader({ title, userName = 'Leon', userRole = 'Usuário' }: {
+function PageHeader({ title, userName = 'Leon', userRole = 'Usuário', userEmail, onLogout }: {
   title: string
   userName?: string
   userRole?: string
+  userEmail?: string
+  onLogout?: () => void
 }) {
   return (
     <div className="flex h-[78px] items-center justify-between p-3 shrink-0 w-full">
@@ -416,553 +54,732 @@ function PageHeader({ title, userName = 'Leon', userRole = 'Usuário' }: {
         </div>
         <h1 className="font-bold text-[24px] text-[#0f3255]">{title}</h1>
       </div>
-      <div className="flex gap-1 h-[34px] items-center">
-        <div className="w-[34px] h-[34px] rounded-full bg-[#bdcde8] flex items-center justify-center">
-          <div className="w-[24px] h-[24px] rounded-full bg-[#0f3255] flex items-center justify-center">
-            <span className="font-normal text-[16px] text-white">{userName.charAt(0)}</span>
-          </div>
-        </div>
-        <div className="flex flex-col">
-          <span className="font-semibold text-[12px] text-[#4c4c4c]">{userName}</span>
-          <span className="font-normal text-[10px] text-[#4c4c4c]">{userRole}</span>
-        </div>
-      </div>
+      <UserMenu
+        userName={userName}
+        userEmail={userEmail}
+        userRole={userRole}
+        onLogout={onLogout}
+      />
     </div>
   )
 }
 
 // =====================================================
-// 7. COMPONENTE PRINCIPAL
+// INTERFACE DO COMPONENTE
 // =====================================================
 
-export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário' }: AssignNotesPageProps) {
-  // ---------- ESTADO PERSISTIDO ----------
-  const {
-    routes,
-    routeNotes,
-    vehicles,
-    drivers,
-    routeStatuses,
-    deliveryStatuses,
-    fetchRoutes,
-    fetchReferenceData,
-  } = usePersistedState()
+interface AssignNotesPageProps {
+  userName?: string
+  userRole?: string
+  onLogout?: () => void
+  userEmail?: string
+}
 
-  // ---------- ESTADO TEMPORÁRIO ----------
-  const {
-    localRouteNotes,
-    setLocalRouteNotes,
-    localUnassignedNotes,
-    setLocalUnassignedNotes,
-    dirtyRoutes,
-    setDirtyRoutes,
-    clearChanges,
-    fetchUnassignedNotes,
-  } = useTemporaryState()
+// =====================================================
+// COMPONENTE PRINCIPAL
+// =====================================================
 
-  // ---------- NOTAS DISPONÍVEIS ----------
-  // Calcula quais notas não estão atribuídas a nenhuma rota ou veículo
-  const notesAvailable = useMemo(() => {
-    const assignedIds = new Set<string>()
-
-    // Rotas persistidas: considera override local ou banco
-    routes.forEach((route) => {
-      const finalNotes = getFinalNotes(String(route.id), localRouteNotes, routeNotes)
-      finalNotes.forEach((n) => assignedIds.add(String(n.id)))
-    })
-
-    // Veículos temporários: só usa estado local
-    vehicles.forEach((v) => {
-      const notes = localRouteNotes[`vehicle-${v.id}`] || []
-      notes.forEach((n) => assignedIds.add(String(n.id)))
-    })
-
-    return localUnassignedNotes.filter((n) => !assignedIds.has(String(n.id)))
-  }, [localUnassignedNotes, routeNotes, localRouteNotes, routes, vehicles])
+export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLogout, userEmail }: AssignNotesPageProps) {
+  // ---------- ESTADO ----------
+  const [routes, setRoutes] = useState<RouteListItem[]>([])
+  const [routeNotes, setRouteNotes] = useState<Record<string, AssignedNote[]>>({})
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>([])
+  const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([])
+  const [routeStatuses, setRouteStatuses] = useState<{ id: string; description: string; code: string; name: string }[]>([])
+  const [deliveryStatuses, setDeliveryStatuses] = useState<{ id: string; description: string; code: string; name: string; allows_route_edition: boolean }[]>([])
+  const [routeResponsibles, setRouteResponsibles] = useState<ResponsibleOption[]>([])
+  const [routeResponsiblesLoading, setRouteResponsiblesLoading] = useState(false)
+  const [localRouteNotes, setLocalRouteNotes] = useState<Record<string, AssignedNote[]>>({})
+  const [localUnassignedNotes, setLocalUnassignedNotes] = useState<NoteItem[]>([])
+  const [dirtyRoutes, setDirtyRoutes] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // ---------- ESTADO DE UI ----------
-  const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false)
   const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false)
   const [isNoteDetailOpen, setIsNoteDetailOpen] = useState(false)
+  const [currentFilterDate, setCurrentFilterDate] = useState<string>(() => getTodayDateOnly())
 
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<{ routeId: string; noteId: string; invoiceNumber: string } | null>(null)
-  const [selectedNote, setSelectedNote] = useState<{ id: string; invoice_number: string; weight: number; volume: number; value: number; destination_name: string; is_active: boolean } | null>(null)
+  const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null)
   const [createRouteData, setCreateRouteData] = useState<RouteFormData | null>(null)
   const [editRouteData, setEditRouteData] = useState<RouteFormData | null>(null)
+  const [createDrawerError, setCreateDrawerError] = useState<string | null>(null)
+  const [editDrawerError, setEditDrawerError] = useState<string | null>(null)
+
+  const [notesPage, setNotesPage] = useState(1)
+  const [notesHasMore, setNotesHasMore] = useState(false)
+  const [notesLoading, setNotesLoading] = useState(false)
+
+  // Opções dos filtros avançados (carregadas do banco)
+  const [filterSupplierGroups, setFilterSupplierGroups] = useState<FilterOption[]>([])
+  const [filterDestinationGroups, setFilterDestinationGroups] = useState<FilterOption[]>([])
+  const [filterCities, setFilterCities] = useState<FilterOption[]>([])
+  const [filterNeighborhoods, setFilterNeighborhoods] = useState<FilterOption[]>([])
+  const [filterNeighborhoodsByCity, setFilterNeighborhoodsByCity] = useState<Record<string, FilterOption[]>>({})
+  const [isLoadingFilterOptions, setIsLoadingFilterOptions] = useState(false)
+  // Filtros avançados ativos (aplicados pelo painel)
+  const [activeAdvancedFilters, setActiveAdvancedFilters] = useState<FilterValues | null>(null)
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
 
+  // ---------- FUNÇÕES DE BUSCA ----------
+  const fetchRoutes = useCallback(async (filter?: { departureDate?: string }) => {
+    try {
+      const result = await assignNotesService.getActiveRoutes({
+        departureDate: filter?.departureDate,
+        limit: 50,
+      })
+
+      setRoutes(result.data)
+
+      if (result.data.length > 0) {
+        const routeIds = result.data.map(r => String(r.id))
+        const allNotes = await assignNotesService.getAllRouteNotes(routeIds)
+        setRouteNotes(allNotes)
+      } else {
+        setRouteNotes({})
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar rotas')
+    }
+  }, [])
+
+  const fetchReferenceData = useCallback(async () => {
+    try {
+      setRouteResponsiblesLoading(true)
+      const refData = await assignNotesService.getReferenceData()
+      setDrivers(refData.drivers)
+      setRouteStatuses(refData.routeStatuses)
+      setDeliveryStatuses(refData.deliveryStatuses)
+      setRouteResponsibles(refData.responsibles)
+
+      const vehiclesData = await assignNotesService.getActiveVehicles()
+      setVehicles(vehiclesData)
+      setRouteResponsiblesLoading(false)
+    } catch (err) {
+      setRouteResponsibles([])
+      setRouteResponsiblesLoading(false)
+      setError(err instanceof Error ? err.message : 'Erro ao carregar dados de referência')
+    }
+  }, [])
+
+  const fetchUnassignedNotes = useCallback(async (page = 1, search?: string, advFilters?: FilterValues | null) => {
+    try {
+      setNotesLoading(true)
+      const f = advFilters
+      const result = await assignNotesService.getUnassignedNotes({
+        page,
+        search,
+        limit: 50,
+        grupoCliente: f?.grupoCliente || undefined,
+        razaoSocial: f?.razaoSocial || undefined,
+        grupoDestino: f?.grupoDestino || undefined,
+        nomeDestino: f?.nomeDestino || undefined,
+        cidade: f?.cidade || undefined,
+        bairro: f?.bairro || undefined,
+        minWeight: f?.minWeight ? Number(f.minWeight) : undefined,
+        maxWeight: f?.maxWeight ? Number(f.maxWeight) : undefined,
+      })
+
+      if (page === 1) {
+        setLocalUnassignedNotes(result.data)
+      } else {
+        setLocalUnassignedNotes(prev => [...prev, ...result.data])
+      }
+
+      setNotesHasMore(result.data.length === 50)
+      setNotesPage(page)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar notas')
+    } finally {
+      setNotesLoading(false)
+    }
+  }, [])
+
   // ---------- CARREGAMENTO INICIAL ----------
   useEffect(() => {
-    fetchRoutes()
+    setRoutes([])
+    setRouteNotes({})
+    setLocalRouteNotes({})
+    setLocalUnassignedNotes([])
+    setDirtyRoutes(new Set())
+    fetchRoutes({ departureDate: currentFilterDate })
     fetchReferenceData()
-    fetchUnassignedNotes()
-  }, [fetchRoutes, fetchReferenceData, fetchUnassignedNotes])
+    fetchUnassignedNotes(1, searchTerm, activeAdvancedFilters)
+  }, [currentFilterDate]) // Re-fetch when filter date changes
+
+  // Carregar opções dos filtros avançados (uma vez por sessão)
+  useEffect(() => {
+    setIsLoadingFilterOptions(true)
+    assignNotesService.getAdvancedFilterOptions()
+      .then(opts => {
+        setFilterSupplierGroups(opts.supplierGroups)
+        setFilterDestinationGroups(opts.destinationGroups)
+        setFilterCities(opts.cities)
+        setFilterNeighborhoods(opts.neighborhoods)
+        setFilterNeighborhoodsByCity(opts.neighborhoodsByCity)
+      })
+      .catch(() => setError('Erro ao carregar opções dos filtros avançados.'))
+      .finally(() => setIsLoadingFilterOptions(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- BUSCA COM DEBOUNCE ----------
   const handleSearchChange = useCallback((value: string) => {
     setSearchTerm(value)
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-    searchTimeoutRef.current = setTimeout(() => fetchUnassignedNotes(1, value), 300)
-  }, [fetchUnassignedNotes])
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchUnassignedNotes(1, value, activeAdvancedFilters)
+    }, 300)
+  }, [fetchUnassignedNotes, activeAdvancedFilters])
 
-  // =====================================================
-  // AÇÕES DO USUÁRIO
-  // =====================================================
+  // ---------- CÁLCULO DE DIVERGÊNCIAS ----------
+  const divergences = useMemo(() => {
+    const result: Record<string, DivergenceInfo> = {}
 
-  /** Abre o drawer de criação de rota para um veículo temporário */
-  const handleOpenCreateDrawer = (vehicleId: string) => {
-    console.log('[handleOpenCreateDrawer] vehicleId:', vehicleId)
-    console.log('[handleOpenCreateDrawer] vehicles:', vehicles.map(v => ({ id: v.id, plate: v.plate })))
-
-    const vehicle = vehicles.find((v) => String(v.id) === String(vehicleId))
-    console.log('[handleOpenCreateDrawer] found vehicle:', vehicle)
-
-    if (!vehicle) {
-      console.error('[handleOpenCreateDrawer] Vehicle not found for id:', vehicleId)
-      return
-    }
-
-    const vehicleKey = `vehicle-${vehicleId}`
-    const notes = localRouteNotes[vehicleKey] ?? []
-    console.log('[handleOpenCreateDrawer] notes for vehicle:', notes)
-
-    setCreateRouteData({
-      status: '',
-      statusEntrega: '',
-      numeroRota: '',
-      areaRota: '',
-      responsaveis: '',
-      destinos: notes.map((n) => ({ value: n.id, label: n.destination_name || n.invoice_number })),
-      tipoRota: '',
-      dataSaida: '',
-      fimRota: '',
-      motorista: '',
-      ajudante: '',
-      placaVeiculo: vehicle.plate || '',
-      cargaMaxima: String(vehicle.max_capacity || 500),
-    })
-
-    setSelectedVehicleId(String(vehicleId))
-    setIsCreateDrawerOpen(true)
-  }
-
-  /** Salva uma nova rota criada a partir de veículo temporário */
-  const handleSaveNewRoute = async () => {
-    if (!createRouteData || !selectedVehicleId) return
-
-    console.log('[handleSaveNewRoute] selectedVehicleId:', selectedVehicleId)
-
-    const vehicle = vehicles.find((v) => String(v.id) === String(selectedVehicleId))
-    console.log('[handleSaveNewRoute] vehicle:', vehicle)
-
-    if (!vehicle) return
-
-    const vehicleKey = `vehicle-${selectedVehicleId}`
-    const notes = localRouteNotes[vehicleKey] ?? []
-    console.log('[handleSaveNewRoute] notes to save:', notes)
-
-    setLoading(true)
-    try {
-      // 1. Criar rota no banco
-      await createRouteWithInvoices(vehicle, notes, createRouteData)
-
-      // 2. Limpar estado temporário do veículo
-      setLocalRouteNotes((prev) => {
-        const next = { ...prev }
-        delete next[`vehicle-${selectedVehicleId}`]
-        return next
-      })
-
-      // 3. Recarregar dados do banco
-      await fetchRoutes()
-      await fetchUnassignedNotes(1)
-
-      setIsCreateDrawerOpen(false)
-      setCreateRouteData(null)
-      setSelectedVehicleId(null)
-    } catch (err) {
-      console.error('[handleSaveNewRoute] Erro ao criar rota:', err)
-      alert((err as Error).message || 'Erro ao criar rota')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  /** Abre o drawer de edição de uma rota persistida */
-  const handleOpenEditDrawer = async (routeId: string) => {
-    const route = routes.find((r) => String(r.id) === String(routeId))
-    if (!route) return
-
-    setSelectedRouteId(String(routeId))
-    setLoading(true)
-
-    try {
-      // 1. Carregar dados básicos da rota
-      const formData = await loadRouteForEdit(String(routeId))
-
-      // 2. Sobrescrever destinos com a fonte final de notas
-      // Isso garante que o drawer reflita o estado atual do card
-      const finalNotes = getFinalNotes(String(routeId), localRouteNotes, routeNotes)
-      formData.destinos = finalNotes.map((n) => ({
-        value: n.id,
-        label: n.destination_name || n.invoice_number
-      }))
-
-      setEditRouteData(formData)
-      setIsEditDrawerOpen(true)
-    } catch (err) {
-      console.error('Erro ao carregar rota:', err)
-      alert('Erro ao carregar dados da rota')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  /** Salva as alterações de uma rota persistida */
-  const handleSaveEditRoute = async () => {
-    if (!selectedRouteId || !editRouteData) return
-
-    setLoading(true)
-    try {
-      // Se há múltiplas rotas dirty, salvar todas na ordem correta
-      if (dirtyRoutes.size > 1) {
-        await saveAllDirtyRoutes()
-      } else {
-        // Salvar apenas a rota atual
-        const finalNotes = getFinalNotes(selectedRouteId, localRouteNotes, routeNotes)
-        const finalNoteIds = finalNotes.map((n) => String(n.id))
-        await updateRouteAndSyncInvoices(selectedRouteId, editRouteData, finalNoteIds)
-        clearChanges(selectedRouteId)
-      }
-
-      // Recarregar dados do banco
-      await fetchRoutes()
-      await fetchUnassignedNotes(1, searchTerm)
-
-      setIsEditDrawerOpen(false)
-      setSelectedRouteId(null)
-      setEditRouteData(null)
-    } catch (err) {
-      console.error('Erro ao salvar:', err)
-      alert((err as Error).message || 'Erro ao salvar')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  /** Salva todas as rotas dirty na ordem correta (origem primeiro, depois destino) */
-  const saveAllDirtyRoutes = async () => {
-    console.log('[saveAllDirtyRoutes] INICIANDO')
-    const dirtyRouteIds = Array.from(dirtyRoutes)
-    console.log('[saveAllDirtyRoutes] dirtyRouteIds:', dirtyRouteIds)
-
-    // Para cada rota dirty, construir o mapa de notas transferidas
-    // Isso vai nos ajudar a identificar a ordem
-    const pendingTransfers: { fromRoute: string; toRoute: string; noteId: string }[] = []
-
-    for (const routeId of dirtyRouteIds) {
+    routes.forEach(route => {
+      const routeId = String(route.id)
       const localNotes = localRouteNotes[routeId]
       const dbNotes = routeNotes[routeId] || []
-      const finalNotes = localNotes !== undefined ? localNotes : dbNotes
-      const originalNoteIds = new Set(dbNotes.map(n => String(n.id)))
-      const finalNoteIds = new Set(finalNotes.map(n => String(n.id)))
 
-      // Notas que saíram desta rota
-      for (const noteId of originalNoteIds) {
-        if (!finalNoteIds.has(noteId)) {
-          // Encontrar para qual rota foi
-          for (const otherRouteId of dirtyRouteIds) {
-            if (otherRouteId === routeId) continue
-            const otherLocalNotes = localRouteNotes[otherRouteId]
-            const otherDbNotes = routeNotes[otherRouteId] || []
-            const otherFinalNotes = otherLocalNotes !== undefined ? otherLocalNotes : otherDbNotes
-            if (otherFinalNotes.some(n => String(n.id) === noteId)) {
-              pendingTransfers.push({ fromRoute: routeId, toRoute: otherRouteId, noteId })
-              break
-            }
-          }
-        }
+      if (localNotes !== undefined) {
+        result[routeId] = assignNotesService.calculateDivergence(routeId, localNotes, dbNotes)
       }
-    }
+    })
 
-    console.log('[saveAllDirtyRoutes] pendingTransfers:', pendingTransfers)
+    return result
+  }, [routes, routeNotes, localRouteNotes])
 
-    // Identificar rotas que são origem de transferências (devem ser salvas primeiro)
-    const sourceRoutes = new Set(pendingTransfers.map(t => t.fromRoute))
+  // ---------- NOTAS DISPONÍVEIS ----------
+  const notesAvailable = useMemo(() => {
+    const assignedIds = new Set<string>()
 
-    // Salvar primeiro as rotas que são origem de transferências
-    const routesToSaveFirst = dirtyRouteIds.filter(id => sourceRoutes.has(id))
-    const routesToSaveAfter = dirtyRouteIds.filter(id => !sourceRoutes.has(id))
+    routes.forEach(route => {
+      const routeId = String(route.id)
+      const finalNotes = localRouteNotes[routeId] ?? routeNotes[routeId] ?? []
+      finalNotes.forEach(n => assignedIds.add(String(n.id)))
+    })
 
-    console.log('[saveAllDirtyRoutes] saving first:', routesToSaveFirst)
-    console.log('[saveAllDirtyRoutes] saving after:', routesToSaveAfter)
+    vehicles.forEach(v => {
+      const notes = localRouteNotes[`vehicle-${v.id}`] || []
+      notes.forEach(n => assignedIds.add(String(n.id)))
+    })
 
-    // Salvar rotas de origem primeiro
-    for (const routeId of routesToSaveFirst) {
-      await saveSingleRoute(routeId)
-    }
+    return localUnassignedNotes.filter(n => !assignedIds.has(String(n.id)))
+  }, [localUnassignedNotes, routeNotes, localRouteNotes, routes, vehicles])
 
-    // Depois salvar as rotas de destino
-    for (const routeId of routesToSaveAfter) {
-      await saveSingleRoute(routeId)
-    }
-  }
+  // ---------- BUILD DE CARDS ----------
+  const routeCards = useMemo((): RouteCardData[] => {
+    const cards: RouteCardData[] = []
 
-  /** Salva uma única rota */
-  const saveSingleRoute = async (routeId: string) => {
-    const localNotes = localRouteNotes[routeId]
-    const dbNotes = routeNotes[routeId] || []
-    const finalNotes = localNotes !== undefined ? localNotes : dbNotes
-    const finalNoteIds = finalNotes.map((n) => String(n.id))
+    vehicles.forEach(vehicle => {
+      if (!vehicle.plate) return
 
-    console.log('[saveSingleRoute] saving route:', routeId, 'with notes:', finalNoteIds)
+      const existingRoute = routes.find(route =>
+        Number(route.id_vehicle) === Number(vehicle.id) &&
+        String(route.departure_date).slice(0, 10) === currentFilterDate
+      )
 
-    // Criar dados mínimos para update
-    const route = routes.find(r => String(r.id) === routeId)
-    const minimalData = {
-      status: '',
-      statusEntrega: '',
-      numeroRota: route?.route_code || '',
-      areaRota: '',
-      responsaveis: '',
-      destinos: [],
-      tipoRota: '',
-      dataSaida: '',
-      fimRota: '',
-      motorista: '',
-      ajudante: '',
-      placaVeiculo: '',
-      cargaMaxima: '',
-    }
+      if (existingRoute) {
+        const routeId = String(existingRoute.id)
+        const dbNotes = routeNotes[routeId] || []
+        const localNotes = localRouteNotes[routeId]
+        const finalNotes = localNotes !== undefined ? localNotes : dbNotes
 
-    await updateRouteAndSyncInvoices(routeId, minimalData, finalNoteIds)
-    clearChanges(routeId)
-  }
+        const cargaAtual = finalNotes.reduce((sum, n) => sum + n.peso, 0)
 
-  /** Arrasta uma nota para uma rota ou veículo */
-  const handleDropNote = (noteId: string, targetId: string) => {
-    const note = notesAvailable.find((n) => String(n.id) === String(noteId))
-    if (!note) {
-      // Nota pode estar em outra rota - verificar
-      console.log('[handleDropNote] nota não encontrada em notesAvailable, verificando outras rotas')
-    }
+        const deliveryStatus = deliveryStatuses.find(s => s.id === String(existingRoute.id_route_delivery_status ?? ''))
+        const allowsEdition = deliveryStatus?.allows_route_edition === true
+
+        cards.push({
+          id: routeId,
+          tipoRota: existingRoute.area_description || 'Rota',
+          numeroRota: existingRoute.route_code || '',
+          veiculo: vehicle.plate,
+          capacidade: vehicle.nominal_capacity || 0,
+          cargaAtual,
+          notasAtribuidas: finalNotes,
+          isTemporary: false,
+          hasPendingChanges: dirtyRoutes.has(routeId),
+          buttonLabel: 'Alterar Rota',
+          buttonColor: dirtyRoutes.has(routeId) ? 'orange' : 'gray',
+          route_status: existingRoute.status,
+          allowsEdition,
+        })
+      } else {
+        const vehicleKey = `vehicle-${vehicle.id}`
+        const tempNotes = localRouteNotes[vehicleKey] || []
+        const cargaAtual = tempNotes.reduce((sum, n) => sum + n.peso, 0)
+
+        cards.push({
+          id: vehicleKey,
+          tipoRota: 'Nova Rota',
+          numeroRota: '',
+          veiculo: vehicle.plate,
+          capacidade: vehicle.nominal_capacity || 0,
+          cargaAtual,
+          notasAtribuidas: tempNotes,
+          isTemporary: true,
+          hasPendingChanges: false,
+          buttonLabel: 'Criar Rota',
+          buttonColor: tempNotes.length > 0 ? 'orange' : 'gray',
+          route_status: undefined,
+          allowsEdition: true,
+        })
+      }
+    })
+
+    return [...cards].sort((a, b) => {
+      const aHasRoute = !a.isTemporary
+      const bHasRoute = !b.isTemporary
+
+      if (aHasRoute !== bHasRoute) {
+        return aHasRoute ? -1 : 1
+      }
+
+      if (aHasRoute && bHasRoute) {
+        return String(a.numeroRota ?? '').localeCompare(String(b.numeroRota ?? ''), 'pt-BR', { numeric: true })
+      }
+
+      return String(a.veiculo ?? '').localeCompare(String(b.veiculo ?? ''), 'pt-BR', { numeric: true })
+    })
+  }, [routes, routeNotes, localRouteNotes, vehicles, dirtyRoutes, deliveryStatuses])
+
+  // ---------- AÇÕES ----------
+
+  const clearChanges = useCallback((routeId: string) => {
+    setLocalRouteNotes(prev => {
+      const next = { ...prev }
+      delete next[routeId]
+      return next
+    })
+    setDirtyRoutes(prev => {
+      const next = new Set(prev)
+      next.delete(routeId)
+      return next
+    })
+  }, [])
+
+  const handleDropNote = useCallback((noteId: string, targetId: string) => {
+    const note = notesAvailable.find(n => String(n.id) === noteId)
+    if (!note) return
 
     const noteToAdd: AssignedNote = {
       id: String(noteId),
-      invoice_number: note?.invoice_number || '',
-      peso: note?.weight || 0,
-      destination_name: note?.destination_name,
+      invoice_number: note.invoice_number,
+      peso: note.weight,
+      destination_name: note.destination_name,
     }
 
-    // VEÍCULO TEMPORÁRIO: prefixo "vehicle-"
+    // Veículo temporário — valida apenas se origem é rota persistida
     if (targetId.startsWith('vehicle-')) {
       const vehicleId = targetId.replace('vehicle-', '')
       const vehicleKey = `vehicle-${vehicleId}`
 
-      // Verificar se nota já está em outra rota persistida - se sim, remover de lá
-      const sourceRouteId = routes.find(r => {
+      const sourceRoute = routes.find(r => {
         const routeId = String(r.id)
-        const finalNotes = getFinalNotes(routeId, localRouteNotes, routeNotes)
+        const finalNotes = localRouteNotes[routeId] ?? routeNotes[routeId] ?? []
         return finalNotes.some(n => String(n.id) === String(noteId))
-      })?.id
+      })
 
-      if (sourceRouteId) {
-        const sourceId = String(sourceRouteId)
-        // Remover da rota de origem
-        const sourceNotes = getFinalNotes(sourceId, localRouteNotes, routeNotes)
-        const updatedSourceNotes = sourceNotes.filter(n => String(n.id) !== String(noteId))
-        setLocalRouteNotes((prev) => ({ ...prev, [sourceId]: updatedSourceNotes }))
-        setDirtyRoutes((prev) => new Set(prev).add(sourceId))
+      if (sourceRoute) {
+        const srcDs = deliveryStatuses.find(s => s.id === String(sourceRoute.id_route_delivery_status ?? ''))
+        if (srcDs?.allows_route_edition !== true) {
+          setError('Rota em andamento. A montagem não pode mais ser alterada.')
+          return
+        }
+        const sourceId = String(sourceRoute.id)
+        const sourceNotes = localRouteNotes[sourceId] ?? routeNotes[sourceId] ?? []
+        setLocalRouteNotes(prev => ({ ...prev, [sourceId]: sourceNotes.filter(n => String(n.id) !== String(noteId)) }))
+        setDirtyRoutes(prev => new Set(prev).add(sourceId))
       }
 
-      // Adicionar nota ao veículo
-      setLocalRouteNotes((prev) => ({
+      setLocalRouteNotes(prev => ({
         ...prev,
         [vehicleKey]: [...(prev[vehicleKey] ?? []), noteToAdd],
       }))
-
-      // Remover da lista da esquerda
-      setLocalUnassignedNotes((prev) => prev.filter((n) => String(n.id) !== noteId))
+      setLocalUnassignedNotes(prev => prev.filter(n => String(n.id) !== noteId))
       return
     }
 
-    // ROTA PERSISTIDA: usar fonte final como base
-    // Verificar se nota já está em outra rota persistida - se sim, remover de lá primeiro
+    // Rota persistida — valida se target permite edição
+    const targetRoute = routes.find(r => String(r.id) === targetId)
+    if (targetRoute) {
+      const targetDs = deliveryStatuses.find(s => s.id === String(targetRoute.id_route_delivery_status ?? ''))
+      if (targetDs?.allows_route_edition !== true) {
+        setError('Rota em andamento. A montagem não pode mais ser alterada.')
+        return
+      }
+    }
+
     const sourceRoute = routes.find(r => {
       const routeId = String(r.id)
-      if (routeId === targetId) return false // mesma rota destino
-      const finalNotes = getFinalNotes(routeId, localRouteNotes, routeNotes)
+      if (routeId === targetId) return false
+      const finalNotes = localRouteNotes[routeId] ?? routeNotes[routeId] ?? []
       return finalNotes.some(n => String(n.id) === String(noteId))
     })
 
     if (sourceRoute) {
+      const srcDs = deliveryStatuses.find(s => s.id === String(sourceRoute.id_route_delivery_status ?? ''))
+      if (srcDs?.allows_route_edition !== true) {
+        setError('Rota em andamento. A montagem não pode mais ser alterada.')
+        return
+      }
       const sourceId = String(sourceRoute.id)
-      console.log('[handleDropNote] transferindo nota', noteId, 'da rota', sourceId, 'para', targetId)
-
-      // Remover da rota de origem no estado local
-      const sourceNotes = getFinalNotes(sourceId, localRouteNotes, routeNotes)
-      const updatedSourceNotes = sourceNotes.filter(n => String(n.id) !== String(noteId))
-      setLocalRouteNotes((prev) => ({ ...prev, [sourceId]: updatedSourceNotes }))
-
-      // Marcar rota de ORIGEM como dirty
-      setDirtyRoutes((prev) => new Set(prev).add(sourceId))
+      const sourceNotes = localRouteNotes[sourceId] ?? routeNotes[sourceId] ?? []
+      setLocalRouteNotes(prev => ({ ...prev, [sourceId]: sourceNotes.filter(n => String(n.id) !== String(noteId)) }))
+      setDirtyRoutes(prev => new Set(prev).add(sourceId))
     }
 
-    // Adicionar na rota de destino
-    setLocalRouteNotes((prev) => {
-      const baseNotes = getFinalNotes(targetId, prev, routeNotes)
-      return { ...prev, [targetId]: [...baseNotes, noteToAdd] }
-    })
+    const targetNotes = localRouteNotes[targetId] ?? routeNotes[targetId] ?? []
+    setLocalRouteNotes(prev => ({ ...prev, [targetId]: [...targetNotes, noteToAdd] }))
+    setDirtyRoutes(prev => new Set(prev).add(targetId))
+    setLocalUnassignedNotes(prev => prev.filter(n => String(n.id) !== noteId))
+  }, [notesAvailable, routes, routeNotes, localRouteNotes, deliveryStatuses])
 
-    // Remover da lista da esquerda (se ainda estiver lá)
-    setLocalUnassignedNotes((prev) => prev.filter((n) => String(n.id) !== noteId))
-
-    // Marcar rota de DESTINO como dirty
-    setDirtyRoutes((prev) => new Set(prev).add(targetId))
-  }
-
-  /** Abre modal de confirmação para remover nota de rota persistida */
-  const handleRemoveNoteClick = (routeId: string, noteId: string, invoiceNumber: string) => {
-    // Veículos temporários: remoção direta, sem modal
+  const handleRemoveNoteClick = useCallback((routeId: string, noteId: string, invoiceNumber: string) => {
     if (routeId.startsWith('vehicle-')) {
       const vehicleId = routeId.replace('vehicle-', '')
       const vehicleKey = `vehicle-${vehicleId}`
 
-      const note = localRouteNotes[vehicleKey]?.find((n) => String(n.id) === noteId)
+      const note = localRouteNotes[vehicleKey]?.find(n => String(n.id) === noteId)
 
-      // Remover do veículo
-      setLocalRouteNotes((prev) => ({
+      setLocalRouteNotes(prev => ({
         ...prev,
-        [vehicleKey]: (prev[vehicleKey] || []).filter((n) => String(n.id) !== noteId),
+        [vehicleKey]: (prev[vehicleKey] || []).filter(n => String(n.id) !== noteId),
       }))
 
-      // Devolver para lista da esquerda APENAS se não existir (evitar duplicação)
       if (note) {
-        const noteToAdd = {
-          id: note.id,
-          invoice_number: note.invoice_number,
-          weight: note.peso,
-          volume: 1,
-          value: 0,
-          destination_name: note.destination_name,
-        }
-
-        setLocalUnassignedNotes((prev) => {
-          const exists = prev.some((n) => String(n.id) === String(noteId))
-          if (exists) return prev
-          return [...prev, noteToAdd]
+        setLocalUnassignedNotes(prev => {
+          if (prev.some(n => String(n.id) === String(noteId))) return prev
+          return [...prev, {
+            id: note.id,
+            invoice_number: note.invoice_number,
+            weight: note.peso,
+            volume: 1,
+            value: 0,
+            destination_name: note.destination_name,
+          }]
         })
       }
       return
     }
 
-    // Rotas persistidas: abrir modal
+    // Rota persistida — valida se permite edição
+    const route = routes.find(r => String(r.id) === routeId)
+    if (route) {
+      const ds = deliveryStatuses.find(s => s.id === String(route.id_route_delivery_status ?? ''))
+      if (ds?.allows_route_edition !== true) {
+        setError('Rota em andamento. A montagem não pode mais ser alterada.')
+        return
+      }
+    }
+
     setPendingRemove({ routeId, noteId, invoiceNumber })
     setIsRemoveModalOpen(true)
-  }
+  }, [localRouteNotes, routes, deliveryStatuses])
 
-  /** Confirma a remoção de nota de uma rota persistida */
-  const handleConfirmRemove = () => {
+  const handleConfirmRemove = useCallback(() => {
     if (!pendingRemove) return
 
     const { routeId, noteId } = pendingRemove
 
-    // Usar fonte final de notas
-    const baseNotes = getFinalNotes(routeId, localRouteNotes, routeNotes)
-    const note = baseNotes.find((n) => String(n.id) === noteId)
+    const baseNotes = localRouteNotes[routeId] ?? routeNotes[routeId] ?? []
+    const note = baseNotes.find(n => String(n.id) === noteId)
 
     if (note) {
-      // Remover nota e criar override (pode ser array vazio)
-      const nextNotes = baseNotes.filter((n) => String(n.id) !== noteId)
-      setLocalRouteNotes((prev) => ({ ...prev, [routeId]: nextNotes }))
+      const nextNotes = baseNotes.filter(n => String(n.id) !== noteId)
+      setLocalRouteNotes(prev => ({ ...prev, [routeId]: nextNotes }))
 
-      // Devolver para lista da esquerda APENAS se não existir
-      const noteToAdd = {
-        id: note.id,
-        invoice_number: note.invoice_number,
-        weight: note.peso || 0,
-        volume: 1,
-        value: 0,
-        destination_name: note.destination_name || '',
-      }
-
-      setLocalUnassignedNotes((prev) => {
-        // Verificar se já existe para evitar duplicação
-        const exists = prev.some((n) => String(n.id) === String(noteId))
-        if (exists) return prev
-        return [...prev, noteToAdd]
+      setLocalUnassignedNotes(prev => {
+        if (prev.some(n => String(n.id) === String(noteId))) return prev
+        return [...prev, {
+          id: note.id,
+          invoice_number: note.invoice_number,
+          weight: note.peso || 0,
+          volume: 1,
+          value: 0,
+          destination_name: note.destination_name || '',
+        }]
       })
 
-      // Marcar rota como dirty
-      setDirtyRoutes((prev) => new Set(prev).add(routeId))
+      setDirtyRoutes(prev => new Set(prev).add(routeId))
     }
 
     setIsRemoveModalOpen(false)
     setPendingRemove(null)
-  }
+  }, [pendingRemove, localRouteNotes, routeNotes])
 
-  /** Abre detalhes de uma nota */
-  const handleSelectNote = (note: NoteItem) => {
+  const handleSelectNote = useCallback((note: NoteItem) => {
+    setSelectedNote(note)
+    setIsNoteDetailOpen(true)
+  }, [])
+
+  const handleOpenCreateDrawer = useCallback((vehicleId: string) => {
+    const vehicle = vehicles.find(v => String(v.id) === String(vehicleId))
+    if (!vehicle) return
+
+    const existingRoute = routes.find(r =>
+      Number(r.id_vehicle) === Number(vehicle.id) &&
+      String(r.departure_date).slice(0, 10) === currentFilterDate
+    )
+
+    if (existingRoute) {
+      const existingDs = deliveryStatuses.find(s => s.id === String(existingRoute.id_route_delivery_status ?? ''))
+      if (existingDs?.allows_route_edition !== true) {
+        setError('Rota em andamento. A montagem não pode mais ser alterada.')
+        return
+      }
+      setSelectedRouteId(String(existingRoute.id))
+      setIsEditDrawerOpen(true)
+      return
+    }
+
+    const vehicleKey = `vehicle-${vehicleId}`
+    const notes = localRouteNotes[vehicleKey] ?? []
+
+    // Deduplicar destinos por nome da empresa
+    const uniqueDestinations = [...new Map(
+      notes.map(n => [n.destination_name, { value: n.id, label: n.destination_name || n.invoice_number }])
+    ).values()]
+
+    setCreateRouteData({
+      numeroRota: '',
+      areaRota: '',
+      id_route_responsible: '',
+      destinos: uniqueDestinations,
+      tipoRota: '',
+      dataSaida: currentFilterDate,
+      fimRota: '',
+      motorista: '',
+      ajudante: [],
+      placaVeiculo: vehicle.plate || '',
+      cargaMaxima: String(vehicle.nominal_capacity ?? 0),
+      id_route_status: '',
+      id_route_delivery_status: '',
+    })
+
+    setSelectedVehicleId(String(vehicleId))
+    setIsCreateDrawerOpen(true)
+  }, [vehicles, routes, localRouteNotes, currentFilterDate, deliveryStatuses])
+
+const handleSaveNewRoute = useCallback(async () => {
+    if (!createRouteData || !selectedVehicleId) return
+
+    const vehicle = vehicles.find(v => String(v.id) === String(selectedVehicleId))
+    if (!vehicle) return
+
+    const vehicleKey = `vehicle-${selectedVehicleId}`
+    const notes = localRouteNotes[vehicleKey] ?? []
+
+    if (!createRouteData.id_route_responsible) {
+      setError('Selecione o responsável')
+      return
+    }
+
+    if (notes.length === 0) {
+      setError('Adicione pelo menos uma nota à rota')
+      return
+    }
+
+    const cargaAtual = notes.reduce((sum, n) => sum + n.peso, 0)
+    const capacidade = vehicle.nominal_capacity || 0
+    if (capacidade > 0 && cargaAtual > capacidade) {
+      setError('Carga máxima excedida. Remova notas para criar a rota.')
+      return
+    }
+
+    setLoading(true)
+    try {
+      await assignNotesService.createRouteWithNotes(
+        selectedVehicleId,
+        notes,
+        {
+          departure_date: createRouteData.dataSaida,
+          id_driver: createRouteData.motorista || undefined,
+          area: createRouteData.areaRota || undefined,
+          id_route_responsible: Number(createRouteData.id_route_responsible),
+          assistant: createRouteData.ajudante.length > 0
+            ? createRouteData.ajudante.map((a: any) => a.label).join(', ')
+            : undefined,
+        }
+      )
+
+      setLocalRouteNotes(prev => {
+        const next = { ...prev }
+        delete next[vehicleKey]
+        return next
+      })
+
+      await fetchRoutes({ departureDate: currentFilterDate })
+      await fetchUnassignedNotes(1, searchTerm)
+
+      setIsCreateDrawerOpen(false)
+      setCreateRouteData(null)
+      setSelectedVehicleId(null)
+      setCreateDrawerError(null)
+    } catch (err) {
+      setCreateDrawerError(err instanceof Error ? err.message : 'Erro ao criar rota')
+    } finally {
+      setLoading(false)
+    }
+  }, [createRouteData, selectedVehicleId, vehicles, localRouteNotes, fetchRoutes, fetchUnassignedNotes, currentFilterDate, searchTerm])
+
+  const handleOpenEditDrawer = useCallback(async (routeId: string) => {
+    const route = routes.find(r => String(r.id) === String(routeId))
+    if (!route) return
+
+    const ds = deliveryStatuses.find(s => s.id === String(route.id_route_delivery_status ?? ''))
+    if (ds?.allows_route_edition !== true) {
+      setError('Rota em andamento. A montagem não pode mais ser alterada.')
+      return
+    }
+
+    setSelectedRouteId(String(routeId))
+    setLoading(true)
+
+    try {
+      const localNotes = localRouteNotes[routeId]
+      const dbNotes = routeNotes[routeId] || []
+      const finalNotes = localNotes !== undefined ? localNotes : dbNotes
+
+      setEditRouteData({
+        numeroRota: route.route_code || '',
+        areaRota: route.area || '',
+        id_route_responsible: route.id_route_responsible ? String(route.id_route_responsible) : '',
+        destinos: finalNotes.map(n => ({
+          value: n.id,
+          label: n.destination_name || n.invoice_number
+        })),
+        tipoRota: route.id_route_type ? String(route.id_route_type) : '',
+        dataSaida: route.departure_date || '',
+        fimRota: route.ends_at || '',
+        motorista: route.id_driver ? String(route.id_driver) : '',
+        ajudante: (() => {
+          const raw = route.assistant
+          if (!raw) return []
+          const names = Array.isArray(raw)
+            ? (raw as string[]).filter(Boolean)
+            : String(raw).split(',').map((s: string) => s.trim()).filter(Boolean)
+          return names.map((name: string) => ({
+            value: name.toLowerCase().replace(/\s+/g, '-'),
+            label: name,
+            color: '#e67c26',
+          }))
+        })(),
+        placaVeiculo: route.vehicle_plate || vehicles.find(v => String(v.id) === String(route.id_vehicle))?.plate || '',
+        cargaMaxima: String(route.vehicle_max_capacity || vehicles.find(v => String(v.id) === String(route.id_vehicle))?.nominal_capacity || 0),
+        id_route_status: route.id_route_status ? String(route.id_route_status) : '',
+        id_route_delivery_status: route.id_route_delivery_status ? String(route.id_route_delivery_status) : '',
+      })
+
+      setIsEditDrawerOpen(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar rota')
+    } finally {
+      setLoading(false)
+    }
+  }, [routes, routeNotes, localRouteNotes, vehicles, deliveryStatuses])
+
+  const handleSaveEditRoute = useCallback(async () => {
+    if (!selectedRouteId || !editRouteData) return
+
+    const routeForSave = routes.find(r => String(r.id) === selectedRouteId)
+    if (routeForSave) {
+      const dsForSave = deliveryStatuses.find(s => s.id === String(routeForSave.id_route_delivery_status ?? ''))
+      if (dsForSave?.allows_route_edition !== true) {
+        setError('Rota em andamento. A montagem não pode mais ser alterada.')
+        return
+      }
+    }
+
+    setLoading(true)
+    try {
+      const localNotes = localRouteNotes[selectedRouteId]
+      const dbNotes = routeNotes[selectedRouteId] || []
+      const finalNotes = localNotes !== undefined ? localNotes : dbNotes
+      const finalNoteIds = finalNotes.map(n => String(n.id))
+
+      if (!editRouteData.id_route_responsible) {
+        setError('Selecione o responsável')
+        setLoading(false)
+        return
+      }
+
+      const cargaAtualEdit = finalNotes.reduce((sum, n) => sum + n.peso, 0)
+      const capacidadeEdit = Number(editRouteData.cargaMaxima) || 0
+      if (capacidadeEdit > 0 && cargaAtualEdit > capacidadeEdit) {
+        setError('Carga máxima excedida. Remova notas para salvar a rota.')
+        setLoading(false)
+        return
+      }
+
+      await assignNotesService.updateRouteWithNotes(
+        selectedRouteId,
+        {
+          departure_date: editRouteData.dataSaida || undefined,
+          id_driver: editRouteData.motorista || undefined,
+          area: editRouteData.areaRota || undefined,
+          id_route_responsible: Number(editRouteData.id_route_responsible),
+          assistant: editRouteData.ajudante.length > 0
+            ? editRouteData.ajudante.map((a: any) => a.label).join(', ')
+            : undefined,
+        },
+        finalNoteIds
+      )
+
+      clearChanges(selectedRouteId)
+      await fetchRoutes({ departureDate: currentFilterDate })
+      await fetchUnassignedNotes(1, searchTerm)
+
+      setIsEditDrawerOpen(false)
+      setSelectedRouteId(null)
+      setEditRouteData(null)
+      setEditDrawerError(null)
+    } catch (err) {
+      setEditDrawerError(err instanceof Error ? err.message : 'Erro ao salvar')
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedRouteId, editRouteData, localRouteNotes, routeNotes, deliveryStatuses, clearChanges, fetchRoutes, fetchUnassignedNotes, currentFilterDate, searchTerm])
+
+  const handleLoadMoreNotes = useCallback(() => {
+    fetchUnassignedNotes(notesPage + 1, searchTerm, activeAdvancedFilters)
+  }, [notesPage, searchTerm, fetchUnassignedNotes, activeAdvancedFilters])
+
+  const handleViewRouteNote = useCallback((note: AssignedNote) => {
     setSelectedNote({
       id: note.id,
       invoice_number: note.invoice_number,
-      weight: note.weight,
-      volume: note.volume,
+      weight: note.peso || note.weight || 0,
+      volume: note.volume || 0,
       value: note.value || 0,
       destination_name: note.destination_name || '',
+      supplier_name: note.supplier_name || note.fornecedor || '',
+      fornecedor: note.fornecedor || note.supplier_name || '',
+      customer_name: note.customer_name || note.destination_name || '',
       is_active: true,
     })
     setIsNoteDetailOpen(true)
-  }
+  }, [])
 
   // =====================================================
-  // COMPUTED VALUES
+  // COMPUTED: permite edição apenas para status Pendente
   // =====================================================
 
-  /** Constrói os cards de todas as rotas e veículos */
-  const routeCards = useMemo(() => {
-    const cards: RouteCardData[] = []
-
-    // 1. Rotas persistidas (do banco)
-    routes.forEach((route) => {
-      const routeId = String(route.id)
-      const card = buildRouteCard(
-        route,
-        vehicles.find((v) => v.plate === route.vehicle_plate) || null,
-        routeNotes[routeId] || [],
-        localRouteNotes[routeId],
-        false,
-        dirtyRoutes.has(routeId)
-      )
-      cards.push(card)
-    })
-
-    // 2. Veículos sem rota (temporários)
-    const usedVehiclePlates = new Set(routes.map((r) => r.vehicle_plate || ''))
-    vehicles
-      .filter((v) => v.plate && !usedVehiclePlates.has(v.plate))
-      .forEach((vehicle) => {
-        const vehicleKey = `vehicle-${vehicle.id}`
-        const card = buildRouteCard(
-          null,
-          vehicle,
-          [],
-          localRouteNotes[vehicleKey],
-          true,
-          false
-        )
-        cards.push(card)
-      })
-
-    return cards
-  }, [routes, routeNotes, localRouteNotes, vehicles, dirtyRoutes])
+  const editRouteAllowsEdition = useMemo(() => {
+    if (!selectedRouteId || !isEditDrawerOpen) return false
+    const route = routes.find(r => String(r.id) === selectedRouteId)
+    if (!route) return false
+    const ds = deliveryStatuses.find(s => s.id === String(route.id_route_delivery_status ?? ''))
+    return ds?.allows_route_edition === true
+  }, [selectedRouteId, isEditDrawerOpen, routes, deliveryStatuses])
 
   // =====================================================
   // RENDER
@@ -970,45 +787,69 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário' }: As
 
   return (
     <div className="flex flex-col h-full w-full bg-white">
-      <PageHeader title="Atribuir Notas" userName={userName} userRole={userRole} />
+      <PageHeader title="Atribuir Notas" userName={userName} userRole={userRole} userEmail={userEmail} onLogout={onLogout} />
 
-      {/* Botão de filtros */}
-      <div className="flex gap-6 items-start p-4 border-b border-[#828282]">
-        <button
-          onClick={() => setIsFilterModalOpen(true)}
-          className="flex gap-[10px] h-[40px] items-center justify-center p-[8px] rounded-[6px] bg-[#e67c26] hover:bg-[#d06c1e]"
-        >
-          <span className="font-bold text-[14px] text-white">Filtros avançados</span>
-          <AppIcon name="filter_alt" size={24} color="white" />
-        </button>
+      {/* Toolbar: data (esq) + filtros avançados (dir) */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#828282]">
+        {/* Esquerda — campo de data */}
+        <div className="flex items-center gap-2">
+          <label className="font-semibold text-[13px] text-[#2a2a2a] whitespace-nowrap">
+            Data
+          </label>
+          <input
+            type="date"
+            value={currentFilterDate}
+            onChange={(e) => { if (e.target.value) setCurrentFilterDate(e.target.value) }}
+            className="h-[40px] px-3 rounded-[5px] border border-[#bdbdbd] text-[14px] text-[#2a2a2a] focus:outline-none focus:border-[#4077d9] bg-white"
+          />
+        </div>
+
+        {/* Direita — erro + botão filtros avançados + popover */}
+        <div className="flex items-center gap-3">
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-[#fee2e2] text-[#991b1b]">
+              <AppIcon name="error" size={16} />
+              <span className="text-[12px]">{error}</span>
+              <button onClick={() => setError(null)} className="ml-1 text-[#991b1b]">✕</button>
+            </div>
+          )}
+
+          <div className="relative">
+            <button
+              onClick={() => setIsFilterModalOpen(!isFilterModalOpen)}
+              className="flex gap-[10px] h-[40px] items-center justify-center px-4 rounded-[6px] bg-[#e67c26] hover:bg-[#d06c1e]"
+            >
+              <span className="font-bold text-[14px] text-white">Filtros avançados</span>
+              <AppIcon name="filter_alt" size={24} color="white" />
+            </button>
+
+            <FilterPopover
+              isOpen={isFilterModalOpen}
+              onClose={() => setIsFilterModalOpen(false)}
+              initialDate={currentFilterDate}
+              supplierGroups={filterSupplierGroups}
+              destinationGroups={filterDestinationGroups}
+              cities={filterCities}
+              allNeighborhoods={filterNeighborhoods}
+              neighborhoodsByCity={filterNeighborhoodsByCity}
+              isLoadingOptions={isLoadingFilterOptions}
+              onApply={(filters: FilterValues) => {
+                setActiveAdvancedFilters(filters)
+                fetchUnassignedNotes(1, searchTerm, filters)
+              }}
+            />
+          </div>
+        </div>
       </div>
-
-      {/* Modal de filtros */}
-      {isFilterModalOpen && (
-        <FilterModal
-          isOpen={isFilterModalOpen}
-          onClose={() => setIsFilterModalOpen(false)}
-          onApply={(filters) => {
-            fetchUnassignedNotes(1, searchTerm, {
-              startDate: filters.startDate,
-              endDate: filters.endDate,
-              maxWeight: filters.maxWeight ? parseInt(filters.maxWeight) : undefined,
-              minWeight: 0,
-              destinationIds: filters.destinations.length > 0 ? filters.destinations : undefined,
-            })
-          }}
-        />
-      )}
 
       {/* Conteúdo principal */}
       <div className="flex flex-1 min-h-0">
         {/* Lista de notas disponíveis */}
-        <div className="w-[280px] flex flex-col pl-4 pr-2 pt-4 shrink-0">
-          <span className="font-bold text-[14px] text-[#2a2a2a] mb-4">
-            Notas disponíveis ({notesAvailable.length})
-          </span>
-
-          <div className="mb-4">
+        <div className="w-[280px] shrink-0 flex flex-col bg-white border-r border-[#e0e0e0]">
+          <div className="p-4 pb-2">
+            <span className="font-bold text-[14px] text-[#2a2a2a] mb-3 block">
+              Notas disponíveis ({notesAvailable.length})
+            </span>
             <input
               type="text"
               placeholder="Buscar nota..."
@@ -1018,22 +859,28 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário' }: As
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto px-4 pb-4">
             <NotesList
               notes={notesAvailable}
               onSelectNote={handleSelectNote}
+              onViewNote={handleSelectNote}
+              hasMore={notesHasMore}
+              isLoading={notesLoading}
+              onLoadMore={handleLoadMoreNotes}
             />
           </div>
         </div>
 
-        {/* Grid de rotas e veículos */}
-        <div className="flex-1 bg-[#f9f9f9] flex flex-col gap-6 pt-4 px-4 overflow-y-auto">
+        {/* Grid de veículos */}
+        <div className="flex-1 bg-[#f9f9f9] p-4 overflow-y-auto">
           <RoutesGrid
             routes={routeCards}
+            divergences={divergences}
             onDropNote={handleDropNote}
             onRemoveNote={handleRemoveNoteClick}
             onCreateRoute={handleOpenCreateDrawer}
             onAlterRoute={handleOpenEditDrawer}
+            onViewNote={handleViewRouteNote}
             loading={loading}
           />
         </div>
@@ -1042,36 +889,47 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário' }: As
       {/* Drawer de criar nova rota */}
       <Drawer
         isOpen={isCreateDrawerOpen}
-        onClose={() => setIsCreateDrawerOpen(false)}
+        onClose={() => { setIsCreateDrawerOpen(false); setCreateDrawerError(null) }}
         title="Nova Rota"
         icon="road"
         footerContent={
           <div className="flex gap-3">
             <button
-              onClick={() => setIsCreateDrawerOpen(false)}
-              className="px-4 py-2 rounded-[4px] border border-[#4077d9] text-[#4077d9] font-bold"
+              onClick={() => { setIsCreateDrawerOpen(false); setCreateDrawerError(null) }}
+              className="px-4 py-2 rounded-[4px] border border-[#e67c26] text-[#e67c26] font-bold"
             >
               Cancelar
             </button>
             <button
               onClick={handleSaveNewRoute}
               disabled={loading}
-              className="px-4 py-2 rounded-[4px] bg-[#4077d9] text-white font-bold disabled:opacity-50"
+              className="px-4 py-2 rounded-[4px] bg-[#e67c26] text-white font-bold disabled:opacity-50"
             >
               {loading ? 'Criando...' : 'Criar Rota'}
             </button>
           </div>
         }
       >
+        {createDrawerError && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-[4px] flex items-start gap-2">
+            <span className="text-[12px] text-[#991b1b] flex-1">{createDrawerError}</span>
+            <button onClick={() => setCreateDrawerError(null)} className="text-[#991b1b] text-[12px] font-bold shrink-0">✕</button>
+          </div>
+        )}
         {createRouteData && (
           <RouteEditForm
             data={createRouteData}
             isEditing
-            onChange={(field, value) => setCreateRouteData((prev) => prev ? { ...prev, [field]: value } : null)}
-            driverOptions={drivers.map((d) => ({ value: d.id, label: d.name }))}
-            vehicleOptions={vehicles.map((v) => ({ value: v.plate || '', label: v.plate || '' }))}
-            routeStatusOptions={routeStatuses.map((s) => ({ value: s.id, label: s.description }))}
-            deliveryStatusOptions={deliveryStatuses.map((s) => ({ value: s.id, label: s.description }))}
+            onChange={(field, value) => setCreateRouteData(prev => prev ? { ...prev, [field]: value } : null)}
+            driverOptions={drivers.map(d => ({ value: d.id, label: d.name }))}
+            vehicleOptions={vehicles.map(v => ({ value: String(v.id), label: v.plate }))}
+            routeStatusOptions={routeStatuses.map(s => ({ value: s.id, label: s.description }))}
+            deliveryStatusOptions={deliveryStatuses.map(s => ({ value: s.id, label: s.description }))}
+            responsibleOptions={routeResponsibles.map((item) => ({
+              value: String(item.id),
+              label: item.name,
+            }))}
+            responsibleOptionsLoading={routeResponsiblesLoading}
           />
         )}
       </Drawer>
@@ -1083,6 +941,7 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário' }: As
           setIsEditDrawerOpen(false)
           setSelectedRouteId(null)
           setEditRouteData(null)
+          setEditDrawerError(null)
         }}
         title={`Editar Rota ${editRouteData?.numeroRota || ''}`}
         icon="road"
@@ -1093,30 +952,44 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário' }: As
                 setIsEditDrawerOpen(false)
                 setSelectedRouteId(null)
                 setEditRouteData(null)
+                setEditDrawerError(null)
               }}
-              className="px-4 py-2 rounded-[4px] border border-[#4077d9] text-[#4077d9] font-bold"
+              className="px-4 py-2 rounded-[4px] border border-[#e67c26] text-[#e67c26] font-bold"
             >
               Cancelar
             </button>
-            <button
-              onClick={handleSaveEditRoute}
-              disabled={loading}
-              className="px-4 py-2 rounded-[4px] bg-[#4077d9] text-white font-bold disabled:opacity-50"
-            >
-              {loading ? 'Salvando...' : 'Salvar'}
-            </button>
+            {editRouteAllowsEdition && (
+              <button
+                onClick={handleSaveEditRoute}
+                disabled={loading}
+                className="px-4 py-2 rounded-[4px] bg-[#e67c26] text-white font-bold disabled:opacity-50"
+              >
+                {loading ? 'Salvando...' : 'Salvar'}
+              </button>
+            )}
           </div>
         }
       >
+        {editDrawerError && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-[4px] flex items-start gap-2">
+            <span className="text-[12px] text-[#991b1b] flex-1">{editDrawerError}</span>
+            <button onClick={() => setEditDrawerError(null)} className="text-[#991b1b] text-[12px] font-bold shrink-0">✕</button>
+          </div>
+        )}
         {editRouteData && (
           <RouteEditForm
             data={editRouteData}
-            isEditing
-            onChange={(field, value) => setEditRouteData((prev) => prev ? { ...prev, [field]: value } : null)}
-            driverOptions={drivers.map((d) => ({ value: d.id, label: d.name }))}
-            vehicleOptions={vehicles.map((v) => ({ value: v.plate || '', label: v.plate || '' }))}
-            routeStatusOptions={routeStatuses.map((s) => ({ value: s.id, label: s.description }))}
-            deliveryStatusOptions={deliveryStatuses.map((s) => ({ value: s.id, label: s.description }))}
+            isEditing={editRouteAllowsEdition}
+            onChange={editRouteAllowsEdition ? (field, value) => setEditRouteData(prev => prev ? { ...prev, [field]: value } : null) : undefined}
+            driverOptions={drivers.map(d => ({ value: d.id, label: d.name }))}
+            vehicleOptions={vehicles.map(v => ({ value: String(v.id), label: v.plate }))}
+            routeStatusOptions={routeStatuses.map(s => ({ value: s.id, label: s.description }))}
+            deliveryStatusOptions={deliveryStatuses.map(s => ({ value: s.id, label: s.description }))}
+            responsibleOptions={routeResponsibles.map((item) => ({
+              value: String(item.id),
+              label: item.name,
+            }))}
+            responsibleOptionsLoading={routeResponsiblesLoading}
           />
         )}
       </Drawer>
@@ -1133,12 +1006,15 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário' }: As
         loading={loading}
       />
 
-      {/* Modal de detalhes da nota */}
-      <NoteDetailModal
+      {/* Drawer de detalhes da nota — somente leitura nesta tela */}
+      <NoteDetailsDrawer
         isOpen={isNoteDetailOpen}
         onClose={() => setIsNoteDetailOpen(false)}
+        mode="readonly"
         note={selectedNote}
       />
     </div>
   )
 }
+
+export default AssignNotesPage

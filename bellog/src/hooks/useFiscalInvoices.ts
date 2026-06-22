@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fiscalInvoiceService, InvoiceListItem, FiscalInvoiceWithDetails, CreateInvoiceDTO, UpdateInvoiceDTO } from '../services/fiscal-invoice.service'
+import { fiscalInvoiceService, InvoiceListItem, FiscalInvoiceWithDetails, CreateInvoiceDTO, UpdateInvoiceDTO } from '../features/notes'
+import { useRealtimeInvoices } from './useRealtime'
 
 interface CreateInvoiceFormData {
   invoice_number: string
@@ -116,7 +117,6 @@ export const useFiscalInvoices = (initialParams?: {
     setError(null)
     try {
       await fiscalInvoiceService.createFromForm(formData)
-      // Refresh the list - use default params
       const result = await fiscalInvoiceService.list({ isActive: true, page: 1, limit: 20 })
       setInvoices(result.data)
       setTotal(result.total)
@@ -127,6 +127,36 @@ export const useFiscalInvoices = (initialParams?: {
       setLoading(false)
     }
   }, [])
+
+  const handleRealtimeUpdate = useCallback((payload: any) => {
+    const updatedInvoice = payload.new
+    setInvoices(prev => prev.map(inv => {
+      if (inv.id === updatedInvoice.id) {
+        return {
+          ...inv,
+          invoice_status: updatedInvoice.id_fiscal_invoice_status || inv.invoice_status,
+          receipt_status: updatedInvoice.id_receipt_status || inv.receipt_status,
+        }
+      }
+      return inv
+    }))
+  }, [])
+
+  const handleRealtimeInsert = useCallback(() => {
+    fetchInvoices({ isActive: true, page: 1, limit: 20 })
+  }, [fetchInvoices])
+
+  const handleRealtimeDelete = useCallback((payload: any) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== payload.old.id))
+    setTotal(prev => Math.max(0, prev - 1))
+  }, [])
+
+  useRealtimeInvoices({
+    onUpdate: handleRealtimeUpdate,
+    onInsert: handleRealtimeInsert,
+    onDelete: handleRealtimeDelete,
+    enabled: true,
+  })
 
   const fetchReferenceData = useCallback(async () => {
     try {

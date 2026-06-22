@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { companyService, CompanyWithDetails, CreateCompanyDTO, UpdateCompanyDTO } from '../services/company.service'
+import { companyService, CompanyWithDetails, CreateCompanyDTO, UpdateCompanyDTO } from '../features/companies'
 
 interface UseCompaniesResult {
   companies: CompanyWithDetails[]

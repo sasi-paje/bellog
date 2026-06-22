@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { driverService, DriverWithAddress, DriverFormData } from '../services/driver.service'
+import { driverService, DriverWithAddress, DriverFormData } from '../features/drivers'
 
 interface UseDriversResult {
   drivers: DriverWithAddress[]
@@ -11,6 +11,9 @@ interface UseDriversResult {
     isActive?: boolean
     page?: number
     limit?: number
+    taxId?: string
+    email?: string
+    phone?: string
   }) => Promise<void>
   getDriverById: (id: string) => Promise<DriverWithAddress | null>
   createDriver: (formData: DriverFormData) => Promise<DriverWithAddress>
@@ -35,6 +38,9 @@ export const useDrivers = (initialParams?: {
     isActive?: boolean
     page?: number
     limit?: number
+    taxId?: string
+    email?: string
+    phone?: string
   }) => {
     setLoading(true)
     setError(null)

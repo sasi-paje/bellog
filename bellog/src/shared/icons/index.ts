@@ -13,6 +13,10 @@ export { default as SidebarOpenIcon } from './actions/sidebar-open.svg'
 export { default as SidebarCloseIcon } from './actions/sidebar-close.svg'
 
 // Brand icons
-export { default as BellogLogo } from './brand/bellog-logo.svg'
-export { default as BellogLogoMini } from './brand/bellog-logo-mini.svg'
-export { default as SasiLogo } from './brand/sasi-logo.svg'
+import BellogLogo from './brand/bellog-logo.svg'
+import BellogLogoMini from './brand/bellog-logo-mini.svg'
+import BellogLogin from './brand/bellog-login.svg'
+import BellogLogoLogin from './brand/bellog-logo-login.png'
+import SasiLogo from './brand/sasi-logo.svg'
+
+export { BellogLogo, BellogLogoLogin, BellogLogoMini, BellogLogin as LoginIllustration, SasiLogo }

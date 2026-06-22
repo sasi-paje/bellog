@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { assignmentService } from '../services/assignment.service'
+import { assignmentService } from '../features/assignments'
 
 interface UseAssignmentsResult {
   loading: boolean

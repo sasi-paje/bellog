@@ -27,7 +27,7 @@ export const ConfirmRemoveModal = ({
 
       {/* Modal */}
       <div className="fixed inset-0 flex items-center justify-center z-50 p-8">
-        <div className="bg-white rounded-[8px] w-full max-w-[400px] flex flex-col overflow-hidden shadow-xl">
+        <div className="bg-white rounded-[8px] w-full min-w-[50vw] flex flex-col overflow-hidden shadow-xl">
           {/* Header */}
           <div className="flex items-center justify-between h-[60px] px-8 shrink-0 border-b border-[#e0e0e0]">
             <h2

@@ -1,48 +1,76 @@
-import { SharedTable, TableColumn, StatusBadge, ActionButtons } from '../../../shared/components'
-import { InvoiceListItem } from '../../../services/fiscal-invoice.service'
-import { NoteStatus } from '../../../shared/components'
+import { SharedTable, TableColumn } from '../../../shared/components'
+import { InvoiceListItem } from '../../../features/notes'
+
+const NEUTRAL_LIGHT75 = '#2A2A2A'
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0)
 }
 
-const getInvoiceStatus = (data: InvoiceListItem): NoteStatus => {
-  if (!data.is_active) return 'Cancelada'
-  if (data.route_number) return 'Em Trânsito'
-  return 'Pendente'
-}
-
-const renderText = (value: string | number | undefined, suffix = '') => (
-  <span className="font-normal text-[14px]">
-    {value != null ? value : '-'}{suffix}
+const renderText = (value: string | number | undefined | null, suffix = '') => (
+  <span className="font-medium text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: NEUTRAL_LIGHT75 }}>
+    {value != null && value !== '' ? value : '-'}{suffix}
   </span>
 )
 
+const getStatusText = (row: InvoiceListItem): string => {
+  if (!row.is_active) return 'Cancelada'
+  if (row.delivery_status_description) return row.delivery_status_description
+  if (row.route_number || row.route_code) return 'Em andamento'
+  return 'Aguardando'
+}
+
+const getStatusColor = (row: InvoiceListItem): string => {
+  if (!row.is_active) return '#EB5757'
+  if (row.delivery_status_description || row.route_number || row.route_code) return '#4C4C4C'
+  return '#919191'
+}
+
+const renderStatus = (row: InvoiceListItem) => {
+  const status = getStatusText(row)
+  const color = getStatusColor(row)
+
+  return (
+    <span className="whitespace-nowrap font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color }}>
+      {status}
+    </span>
+  )
+}
+
+// FIX: Use correct field names that match InvoiceListItem (not InvoiceViewModel)
 const notesColumns: TableColumn<InvoiceListItem>[] = [
-  { key: 'invoice_number', label: 'Número Nota', width: '120px' },
-  { key: 'supplier_name', label: 'Fornecedor', width: '180px', render: (row) => renderText(row.supplier_name) },
-  { key: 'destination_name', label: 'Destino', width: '160px', render: (row) => renderText(row.destination_name) },
-  { key: 'route_number', label: 'Nº Viagem', width: '100px', align: 'center' },
-  { key: 'volume', label: 'Caixas', width: '100px', align: 'right' },
-  { key: 'weight', label: 'Peso líquido', width: '140px', align: 'right', render: (row) => renderText(row.weight?.toFixed(1), ' kg') },
-  { key: 'weight_bruto', label: 'Peso bruto', width: '140px', align: 'right', render: (row) => renderText(row.weight?.toFixed(1), ' kg') },
-  { key: 'value', label: 'Valor da nota', width: '140px', align: 'right', render: (row) => renderText(formatCurrency(row.value || 0)) },
-  { key: 'status', label: 'Status', width: '180px', align: 'center', render: (row) => <StatusBadge status={getInvoiceStatus(row)} /> },
-  { key: 'actions', label: 'Ações', width: '80px', align: 'center', render: () => <ActionButtons onEdit={() => {}} /> },
+  { key: 'invoice_number', label: 'N° Nota', render: (row) => renderText(row.invoice_number) },
+  { key: 'supplier_name', label: 'Fornecedor', render: (row) => renderText(row.supplier_name) },
+  { key: 'destination_name', label: 'Destino', render: (row) => renderText(row.destination_name) },
+  { key: 'tripNumber', label: 'Nº Viagem', render: (row) => renderText(row.tripNumber) },
+  { key: 'attempt_number', label: 'Nº Tentativa', render: (row) => renderText(row.attempt_number) },
+  { key: 'volume', label: 'Caixas', render: (row) => renderText(row.volume) },
+  { key: 'weight', label: 'Peso Líquido', render: (row) => renderText(row.weight ? `${row.weight.toFixed(1)} kg` : null) },
+  { key: 'gross_weight', label: 'Peso Bruto', render: (row) => renderText(row.gross_weight ? `${row.gross_weight.toFixed(1)} kg` : null) },
+  { key: 'value', label: 'Valor', render: (row) => renderText(row.value != null ? formatCurrency(row.value) : null) },
+  { key: 'status', label: 'Status', render: renderStatus },
 ]
 
 interface NotesTableProps {
   data: InvoiceListItem[]
   loading?: boolean
   onRowClick?: (note: InvoiceListItem) => void
+  selectable?: boolean
+  selectedIds?: Set<string>
+  onSelectRow?: (id: string, selected: boolean) => void
+  onSelectAll?: (selected: boolean) => void
 }
 
-export const NotesTable = ({ data, loading, onRowClick }: NotesTableProps) => (
+export const NotesTable = ({ data, loading, onRowClick, selectable, selectedIds, onSelectRow, onSelectAll }: NotesTableProps) => (
   <SharedTable<InvoiceListItem>
     columns={notesColumns}
     data={data}
     onRowClick={onRowClick}
     loading={loading}
     emptyMessage="Nenhuma nota encontrada"
+    selectable={selectable}
+    selectedIds={selectedIds}
+    onSelectRow={onSelectRow}
+    onSelectAll={onSelectAll}
   />
 )

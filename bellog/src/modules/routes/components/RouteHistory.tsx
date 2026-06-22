@@ -1,5 +1,25 @@
 import { AppIcon } from '../../../shared/components'
-import { HistoricoItem } from '../data/historico.mock'
+
+interface OccurrenceDetail {
+  id: string
+  titulo: string
+  local: string
+  notas: string[]
+  observacao: string
+  anexos: { id: string; nome: string; tipo: 'imagem' | 'documento' }[]
+}
+
+interface HistoricoItem {
+  id: string
+  tipo: 'rota-criada' | 'em-rota' | 'entrega-parcial' | 'entrega-total' | 'rota-finalizada'
+  titulo: string
+  subtitulo?: string
+  data: string
+  hora: string
+  local?: string
+  hasDetail: boolean
+  detail?: OccurrenceDetail
+}
 
 interface RouteHistoryProps {
   data: HistoricoItem[]
@@ -8,164 +28,103 @@ interface RouteHistoryProps {
 
 const TEXT_DARK = '#000000'
 const TEXT_LIGHT25 = '#919191'
-const SECONDARY_LIGHTER = '#bdcde8'
-const SECONDARY_DEFAULT = '#e67c26'
+const SECONDARY_LIGHTER = '#E5D7BC'
+const ACCENT_ORANGE = '#e67c26'
 
 interface TimelineItemProps {
   item: HistoricoItem
-  index: number
   isFirst: boolean
   isLast: boolean
   onClick: () => void
 }
 
-const TimelineItem = ({ item, index, isFirst, isLast, onClick }: TimelineItemProps) => {
-  const showTopLine = !isFirst
-  const showBottomLine = !isLast
-
-  const getItemTitle = () => {
-    if (item.subitulo && item.local) {
-      return (
-        <div className="flex gap-[10px] items-center justify-center text-[16px]">
-          <span className="font-bold" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
-            {item.titulo}
-          </span>
-          <span className="font-normal" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
-            {item.subitulo}
-          </span>
-          <span className="font-bold" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
-            {item.local}
-          </span>
-        </div>
-      )
-    }
-    return (
-      <span className="font-bold text-[16px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
-        {item.titulo}
-      </span>
-    )
-  }
+const TimelineItem = ({ item, isFirst, isLast, onClick }: TimelineItemProps) => {
+  const isMostRecent = isLast
+  const cardGap = isLast ? 0 : 16
 
   return (
-    <div className="flex flex-col h-[100px] items-start justify-center relative rounded-[6px] shrink-0 w-full">
-      <div className="flex flex-[1_0_0] gap-[16px] items-center justify-center w-full">
-        {/* Timeline connector */}
-        <div className="flex flex-col h-full items-center justify-end overflow-clip pb-px relative shrink-0 w-[20px]">
-          {showTopLine && <div className="bg-[#bdcde8] flex-1 mb-[-1px] w-[2px]" />}
-          {showTopLine && (
-            <div
-              className="mb-[-1px] relative shrink-0 w-[13px] h-[13px] rounded-full"
-              style={{ backgroundColor: SECONDARY_DEFAULT }}
-            />
-          )}
-          {showBottomLine && <div className="bg-[#bdcde8] flex-1 mt-[-1px] w-[2px]" />}
-        </div>
-
-        {/* Content card */}
-        <div
-          className={`flex flex-[1_0_0] flex-col items-center justify-center py-[16px] relative ${
-            item.hasDetail ? 'cursor-pointer' : ''
-          }`}
-          onClick={item.hasDetail ? onClick : undefined}
-        >
+    <div className="grid grid-cols-[24px_1fr] gap-4 w-full items-stretch">
+      {/* Timeline */}
+      <div className="relative flex justify-center">
+        {!isFirst && (
           <div
-            className={`border border-[#919191] border-solid flex items-center justify-between p-[12px] rounded-[6px] w-full ${
-              item.hasDetail ? 'hover:bg-gray-50' : ''
-            }`}
-          >
-            <div className="flex flex-col gap-[8px] items-start">
-              {getItemTitle()}
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-[2px]"
+            style={{
+              backgroundColor: SECONDARY_LIGHTER,
+              height: 'calc(50% - 6px)',
+            }}
+          />
+        )}
+
+        {!isLast && (
+          <div
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[2px]"
+            style={{
+              backgroundColor: SECONDARY_LIGHTER,
+              height: `calc(50% + ${cardGap}px - 6px)`,
+            }}
+          />
+        )}
+
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full z-10"
+          style={{
+            width: '12px',
+            height: '12px',
+            backgroundColor: isMostRecent ? ACCENT_ORANGE : SECONDARY_LIGHTER,
+          }}
+        />
+      </div>
+
+      {/* Card */}
+      <div
+        className={`border border-[#919191] rounded-[6px] p-3 w-full ${
+          item.hasDetail ? 'cursor-pointer hover:bg-gray-50' : ''
+        }`}
+        style={{ marginBottom: `${cardGap}px` }}
+        onClick={item.hasDetail ? onClick : undefined}
+      >
+        <div className="flex flex-col gap-2">
+          {item.subtitulo && item.local ? (
+            <div className="flex flex-wrap items-center gap-1">
               <span
-                className="font-medium text-[14px]"
-                style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25 }}
+                className="font-bold text-[16px]"
+                style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}
               >
-                {item.data} {item.hora}
+                {item.titulo}
+              </span>
+              <span
+                className="font-normal text-[16px]"
+                style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}
+              >
+                {item.subtitulo}
+              </span>
+              <span
+                className="font-bold text-[16px]"
+                style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}
+              >
+                {' '}{item.local}
               </span>
             </div>
-            {item.hasDetail && (
-              <div className="flex items-center justify-center w-[24px] h-[24px]">
-                <AppIcon name="open_in_new" size={20} color={TEXT_LIGHT25} />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Primeiro item da timeline (círculo no topo, linhaabaixo)
-const FirstTimelineItem = ({ item, onClick }: { item: HistoricoItem; onClick: () => void }) => {
-  return (
-    <div className="flex flex-col h-[100px] items-start justify-center relative rounded-[6px] shrink-0 w-full">
-      <div className="flex flex-[1_0_0] gap-[16px] items-center justify-center w-full">
-        {/* Timeline connector */}
-        <div className="flex flex-col h-full items-center justify-end overflow-clip pb-px relative shrink-0 w-[20px]">
-          <div
-            className="mb-[-1px] relative shrink-0 w-[13px] h-[13px] rounded-full"
-            style={{ backgroundColor: SECONDARY_DEFAULT }}
-          />
-          <div className="bg-[#bdcde8] h-[45px] mb-[-1px] w-[2px]" />
-        </div>
-
-        {/* Content card */}
-        <div className="flex flex-[1_0_0] flex-col items-center justify-center py-[16px] relative">
-          <div className="border border-[#919191] border-solid flex flex-col gap-[8px] items-start p-[12px] rounded-[6px] w-full">
-            <span className="font-bold text-[16px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
+          ) : (
+            <span
+              className="font-bold text-[16px]"
+              style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}
+            >
               {item.titulo}
             </span>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
             <span
               className="font-medium text-[14px]"
               style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25 }}
             >
               {item.data} {item.hora}
             </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
-// Último item da timeline (linha acima, círculo final)
-const LastTimelineItem = ({ item, onClick }: { item: HistoricoItem; onClick: () => void }) => {
-  return (
-    <div className="flex h-[100px] items-center relative shrink-0 w-full">
-      <div className="flex flex-[1_0_0] gap-[16px] h-full items-start min-h-px min-w-px relative">
-        {/* Timeline connector */}
-        <div className="flex flex-col h-full items-center justify-center overflow-clip pb-px relative shrink-0 w-[20px]">
-          <div className="bg-[#bdcde8] h-[45px] mb-[-1px] shrink-0 w-[2px]" />
-          <div
-            className="mb-[-1px] relative shrink-0 w-[13px] h-[13px] rounded-full"
-            style={{ backgroundColor: '#4CAF50' }}
-          />
-        </div>
-
-        {/* Content card */}
-        <div
-          className={`flex flex-[1_0_0] flex-col items-center justify-center py-[16px] relative ${
-            item.hasDetail ? 'cursor-pointer' : ''
-          }`}
-          onClick={item.hasDetail ? onClick : undefined}
-        >
-          <div
-            className={`border border-[#919191] border-solid flex items-center justify-between p-[12px] rounded-[6px] w-full ${
-              item.hasDetail ? 'hover:bg-gray-50' : ''
-            }`}
-          >
-            <div className="flex flex-col gap-[8px] items-start">
-              <span className="font-bold text-[16px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_DARK }}>
-                {item.titulo}
-              </span>
-              <span
-                className="font-medium text-[14px]"
-                style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25 }}
-              >
-                {item.data} {item.hora}
-              </span>
-            </div>
             {item.hasDetail && (
-              <div className="flex items-center justify-center w-[24px] h-[24px]">
+              <div className="shrink-0">
                 <AppIcon name="open_in_new" size={20} color={TEXT_LIGHT25} />
               </div>
             )}
@@ -180,7 +139,10 @@ export const RouteHistory = ({ data, onItemClick }: RouteHistoryProps) => {
   if (data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-8">
-        <p className="text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25 }}>
+        <p
+          className="text-[14px]"
+          style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25 }}
+        >
           Nenhum histórico disponível.
         </p>
       </div>
@@ -188,25 +150,16 @@ export const RouteHistory = ({ data, onItemClick }: RouteHistoryProps) => {
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      {data.map((item, index) => {
-        if (index === 0) {
-          return <FirstTimelineItem key={item.id} item={item} onClick={() => onItemClick(item)} />
-        }
-        if (index === data.length - 1) {
-          return <LastTimelineItem key={item.id} item={item} onClick={() => onItemClick(item)} />
-        }
-        return (
-          <TimelineItem
-            key={item.id}
-            item={item}
-            index={index}
-            isFirst={index === 0}
-            isLast={index === data.length - 1}
-            onClick={() => onItemClick(item)}
-          />
-        )
-      })}
+    <div className="flex flex-col">
+      {data.map((item, index) => (
+        <TimelineItem
+          key={item.id}
+          item={item}
+          isFirst={index === 0}
+          isLast={index === data.length - 1}
+          onClick={() => onItemClick(item)}
+        />
+      ))}
     </div>
   )
 }

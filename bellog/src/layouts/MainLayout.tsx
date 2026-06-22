@@ -43,7 +43,6 @@ export const MainLayout = ({
 
     const pageMap: Record<string, string> = {
       dashboard: 'dashboard',
-      cargas: 'cargas',
       rotas: 'routes',
       notas: 'notes',
       'rotas-notas': 'routes-by-notes',
@@ -64,12 +63,6 @@ export const MainLayout = ({
   }
 
   const menuItems = [
-    {
-      id: 'cargas',
-      label: 'Cargas',
-      icon: <AppIcon name="local_shipping" size={24} />,
-      isActive: currentPage === 'cargas',
-    },
     {
       id: 'rotas',
       label: 'Rotas',
@@ -117,7 +110,7 @@ export const MainLayout = ({
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <AppSidebar
         isOpen={isSidebarOpen}
         logo={
@@ -151,7 +144,7 @@ export const MainLayout = ({
         activeItemId={currentPage}
       />
 
-      <main className="flex min-h-screen flex-1 flex-col overflow-x-hidden bg-white">
+      <main className="flex h-screen flex-1 flex-col overflow-hidden bg-white">
         {isValidElement(children)
           ? cloneElement(children, {
               ...(children.props || {}),

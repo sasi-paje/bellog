@@ -1,145 +1,62 @@
-import { AppIcon } from '../../../shared/components'
+import { SharedTable, AppIcon } from '../../../shared/components'
+import { VehicleListItem } from '../../../features/vehicles'
 
-interface TableRowProps {
-  data: {
-    plate: string
-    maxLoad: number
-    responsible: string
-    status: string
-  }
-  index: number
-}
+const TEXT_COLOR = '#2A2A2A'
 
-const TABLE_GRID = 'grid grid-cols-[120px_120px_minmax(0,1fr)_100px_80px]'
-const BG_OTHER = '#F0F4F9'
-const WHITE = '#FFFFFF'
-const TEXT = '#2A2A2A'
+const renderText = (value: string | number | null | undefined) => (
+  <span className="font-medium text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
+    {value !== undefined && value !== null && value !== '' ? String(value) : '-'}
+  </span>
+)
 
-const TableRow = ({ data, index }: TableRowProps) => {
-  const rowBg = index % 2 === 0 ? WHITE : BG_OTHER
-
-  return (
-    <div
-      className={`${TABLE_GRID} h-[40px] w-full items-center`}
-      style={{ backgroundColor: rowBg }}
-    >
-      <div className="flex h-full items-center px-[12px]">
-        <span
-          className="font-medium text-[14px] whitespace-nowrap"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.plate}
-        </span>
-      </div>
-
-      <div className="flex h-full items-center px-[12px]">
-        <span
-          className="font-medium text-[14px] whitespace-nowrap"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.maxLoad}
-        </span>
-      </div>
-
-      <div className="flex h-full min-w-0 items-center px-[12px]">
-        <span
-          className="truncate font-medium text-[14px]"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.responsible}
-        </span>
-      </div>
-
-      <div className="flex h-full items-center px-[12px]">
-        <span
-          className="font-bold text-[14px] whitespace-nowrap"
-          style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-        >
-          {data.status}
-        </span>
-      </div>
-
-      <div className="flex h-full items-center justify-end px-[12px]">
-        <button
-          type="button"
-          className="flex h-5 w-5 items-center justify-center rounded hover:bg-black/5"
-        >
-          <AppIcon name="edit" size={20} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-const TableHeader = () => (
-  <div
-    className={`${TABLE_GRID} h-[32px] w-full items-center rounded-[6px]`}
-    style={{ backgroundColor: BG_OTHER }}
+const renderStatus = (row: VehicleListItem) => (
+  <span
+    className="font-bold text-[14px] whitespace-nowrap"
+    style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}
   >
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Placa
-      </span>
-    </div>
-
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Carga Máxima
-      </span>
-    </div>
-
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Responsável
-      </span>
-    </div>
-
-    <div className="flex h-full items-center px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Status
-      </span>
-    </div>
-
-    <div className="flex h-full items-center justify-end px-[12px]">
-      <span
-        className="font-medium text-[12px] whitespace-nowrap"
-        style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}
-      >
-        Actions
-      </span>
-    </div>
-  </div>
+    {row.is_active ? 'Ativo' : 'Inativo'}
+  </span>
 )
 
 interface VehicleTableProps {
-  data: Array<{
-    plate: string
-    maxLoad: number
-    responsible: string
-    status: string
-  }>
+  data?: VehicleListItem[]
+  onRowClick?: (vehicle: VehicleListItem) => void
 }
 
-export const VehicleTable = ({ data }: VehicleTableProps) => (
-  <div className="flex w-full flex-col items-start gap-0">
-    <TableHeader />
-
-    <div className="flex w-full flex-col items-start">
-      {data.map((row, index) => (
-        <TableRow key={index} data={row} index={index} />
-      ))}
-    </div>
-  </div>
+export const VehicleTable = ({ data = [], onRowClick }: VehicleTableProps) => (
+  <SharedTable<VehicleListItem>
+    columns={[
+      { key: 'plate', label: 'Placa', render: (row) => renderText(row.plate) },
+      { key: 'code', label: 'Frota', render: (row) => renderText(row.code) },
+      {
+        key: 'max_capacity',
+        label: 'Carga Máxima (kg)',
+        render: (row) => renderText(row.max_capacity || row.nominal_capacity || null),
+      },
+      { key: 'status', label: 'Status', render: renderStatus },
+      {
+        key: 'actions',
+        label: 'Ações',
+        width: '64px',
+        align: 'center',
+        render: (row) => (
+          <div className="flex items-center justify-center">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRowClick?.(row)
+              }}
+              className="flex items-center justify-center w-8 h-8 rounded hover:bg-[#F0F4F9] transition-colors"
+            >
+              <AppIcon name="edit" size={18} color={TEXT_COLOR} />
+            </button>
+          </div>
+        ),
+      },
+    ]}
+    data={data}
+    onRowClick={onRowClick}
+    emptyMessage="Nenhum veículo encontrado."
+  />
 )

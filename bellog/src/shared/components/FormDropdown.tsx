@@ -55,14 +55,14 @@ export const FormDropdown = ({
       </label>
       <div className="relative">
         <div
-          className={`flex h-[45px] items-center px-[16px] py-[12px] bg-white border rounded-[5px] w-full ${readOnly ? 'border-[#e0e0e0] cursor-not-allowed' : 'border-[#0f3255] cursor-pointer'}`}
+          className={`flex h-[45px] items-center px-[16px] py-[12px] bg-white border rounded-[5px] w-full ${readOnly ? 'border-transparent cursor-default' : 'border-[#0f3255] cursor-pointer'}`}
           onClick={() => !readOnly && setIsOpen(!isOpen)}
           data-name="Input"
         >
           <div className="flex flex-[1_0_0] items-center gap-[4px]">
             <span
               className="font-normal text-[14px]"
-              style={{ fontFamily: 'Inter, sans-serif', color: value ? TEXT_COLOR : '#919191', lineHeight: '24px' }}
+              style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontStyle: 'normal', fontWeight: 400, color: readOnly ? TEXT_COLOR : (value ? TEXT_COLOR : '#919191'), lineHeight: '24px' }}
             >
               {selectedOption?.label || value || 'Selecione...'}
             </span>
@@ -83,7 +83,7 @@ export const FormDropdown = ({
               >
                 <span
                   className="font-normal text-[14px]"
-                  style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR, lineHeight: '24px' }}
+                  style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontStyle: 'normal', fontWeight: 400, color: TEXT_COLOR, lineHeight: '24px' }}
                 >
                   {option.label}
                 </span>

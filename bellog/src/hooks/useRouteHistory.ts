@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { routeHistoryService, HistoryWithDetails } from '../services/route-history.service'
+import { routeHistoryService, HistoryWithDetails } from '../features/routes-history'
+import { routeService, RouteHistoryItem } from '../features/routes'
 
 interface UseRouteHistoryResult {
   history: HistoryWithDetails[]
@@ -21,10 +22,52 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
     setLoading(true)
     setError(null)
     try {
-      const data = await routeHistoryService.getByRouteId(routeId)
-      setHistory(data)
+      // First try to get history from route_history table
+      const dbHistory = await routeHistoryService.getByRouteId(routeId)
+
+      // If no history in database, generate from route data
+      if (!dbHistory || dbHistory.length === 0) {
+        console.log('[useRouteHistory] No history in database, generating from route data')
+        const routeHistory = await routeService.getHistory(routeId)
+
+        // Convert routeService history to HistoryWithDetails format
+        const convertedHistory: HistoryWithDetails[] = routeHistory.map((h) => ({
+          id: h.id,
+          id_route: routeId,
+          id_history_type: null,
+          event_at: h.event_at,
+          description: h.event_description,
+          is_active: true,
+          is_test: true,
+          created_at: h.event_at,
+          updated_at: h.event_at,
+          history_type: undefined,
+        }))
+        setHistory(convertedHistory)
+      } else {
+        setHistory(dbHistory)
+      }
     } catch (err) {
-      setError((err as Error).message)
+      console.error('[useRouteHistory] Error:', err)
+      // Fallback to route data even on error
+      try {
+        const routeHistory = await routeService.getHistory(routeId)
+        const convertedHistory: HistoryWithDetails[] = routeHistory.map((h) => ({
+          id: h.id,
+          id_route: routeId,
+          id_history_type: null,
+          event_at: h.event_at,
+          description: h.event_description,
+          is_active: true,
+          is_test: true,
+          created_at: h.event_at,
+          updated_at: h.event_at,
+          history_type: undefined,
+        }))
+        setHistory(convertedHistory)
+      } catch (fallbackErr) {
+        setError((fallbackErr as Error).message)
+      }
     } finally {
       setLoading(false)
     }

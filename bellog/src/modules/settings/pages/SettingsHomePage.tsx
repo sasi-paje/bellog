@@ -4,7 +4,9 @@ import { SettingsCard } from '../components/SettingsCard'
 interface SettingsHomePageProps {
   userName?: string
   userRole?: string
-  onNavigate?: (page: 'settings-vehicles' | 'settings-suppliers' | 'settings-cargos' | 'settings-recusas' | 'settings-abortadas' | 'settings-destinos' | 'settings-motoristas') => void
+  onLogout?: () => void
+  userEmail?: string
+  onNavigate?: (page: 'settings-vehicles' | 'settings-suppliers' | 'settings-cargos' | 'settings-recusas' | 'settings-destinos' | 'settings-motoristas') => void
   isSidebarOpen?: boolean
   onToggleSidebar?: () => void
 }
@@ -14,7 +16,7 @@ interface CardItem {
   title: string
   description: string
   icon: string
-  navigation?: 'settings-vehicles' | 'settings-suppliers' | 'settings-cargos' | 'settings-recusas' | 'settings-abortadas' | 'settings-destinos' | 'settings-motoristas'
+  navigation?: 'settings-vehicles' | 'settings-suppliers' | 'settings-cargos' | 'settings-recusas' | 'settings-destinos' | 'settings-motoristas'
 }
 
 interface SettingsSectionData {
@@ -36,18 +38,11 @@ const settingsSections: SettingsSectionData[] = [
         navigation: 'settings-cargos',
       },
       {
-        id: 'recusas',
-        title: 'Recusas',
-        description: 'Gerenciamento de entregas Recusadas',
-        icon: 'do_not_disturb_on',
+        id: 'motivo',
+        title: 'Motivo',
+        description: 'Gerenciamento de Motivos de entregas',
+        icon: 'article',
         navigation: 'settings-recusas',
-      },
-      {
-        id: 'abortadas',
-        title: 'Abortadas',
-        description: 'Gerenciamento de entregas Abortadas',
-        icon: 'location_off',
-        navigation: 'settings-abortadas',
       },
     ],
   },
@@ -89,12 +84,6 @@ const settingsSections: SettingsSectionData[] = [
         icon: 'delivery_truck_speed',
         navigation: 'settings-vehicles',
       },
-      {
-        id: 'ajudante',
-        title: 'Ajudante',
-        description: 'Gerenciamento de Ajudantes',
-        icon: 'group',
-      },
     ],
   },
 ]
@@ -133,6 +122,8 @@ const SettingsSection = ({
 export const SettingsHomePage = ({
   userName = 'Leon Kennedy',
   userRole = 'Usuário',
+  onLogout,
+  userEmail,
   onNavigate,
   isSidebarOpen = true,
   onToggleSidebar,
@@ -151,7 +142,9 @@ export const SettingsHomePage = ({
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}
+        userEmail={userEmail}
         userRole={userRole}
+        onLogout={onLogout}
       />
 
       {/* Main Content - Settings Sections */}

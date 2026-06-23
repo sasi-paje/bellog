@@ -124,6 +124,7 @@ const MobileAppContent: React.FC = () => {
 
   return (
     <MyRoutesPage
+      driverId={driver.id}
       onBack={() => navigateTo('my-routes')}
       onNavigate={(page) => {
         if (page === 'delivery') navigateTo('delivery')

@@ -3,7 +3,7 @@ import { ArrivalClientModal } from '../components/ArrivalClientModal'
 import {
   arrivalClientService,
   ArrivalClientDestination,
-  ArrivalClientRecord,
+  RouteArrivalView,
 } from '../services/arrival-client.service'
 import { MobilePageShell, MobileCardLayout } from '../../../shared/components'
 
@@ -24,6 +24,13 @@ const isValidTime = (value: string): boolean => {
   if (!/^\d{2}:\d{2}$/.test(value)) return false
   const [hours, minutes] = value.split(':').map(Number)
   return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59
+}
+
+const isoToTime = (iso: string | null): string => {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 const fileSizeLabel = (file: File): string => {
@@ -60,7 +67,8 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
   const [arrivalTime, setArrivalTime] = useState('')
   const [photo, setPhoto] = useState<File | null>(null)
   const [justification, setJustification] = useState('')
-  const [existingRecord, setExistingRecord] = useState<ArrivalClientRecord | null>(null)
+  const [existingRecord, setExistingRecord] = useState<RouteArrivalView | null>(null)
+  const [isCheckingRecord, setIsCheckingRecord] = useState(false)
   const [modalState, setModalState] = useState<ModalState>('none')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -107,15 +115,42 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
       return
     }
 
+    let active = true
+
     const fetchExistingRecord = async () => {
-      const record = await arrivalClientService.getExistingRecord(
-        selectedDestination.company_id,
-        selectedDestination.route_id
-      )
-      setExistingRecord(record)
+      setIsCheckingRecord(true)
+      setError(null)
+
+      try {
+        const record = await arrivalClientService.getRouteArrival(
+          selectedDestination.company_id,
+          selectedDestination.route_id
+        )
+
+        if (!active) return
+
+        setExistingRecord(record)
+
+        // Pre-preenche o horario com o registro existente, mantendo o fluxo de alteracao.
+        if (record?.arrived_at) {
+          setArrivalTime(isoToTime(record.arrived_at))
+        }
+      } catch (err) {
+        if (!active) return
+        setExistingRecord(null)
+        setError(err instanceof Error ? err.message : 'Não foi possível verificar a chegada deste cliente.')
+      } finally {
+        if (active) {
+          setIsCheckingRecord(false)
+        }
+      }
     }
 
     fetchExistingRecord()
+
+    return () => {
+      active = false
+    }
   }, [selectedDestination])
 
   const isFormValid = Boolean(selectedDestination && isValidTime(arrivalTime) && photo)
@@ -208,7 +243,7 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
             <button
               type="button"
               onClick={handleRegisterClick}
-              disabled={!isFormValid || isSubmitting}
+              disabled={!isFormValid || isSubmitting || isCheckingRecord}
               className="flex h-[45px] flex-1 items-center justify-center rounded-[4px] bg-[#e67c26] px-[8px] py-[2px] text-[14px] font-bold text-white transition-colors hover:bg-[#cf6f22] focus:outline-none focus:ring-2 focus:ring-[#e67c26]/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
@@ -216,7 +251,7 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
                   <LoadingSpinner />
                   Enviando...
                 </span>
-              ) : 'Registrar'}
+              ) : existingRecord ? 'Atualizar chegada' : 'Registrar'}
             </button>
           </div>
         }
@@ -272,6 +307,18 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
               aria-describedby="arrival-time-help"
             />
             <span id="arrival-time-help" className="sr-only">Informe o horario no formato hh:mm.</span>
+
+            {isCheckingRecord && (
+              <span className="text-[12px] font-medium leading-[16px] text-[#919191]">
+                Verificando chegada registrada...
+              </span>
+            )}
+
+            {!isCheckingRecord && existingRecord && (
+              <div className="rounded-[4px] border border-[#f0c98a] bg-[#fff7ec] px-[12px] py-[10px] text-[13px] font-medium leading-[18px] text-[#a86a14]" role="status">
+                Já existe registro de chegada para este cliente. Para alterar, anexe uma nova foto e informe a justificativa.
+              </div>
+            )}
           </div>
 
           <div className="flex w-full shrink-0 flex-col gap-[8px]">
@@ -288,6 +335,20 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
               onChange={handlePhotoChange}
               className="sr-only"
             />
+
+            {existingRecord?.arrival_photo_url && !photo && (
+              <div className="flex flex-col gap-[6px] rounded-[5px] border border-[#d9d9d9] bg-white p-[10px]">
+                <span className="text-[12px] font-semibold leading-[16px] text-[#4c4c4c]">
+                  Foto registrada
+                </span>
+                <img
+                  src={existingRecord.arrival_photo_url}
+                  alt="Foto da chegada registrada"
+                  className="max-h-[200px] w-full rounded-[4px] object-contain"
+                  loading="lazy"
+                />
+              </div>
+            )}
 
             {!photo ? (
               <label
@@ -337,7 +398,7 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
       <ArrivalClientModal
         isOpen={modalState === 'justify'}
         title="Justificativa obrigatória"
-        message={existingRecord ? `Você já possui um registro para a empresa ${existingRecord.company_name}, deseja alterar o registro para as ${arrivalTime}?` : ''}
+        message={existingRecord && selectedDestination ? `Você já possui um registro para a empresa ${selectedDestination.company_name}, deseja alterar o registro para as ${arrivalTime}?` : ''}
         isLoading={isSubmitting}
         isConfirmDisabled={!isJustificationValid}
         onCancel={() => setModalState('none')}

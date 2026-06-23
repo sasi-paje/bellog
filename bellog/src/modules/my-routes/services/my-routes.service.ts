@@ -97,9 +97,49 @@ const toQueryId = (id: string): string | number => {
 
 const getIsTest = (): boolean => getEnvironment() !== 'production'
 
-function getMobileStatus(statusName?: string | null): RouteMobileStatus {
-  if (!statusName) return 'available'
-  return STATUS_MAPPING[statusName] || 'available'
+const NORMALIZED_STATUS_MAPPING: StatusMapping = {
+  pending: 'available',
+  pendente: 'available',
+  available: 'available',
+  aberto: 'available',
+  aberta: 'available',
+  rota_ainda_nao_iniciada: 'available',
+  in_progress: 'in_progress',
+  em_andamento: 'in_progress',
+  em_rota: 'in_progress',
+  em_rota_de_entrega: 'in_progress',
+  started: 'in_progress',
+  finalizada: 'completed',
+  finalizado: 'completed',
+  concluida: 'completed',
+  concluido: 'completed',
+  completed: 'completed',
+  finished: 'completed',
+}
+
+function normalizeStatusToken(value?: string | null): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+function getMobileStatus(status?: StatusReference | string | null): RouteMobileStatus {
+  if (!status) return 'available'
+
+  if (typeof status === 'string') {
+    return STATUS_MAPPING[status] || NORMALIZED_STATUS_MAPPING[normalizeStatusToken(status)] || 'available'
+  }
+
+  for (const candidate of [status.code, status.name, status.description]) {
+    const mappedStatus = STATUS_MAPPING[candidate || ''] || NORMALIZED_STATUS_MAPPING[normalizeStatusToken(candidate)]
+    if (mappedStatus) return mappedStatus
+  }
+
+  return 'available'
 }
 
 function toStatusInfo(status?: StatusReference | null): RouteStatusInfo | undefined {
@@ -148,6 +188,7 @@ function buildAddress(address?: CompanyAddress): string | undefined {
 }
 
 async function getDeliveryStatusByName(name: string): Promise<StatusReference> {
+  const normalizedName = normalizeStatusToken(name)
   const byName = await supabase
     .from('ref_route_delivery_status')
     .select('id, code, name, description')
@@ -170,9 +211,9 @@ async function getDeliveryStatusByName(name: string): Promise<StatusReference> {
   const byCode = await supabase
     .from('ref_route_delivery_status')
     .select('id, code, name, description')
-    .eq('code', name)
+    .in('code', [name, normalizedName, normalizedName.toUpperCase()])
     .eq('is_active', true)
-    .maybeSingle()
+    .limit(1)
 
   if (byCode.error) {
     throw new MyRoutesServiceError(
@@ -182,7 +223,9 @@ async function getDeliveryStatusByName(name: string): Promise<StatusReference> {
     )
   }
 
-  if (!byCode.data) {
+  const codeMatch = Array.isArray(byCode.data) ? byCode.data[0] : byCode.data
+
+  if (!codeMatch) {
     throw new MyRoutesServiceError(
       `Status de entrega nao encontrado: ${name}`,
       'VALIDATION_ERROR',
@@ -190,7 +233,7 @@ async function getDeliveryStatusByName(name: string): Promise<StatusReference> {
     )
   }
 
-  return byCode.data as StatusReference
+  return codeMatch as StatusReference
 }
 
 async function insertRouteHistory(
@@ -217,7 +260,7 @@ async function insertRouteHistory(
 export class MyRoutesServiceError extends Error {
   constructor(
     message: string,
-    public code: 'NETWORK_ERROR' | 'NOT_FOUND' | 'VALIDATION_ERROR' | 'UNKNOWN',
+    public code: 'NETWORK_ERROR' | 'NOT_FOUND' | 'VALIDATION_ERROR' | 'RPC_ERROR' | 'UNKNOWN',
     public context?: Record<string, unknown>
   ) {
     super(message)
@@ -228,27 +271,30 @@ export class MyRoutesServiceError extends Error {
 export const myRoutesService = {
   async list(params?: MyRoutesParams): Promise<MyRoutesResult> {
     const isTest = getIsTest()
-    const { page = 1, limit = 20 } = params || {}
+    const { page = 1, limit = 100, driverId } = params || {}
 
     const from = (page - 1) * limit
     const to = from + limit - 1
 
+    if (!driverId) {
+      throw new MyRoutesServiceError('Motorista nao informado para carregar rotas', 'VALIDATION_ERROR')
+    }
+
     try {
+      const routesQuery = supabase
+        .from('trx_route')
+        .select('*', { count: 'exact' })
+        .eq('id_driver', toQueryId(driverId))
+        .eq('is_test', isTest)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
       const [
         routesResult,
-        statusRefsResult,
         deliveryStatusResult,
       ] = await Promise.all([
-        supabase
-          .from('trx_route')
-          .select('*', { count: 'exact' })
-          .eq('is_test', isTest)
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .range(from, to),
-        supabase
-          .from('ref_route_status')
-          .select('id, code, name, description'),
+        routesQuery,
         supabase
           .from('ref_route_delivery_status')
           .select('id, code, name, description'),
@@ -267,14 +313,9 @@ export const myRoutesService = {
         return { data: [], total: routesResult.count || 0 }
       }
 
-      const statusNameMap = new Map<string, string>()
-      statusRefsResult.data?.forEach((s: StatusReference) => {
-        statusNameMap.set(toStringId(s.id), s.name || s.code || '')
-      })
-
-      const deliveryStatusNameMap = new Map<string, string>()
+      const deliveryStatusMap = new Map<string, StatusReference>()
       deliveryStatusResult.data?.forEach((s: StatusReference) => {
-        deliveryStatusNameMap.set(toStringId(s.id), s.name || s.code || '')
+        deliveryStatusMap.set(toStringId(s.id), s)
       })
 
       const vehicleIds = [...new Set(routes.map(r => r.id_vehicle).filter(Boolean).map(toStringId))]
@@ -309,11 +350,11 @@ export const myRoutesService = {
 
       const result: MyRouteListItem[] = routes.map(route => {
         const routeId = toStringId(route.id)
-        const deliveryStatusName = route.id_route_delivery_status
-          ? deliveryStatusNameMap.get(toStringId(route.id_route_delivery_status)) || 'Pendente'
-          : 'Pendente'
+        const deliveryStatus = route.id_route_delivery_status
+          ? deliveryStatusMap.get(toStringId(route.id_route_delivery_status)) || null
+          : null
 
-        const mobileStatus = getMobileStatus(deliveryStatusName)
+        const mobileStatus = getMobileStatus(deliveryStatus)
 
         return {
           id: routeId,
@@ -345,7 +386,7 @@ export const myRoutesService = {
     }
   },
 
-  async getById(routeId: string): Promise<MyRouteDetail> {
+  async getById(routeId: string, driverId?: string | null): Promise<MyRouteDetail> {
     const isTest = getIsTest()
 
     if (!routeId) {
@@ -353,13 +394,18 @@ export const myRoutesService = {
     }
 
     try {
-      const { data: route, error: routeError } = await supabase
+      let routeQuery = supabase
         .from('trx_route')
         .select('*')
         .eq('id', toQueryId(routeId))
         .eq('is_test', isTest)
         .eq('is_active', true)
-        .maybeSingle()
+
+      if (driverId) {
+        routeQuery = routeQuery.eq('id_driver', toQueryId(driverId))
+      }
+
+      const { data: route, error: routeError } = await routeQuery.maybeSingle()
 
       if (routeError) {
         throw new MyRoutesServiceError(
@@ -420,7 +466,6 @@ export const myRoutesService = {
 
       const statusInfo = toStatusInfo(statusResult.data as StatusReference | null)
       const deliveryStatusInfo = toStatusInfo(deliveryStatusResult.data as StatusReference | null)
-      const deliveryStatusName = deliveryStatusInfo?.name || deliveryStatusInfo?.code || 'Pendente'
 
       return {
         id: toStringId(routeData.id),
@@ -428,7 +473,7 @@ export const myRoutesService = {
         area_description: routeData.area || '',
         departure_date: routeData.departure_date || '',
         departure_time: routeData.departure_time || '',
-        status: getMobileStatus(deliveryStatusName),
+        status: getMobileStatus(deliveryStatusResult.data as StatusReference | null),
         status_info: statusInfo,
         delivery_status: deliveryStatusInfo,
         vehicle: (vehicleResult.data as MasterFleetVehicle | null) || undefined,

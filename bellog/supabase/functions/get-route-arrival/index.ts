@@ -7,15 +7,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Mesmo bucket usado pela register-route-arrival para manter leitura e escrita em sincronia.
 const ARRIVAL_PHOTO_BUCKET = Deno.env.get('ARRIVAL_PHOTO_BUCKET') ?? 'route-arrivals'
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
-const ALLOWED_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-])
+const SIGNED_URL_TTL_SECONDS = 60 * 60
 
 type JsonBody = Record<string, unknown>
 type DbId = number | string
@@ -53,6 +47,7 @@ interface RouteStop {
   id_route: number
   id_company: number
   arrived_at: string | null
+  arrival_photo_path: string | null
   is_active: boolean
 }
 
@@ -70,22 +65,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const idsMatch = (left: unknown, right: unknown): boolean =>
   left !== null && left !== undefined && right !== null && right !== undefined && String(left) === String(right)
-
-const toNullableNumber = (value: DbId | null | undefined): number | null => {
-  if (value === null || value === undefined || value === '') return null
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) ? numberValue : null
-}
-
-const sanitizeFileName = (fileName: string): string => {
-  const fallback = 'arrival-photo'
-  const sanitized = fileName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return sanitized || fallback
-}
 
 const extractProviderResponse = (payload: unknown): ProviderResponse | null => {
   const candidate = isRecord(payload) && isRecord(payload.data)
@@ -176,24 +155,43 @@ const hasRouteDriverRelation = async (
     .limit(1)
 
   if (error) {
-    console.error('[register-route-arrival] rel_route_driver lookup failed:', error)
+    console.error('[get-route-arrival] rel_route_driver lookup failed:', error)
     return false
   }
 
   return Boolean(data?.length)
 }
 
-const ensureArrivalBucketExists = async (supabase: SupabaseClient): Promise<boolean> => {
-  const { data, error } = await supabase.storage.getBucket(ARRIVAL_PHOTO_BUCKET)
+// Gera a URL da foto a partir do bucket configurado, adaptando-se a visibilidade:
+// bucket publico -> getPublicUrl; bucket privado -> createSignedUrl temporaria.
+const buildPhotoUrl = async (
+  supabase: SupabaseClient,
+  path: string | null
+): Promise<string | null> => {
+  if (!path) return null
 
-  if (!error && data) return true
+  const { data: bucket, error: bucketError } = await supabase.storage.getBucket(ARRIVAL_PHOTO_BUCKET)
 
-  console.error(
-    `[register-route-arrival] Bucket de fotos de chegada nao encontrado: ${ARRIVAL_PHOTO_BUCKET}`,
-    error,
-  )
+  if (bucketError || !bucket) {
+    console.error(`[get-route-arrival] Bucket de fotos nao encontrado: ${ARRIVAL_PHOTO_BUCKET}`, bucketError)
+    return null
+  }
 
-  return false
+  if (bucket.public) {
+    const { data } = supabase.storage.from(ARRIVAL_PHOTO_BUCKET).getPublicUrl(path)
+    return data?.publicUrl ?? null
+  }
+
+  const { data, error } = await supabase.storage
+    .from(ARRIVAL_PHOTO_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
+
+  if (error) {
+    console.error('[get-route-arrival] createSignedUrl failed:', error)
+    return null
+  }
+
+  return data?.signedUrl ?? null
 }
 
 serve(async (req) => {
@@ -207,34 +205,22 @@ serve(async (req) => {
 
   try {
     const supabase = getSupabaseAdmin()
-    const formData = await req.formData()
+    const body = await req.json().catch(() => null)
 
-    const token = String(formData.get('token') || '').trim()
-    const routeId = String(formData.get('routeId') || '').trim()
-    const companyId = String(formData.get('companyId') || '').trim()
-    const arrivedAt = String(formData.get('arrivedAt') || '').trim()
-    const justification = String(formData.get('justification') || '').trim()
-    const fileEntry = formData.get('file')
+    if (!isRecord(body)) {
+      return fail('Corpo da requisicao invalido.')
+    }
+
+    const token = String(body.token || '').trim()
+    const routeId = String(body.routeId || '').trim()
+    const companyId = String(body.companyId || '').trim()
 
     if (!token) return fail('Token de acesso nao informado.', 401)
     if (!routeId) return fail('Rota nao informada.')
     if (!companyId) return fail('Cliente nao informado.')
-    if (!arrivedAt || Number.isNaN(new Date(arrivedAt).getTime())) {
-      return fail('Horario de chegada invalido.')
-    }
-    if (!(fileEntry instanceof File)) {
-      return fail('Foto de chegada nao enviada.')
-    }
-    if (!ALLOWED_MIME_TYPES.has(fileEntry.type)) {
-      return fail('Formato de imagem invalido. Envie JPG, PNG, WebP, HEIC ou HEIF.')
-    }
-    if (fileEntry.size > MAX_IMAGE_SIZE_BYTES) {
-      return fail('A foto de chegada deve ter no maximo 10MB.')
-    }
 
     const provider = await validateSasiToken(token)
     const providerEmail = getProviderEmail(provider)
-    console.log('[register-route-arrival] Provider email:', providerEmail)
 
     if (!providerEmail) {
       return fail('Email do motorista nao encontrado no retorno da SASI.', 401)
@@ -248,7 +234,7 @@ serve(async (req) => {
       .limit(2)
 
     if (driverError) {
-      console.error('[register-route-arrival] driver lookup failed:', driverError)
+      console.error('[get-route-arrival] driver lookup failed:', driverError)
       return fail('Erro ao buscar motorista vinculado ao token SASI.', 500)
     }
     if (!drivers?.length) {
@@ -268,7 +254,7 @@ serve(async (req) => {
       .maybeSingle<Route>()
 
     if (routeError) {
-      console.error('[register-route-arrival] route lookup failed:', routeError)
+      console.error('[get-route-arrival] route lookup failed:', routeError)
       return fail('Erro ao buscar rota informada.', 500)
     }
     if (!route) {
@@ -286,74 +272,51 @@ serve(async (req) => {
 
     const { data: routeStop, error: stopError } = await supabase
       .from('trx_route_stop')
-      .select('id, id_route, id_company, arrived_at, is_active')
+      .select('id, id_route, id_company, arrived_at, arrival_photo_path, is_active')
       .eq('id_route', routeId)
       .eq('id_company', companyId)
       .eq('is_active', true)
       .maybeSingle<RouteStop>()
 
     if (stopError) {
-      console.error('[register-route-arrival] route stop lookup failed:', stopError)
+      console.error('[get-route-arrival] route stop lookup failed:', stopError)
       return fail('Erro ao buscar parada da rota.', 500)
     }
+
     if (!routeStop) {
-      return fail('Paradas da rota ainda nao foram geradas. Inicie a rota primeiro para sincronizar as paradas.', 404)
-    }
-    if (routeStop.arrived_at && !justification) {
-      return fail('Justificativa obrigatoria para alterar uma chegada ja registrada.', 409)
-    }
-
-    const bucketExists = await ensureArrivalBucketExists(supabase)
-    if (!bucketExists) {
-      return fail('Nao foi possivel enviar a foto da chegada. Tente novamente.', 500)
-    }
-
-    const timestamp = Date.now()
-    const fileName = sanitizeFileName(fileEntry.name)
-    const storagePath = `route-${routeId}/company-${companyId}/${timestamp}-${fileName}`
-    const fileBytes = new Uint8Array(await fileEntry.arrayBuffer())
-
-    const { error: uploadError } = await supabase.storage
-      .from(ARRIVAL_PHOTO_BUCKET)
-      .upload(storagePath, fileBytes, {
-        cacheControl: '3600',
-        contentType: fileEntry.type,
-        upsert: false,
+      return json({
+        success: true,
+        data: {
+          id_route_stop: null,
+          id_route: Number(routeId),
+          id_company: Number(companyId),
+          arrived_at: null,
+          arrival_photo_path: null,
+          arrival_photo_url: null,
+          already_registered: false,
+        },
       })
-
-    if (uploadError) {
-      console.error('[register-route-arrival] upload failed:', uploadError)
-      return fail('Nao foi possivel enviar a foto da chegada. Tente novamente.', 500)
     }
 
-    const { data: rpcData, error: rpcError } = await supabase.rpc('register_route_stop_arrival', {
-      p_id_route_stop: routeStop.id,
-      p_arrived_at: new Date(arrivedAt).toISOString(),
-      p_arrival_photo_path: storagePath,
-      p_justification: justification || null,
-      p_user_id: toNullableNumber(driver.id),
-    })
-
-    if (rpcError) {
-      console.error('[register-route-arrival] rpc failed:', rpcError)
-      await supabase.storage.from(ARRIVAL_PHOTO_BUCKET).remove([storagePath])
-      return fail(`Nao foi possivel registrar a chegada: ${rpcError.message}`, 500)
-    }
-
-    const record = Array.isArray(rpcData) ? rpcData[0] : rpcData
-    const responseData = {
-      id_route_stop: record?.id_route_stop ?? routeStop.id,
-      arrival_photo_path: record?.arrival_photo_path ?? storagePath,
-      arrived_at: record?.arrived_at ?? new Date(arrivedAt).toISOString(),
-    }
+    const alreadyRegistered = Boolean(routeStop.arrived_at)
+    const photoUrl = alreadyRegistered
+      ? await buildPhotoUrl(supabase, routeStop.arrival_photo_path)
+      : null
 
     return json({
       success: true,
-      data: responseData,
-      ...responseData,
+      data: {
+        id_route_stop: routeStop.id,
+        id_route: routeStop.id_route,
+        id_company: routeStop.id_company,
+        arrived_at: routeStop.arrived_at,
+        arrival_photo_path: routeStop.arrival_photo_path,
+        arrival_photo_url: photoUrl,
+        already_registered: alreadyRegistered,
+      },
     })
   } catch (error) {
-    console.error('[register-route-arrival] unhandled error:', error)
-    return fail('Nao foi possivel registrar a chegada. Tente novamente.', 500)
+    console.error('[get-route-arrival] unhandled error:', error)
+    return fail('Nao foi possivel consultar a chegada. Tente novamente.', 500)
   }
 })

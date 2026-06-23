@@ -46,7 +46,7 @@ interface UseMyRoutesResult {
   clearError: () => void
 }
 
-export const useMyRoutes = (): UseMyRoutesResult => {
+export const useMyRoutes = (driverId?: string | null): UseMyRoutesResult => {
   const [activeTab, setActiveTab] = useState<MyRoutesTab>('available')
 
   const [routesInProgress, setRoutesInProgress] = useState<MyRouteListItem[]>([])
@@ -91,11 +91,19 @@ export const useMyRoutes = (): UseMyRoutesResult => {
   }, [])
 
   const fetchRoutes = useCallback(async () => {
+    if (!driverId) {
+      setRoutesInProgress([])
+      setAvailableRoutes([])
+      setCompletedRoutes([])
+      setError('Motorista nao identificado para carregar rotas')
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
     try {
-      const result = await myRoutesService.list()
+      const result = await myRoutesService.list({ driverId })
 
       const { inProgress, available, completed } = categorizeRoutes(result.data)
 
@@ -112,7 +120,7 @@ export const useMyRoutes = (): UseMyRoutesResult => {
     } finally {
       setIsLoading(false)
     }
-  }, [categorizeRoutes])
+  }, [categorizeRoutes, driverId])
 
   const openRouteDetail = useCallback(async (routeId: string) => {
     if (!routeId) return
@@ -124,7 +132,7 @@ export const useMyRoutes = (): UseMyRoutesResult => {
     setErrorDetail(null)
 
     try {
-      const detail = await myRoutesService.getById(routeId)
+      const detail = await myRoutesService.getById(routeId, driverId)
       setSelectedRoute(detail)
       setIsDetailOpen(true)
     } catch (err) {
@@ -138,7 +146,7 @@ export const useMyRoutes = (): UseMyRoutesResult => {
     } finally {
       setIsLoadingDetail(false)
     }
-  }, [])
+  }, [driverId])
 
   const closeRouteDetail = useCallback(() => {
     setIsDetailOpen(false)

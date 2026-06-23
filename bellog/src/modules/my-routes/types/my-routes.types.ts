@@ -73,6 +73,7 @@ export interface MyRouteDetail {
 }
 
 export interface MyRoutesParams {
+  driverId?: string
   status?: RouteMobileStatus
   page?: number
   limit?: number

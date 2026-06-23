@@ -1,4 +1,3 @@
-import { supabase, getEnvironment } from '../../../lib/supabase'
 import { myRoutesService } from '../../my-routes/services/my-routes.service'
 import type { RouteDestination } from '../../my-routes/types/my-routes.types'
 import { deliveryService } from '../../delivery/services/delivery.service'
@@ -31,7 +30,37 @@ export interface SaveArrivalInput {
   justification?: string
 }
 
-const toQueryId = (id: string): string | number => (/^\d+$/.test(id) ? Number(id) : id)
+export interface RouteArrivalView {
+  id_route_stop: number | null
+  id_route: number
+  id_company: number
+  arrived_at: string | null
+  arrival_photo_path: string | null
+  arrival_photo_url: string | null
+  already_registered: boolean
+}
+
+interface GetRouteArrivalResponse {
+  success: boolean
+  data?: RouteArrivalView
+  error?: string
+}
+
+interface RegisterRouteArrivalResponse {
+  success: boolean
+  data?: {
+    id_route_stop: number
+    arrival_photo_path: string
+    arrived_at: string
+  }
+  id_route_stop: number
+  arrival_photo_path: string
+  arrived_at: string
+  error?: string
+}
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 const toArrivalDateTime = (arrivalTime: string): string => {
   const [hours, minutes] = arrivalTime.split(':').map(Number)
@@ -57,6 +86,93 @@ const getFunctionErrorMessage = async (error: unknown): Promise<string> => {
   return error instanceof Error && error.message
     ? error.message
     : 'Não foi possível registrar a chegada.'
+}
+
+const parseFunctionResponse = (responseText: string): RegisterRouteArrivalResponse | null => {
+  if (!responseText) return null
+
+  try {
+    return JSON.parse(responseText) as RegisterRouteArrivalResponse
+  } catch {
+    return null
+  }
+}
+
+const invokeGetRouteArrival = async (payload: {
+  token: string
+  routeId: string
+  companyId: string
+}): Promise<GetRouteArrivalResponse> => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Configuracao do Supabase nao encontrada.')
+  }
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/get-route-arrival`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const responseText = await response.text()
+  let responseBody: GetRouteArrivalResponse | null = null
+  try {
+    responseBody = responseText ? (JSON.parse(responseText) as GetRouteArrivalResponse) : null
+  } catch {
+    responseBody = null
+  }
+
+  if (!response.ok) {
+    console.error('[ArrivalClientService] get-route-arrival failed:', {
+      status: response.status,
+      body: responseBody || responseText,
+    })
+    throw new Error(responseBody?.error || 'Nao foi possivel consultar a chegada.')
+  }
+
+  if (!responseBody) {
+    console.error('[ArrivalClientService] get-route-arrival returned invalid JSON:', responseText)
+    throw new Error('Nao foi possivel consultar a chegada.')
+  }
+
+  return responseBody
+}
+
+const invokeRegisterRouteArrival = async (formData: FormData): Promise<RegisterRouteArrivalResponse> => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Configuracao do Supabase nao encontrada.')
+  }
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/register-route-arrival`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
+    },
+    body: formData,
+  })
+
+  const responseText = await response.text()
+  const responseBody = parseFunctionResponse(responseText)
+
+  if (!response.ok) {
+    console.error('[ArrivalClientService] register-route-arrival failed:', {
+      status: response.status,
+      body: responseBody || responseText,
+    })
+
+    throw new Error(responseBody?.error || 'Nao foi possivel registrar a chegada.')
+  }
+
+  if (!responseBody) {
+    console.error('[ArrivalClientService] register-route-arrival returned invalid JSON:', responseText)
+    throw new Error('Nao foi possivel registrar a chegada.')
+  }
+
+  return responseBody
 }
 
 const mapRouteDestination = (
@@ -97,43 +213,34 @@ export const arrivalClientService = {
     return Array.from(map.values())
   },
 
-  async getExistingRecord(companyId: number, routeId?: string): Promise<ArrivalClientRecord | null> {
-    const isTest = getEnvironment() !== 'production'
-
-    let query = supabase
-      .from('trx_route_stop')
-      .select('*')
-      .eq('id_company', companyId)
-      .eq('is_test', isTest)
-      .not('arrived_at', 'is', null)
-      .order('arrived_at', { ascending: false })
-      .limit(1)
-
-    if (routeId) {
-      query = query.eq('id_route', toQueryId(routeId))
+  // Le a chegada ja registrada para a combinacao rota + cliente + motorista (token SASI).
+  // A validacao de acesso do motorista a rota e feita server-side pela Edge Function,
+  // garantindo que o retorno nunca exponha dados de outras rotas/motoristas.
+  async getRouteArrival(companyId: number, routeId: string): Promise<RouteArrivalView | null> {
+    if (!routeId) {
+      throw new Error('Rota da chegada nao identificada.')
     }
 
-    const { data, error } = await query
+    const token = getSasiTokenFromUrl()
+    if (!token) {
+      throw new Error('Token de acesso nao encontrado.')
+    }
 
-    if (error) {
-      console.error('[ArrivalClientService] Error fetching existing record:', error)
+    const response = await invokeGetRouteArrival({
+      token,
+      routeId,
+      companyId: String(companyId),
+    })
+
+    if (!response.success || !response.data) {
+      throw new Error(response.error || 'Nao foi possivel consultar a chegada.')
+    }
+
+    if (!response.data.already_registered) {
       return null
     }
 
-    if (!data || data.length === 0) return null
-
-    const record = data[0]
-    return {
-      id: record.id,
-      company_id: record.id_company,
-      company_name: '',
-      route_id: String(record.id_route),
-      arrived_at: record.arrived_at || '',
-      departed_at: record.departed_at || null,
-      arrival_photo_path: record.arrival_photo_path || '',
-      arrival_observation: record.arrival_observation || null,
-      updated_at: record.updated_at || '',
-    }
+    return response.data
   },
 
   async save(input: SaveArrivalInput): Promise<ArrivalClientRecord> {
@@ -158,24 +265,7 @@ export const arrivalClientService = {
       formData.set('justification', justification)
     }
 
-    const { data, error } = await supabase.functions.invoke<{
-      success: boolean
-      data?: {
-        id_route_stop: number
-        arrival_photo_path: string
-        arrived_at: string
-      }
-      id_route_stop: number
-      arrival_photo_path: string
-      arrived_at: string
-      error?: string
-    }>('register-route-arrival', {
-      body: formData,
-    })
-
-    if (error) {
-      throw new Error(await getFunctionErrorMessage(error))
-    }
+    const data = await invokeRegisterRouteArrival(formData)
 
     if (!data?.success) {
       throw new Error(data?.error || 'Nao foi possivel registrar a chegada.')

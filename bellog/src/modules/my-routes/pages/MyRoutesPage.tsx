@@ -14,6 +14,7 @@ interface MyRoutesPageProps {
   initialRouteId?: string | null
   onNavigate?: (page: string, routeId?: string) => void
   onArrivalClient?: (routeId: string) => void
+  driverId?: string | null
 }
 
 interface RouteFilters {
@@ -68,7 +69,7 @@ const filterRoutes = (routes: MyRouteListItem[], filters: RouteFilters) => {
   })
 }
 
-export const MyRoutesPage: React.FC<MyRoutesPageProps> = ({ onBack, initialRouteId, onArrivalClient }) => {
+export const MyRoutesPage: React.FC<MyRoutesPageProps> = ({ onBack, initialRouteId, onArrivalClient, driverId }) => {
   const [showOnlyInProgress, setShowOnlyInProgress] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filters, setFilters] = useState<RouteFilters>(emptyFilters)
@@ -101,7 +102,7 @@ export const MyRoutesPage: React.FC<MyRoutesPageProps> = ({ onBack, initialRoute
     clearSuccessMessage,
     clearError,
     fetchRoutes,
-  } = useMyRoutes()
+  } = useMyRoutes(driverId)
 
   const hasRouteFilters = Boolean(filters.routeCode.trim() || filters.routeName.trim())
 

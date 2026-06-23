@@ -81,6 +81,10 @@ export const AdminApp: React.FC = () => {
   // direto na raiz (rotas profundas dão 404 no Vercel, sem fallback de SPA).
   const firstAccessEmail = new URLSearchParams(window.location.search).get('first_access')
 
+  // Link de reset de senha: /?reset_password — a sessão de recovery vem no #hash
+  // e é estabelecida automaticamente pelo Supabase JS (detectSessionInUrl).
+  const isResetCallback = new URLSearchParams(window.location.search).has('reset_password')
+
   useEffect(() => {
     if (isSupabaseCallback) {
       setIsAuthCallback(true)
@@ -181,6 +185,16 @@ export const AdminApp: React.FC = () => {
       <FirstAccessPage
         standalone
         inviteEmail={firstAccessEmail}
+        onComplete={() => { window.location.href = '/' }}
+        onCancel={() => { window.location.href = '/' }}
+      />
+    )
+  }
+
+  if (isResetCallback) {
+    return (
+      <ForgotPasswordPage
+        standalone
         onComplete={() => { window.location.href = '/' }}
         onCancel={() => { window.location.href = '/' }}
       />

@@ -26,28 +26,7 @@ function isRateLimited(email: string): boolean {
   return false
 }
 
-// Senha temporária descartável (o usuário define a definitiva no primeiro acesso).
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
-  const bytes = new Uint8Array(20)
-  crypto.getRandomValues(bytes)
-  let pw = ''
-  for (const b of bytes) pw += chars[b % chars.length]
-  return pw + 'aZ9#'
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function getResetHtml(email: string, tempPassword: string, link: string): string {
-  const safeEmail = escapeHtml(email)
-  const safePw = escapeHtml(tempPassword)
+function getResetHtml(link: string): string {
   return `
 <!DOCTYPE html>
 <html>
@@ -58,8 +37,6 @@ function getResetHtml(email: string, tempPassword: string, link: string): string
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
     .header { background-color: #e67c26; color: white; padding: 20px; text-align: center; }
     .content { background-color: #f9fafb; padding: 30px; border-radius: 8px; margin-top: 20px; }
-    .creds { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px;
-             padding: 16px; margin: 20px 0; font-family: monospace; word-break: break-all; }
     .button { display: inline-block; background-color: #e67c26; color: #ffffff !important;
               padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
     .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
@@ -72,13 +49,10 @@ function getResetHtml(email: string, tempPassword: string, link: string): string
     </div>
     <div class="content">
       <p>Olá,</p>
-      <p>Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo para definir uma nova senha — você vai precisar da senha temporária a seguir.</p>
-      <div class="creds">
-        <div><strong>Email:</strong> ${safeEmail}</div>
-        <div><strong>Senha temporária:</strong> ${safePw}</div>
-      </div>
+      <p>Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo para criar uma nova senha:</p>
       <a href="${link}" class="button">Redefinir minha senha</a>
-      <p>Se você não solicitou a redefinição, ignore este email — sua senha anterior deixou de valer apenas se você concluir o processo acima.</p>
+      <p><strong>Este link expira em 1 hora</strong> por motivos de segurança.</p>
+      <p>Se você não solicitou a redefinição, ignore este email — sua senha atual continua válida.</p>
     </div>
     <div class="footer">
       <p>Atenciosamente,<br>Equipe Bellog</p>
@@ -89,19 +63,17 @@ function getResetHtml(email: string, tempPassword: string, link: string): string
 `
 }
 
-function getResetText(email: string, tempPassword: string, link: string): string {
+function getResetText(link: string): string {
   return `Bellog - Redefinir Senha
 
 Olá,
 
 Recebemos uma solicitação para redefinir sua senha.
-Clique no link abaixo para definir uma nova senha — você vai precisar da senha temporária a seguir.
+Clique no link abaixo para criar uma nova senha:
+${link}
 
-Redefinir minha senha: ${link}
-Email: ${email}
-Senha temporária: ${tempPassword}
-
-Se você não solicitou a redefinição, ignore este email.
+Este link expira em 1 hora por motivos de segurança.
+Se você não solicitou a redefinição, ignore este email — sua senha atual continua válida.
 
 Atenciosamente,
 Equipe Bellog`
@@ -137,21 +109,6 @@ serve(async (req) => {
       )
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Verificar se o usuário existe (sem revelar)
-    const { data: userData, error: userError } = await supabase.auth.admin.listUsers()
-    const user = (!userError && userData?.users)
-      ? userData.users.find(u => u.email?.toLowerCase() === emailLower)
-      : null
-
-    if (!user) {
-      console.log('[send-password-reset] Usuário não encontrado:', emailLower)
-      return genericOk()
-    }
-
     // Validar SMTP (sem vazar detalhe ao cliente)
     const smtpServer = Deno.env.get('SMTP_SERVER')
     const smtpPort = Deno.env.get('SMTP_PORT')
@@ -164,25 +121,29 @@ serve(async (req) => {
       return genericOk()
     }
 
-    // Gerar senha temporária e marcar troca obrigatória (mesmo fluxo do convite)
-    const tempPassword = generateTempPassword()
-    const { error: updError } = await supabase.auth.admin.updateUserById(user.id, {
-      password: tempPassword,
-      user_metadata: {
-        ...user.user_metadata,
-        needs_password_change: true,
-        temp_password: tempPassword,
-      },
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    // Gera um link de recovery NATIVO do Supabase (sem enviar email pelo Supabase).
+    // O link, ao ser clicado, estabelece uma sessão de recovery e redireciona para
+    // /?reset_password (raiz; rotas profundas dão 404 no Vercel). NÃO troca a senha
+    // agora — a senha atual segue válida até o usuário concluir.
+    const baseUrl = (Deno.env.get('FRONTEND_URL') || 'http://localhost:5173').replace(/\/$/, '')
+    const redirectTo = `${baseUrl}/?reset_password=1`
+
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email: emailLower,
+      options: { redirectTo },
     })
 
-    if (updError) {
-      console.error('[send-password-reset] Falha ao atualizar usuário:', updError)
+    // Usuário inexistente => generateLink falha; responde genérico (anti-enumeração)
+    const actionLink = linkData?.properties?.action_link
+    if (linkError || !actionLink) {
+      console.log('[send-password-reset] generateLink falhou (usuário inexistente?):', linkError?.message)
       return genericOk()
     }
-
-    // Link para a tela de primeiro acesso (raiz + query; rotas profundas dão 404 no Vercel)
-    const baseUrl = (Deno.env.get('FRONTEND_URL') || 'http://localhost:5173').replace(/\/$/, '')
-    const link = `${baseUrl}/?first_access=${encodeURIComponent(emailLower)}`
 
     const smtpClient = new SMTPClient({
       host: smtpServer,
@@ -195,8 +156,8 @@ serve(async (req) => {
     await smtpClient.sendEmail({
       to: emailLower,
       subject: 'Bellog - Redefinir Senha',
-      body: getResetText(emailLower, tempPassword, link),
-      html: getResetHtml(emailLower, tempPassword, link),
+      body: getResetText(actionLink),
+      html: getResetHtml(actionLink),
     })
 
     console.log('[send-password-reset] Email enviado para:', emailLower)

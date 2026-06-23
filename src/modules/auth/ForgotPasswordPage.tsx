@@ -5,6 +5,9 @@ import { LoginIllustration } from '../../shared/icons'
 import { supabase } from '../../lib/supabase'
 
 interface ForgotPasswordPageProps {
+  /** true quando aberto pelo link de reset (?reset_password): a sessão de
+   *  recovery já foi estabelecida pelo callback; aqui só definimos a nova senha. */
+  standalone?: boolean
   onComplete: () => void
   onCancel: () => void
 }
@@ -30,8 +33,8 @@ const PASSWORD_RULES = [
   { key: 'special', label: 'Pelo menos 1 caractere especial', validate: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
 ]
 
-export const ForgotPasswordPage = ({ onComplete, onCancel }: ForgotPasswordPageProps) => {
-  const [step, setStep] = useState<'email' | 'form' | 'success'>('email')
+export const ForgotPasswordPage = ({ standalone, onComplete, onCancel }: ForgotPasswordPageProps) => {
+  const [step, setStep] = useState<'email' | 'form' | 'success'>(standalone ? 'form' : 'email')
   const [email, setEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -121,9 +124,11 @@ export const ForgotPasswordPage = ({ onComplete, onCancel }: ForgotPasswordPageP
     setError(null)
 
     try {
-      // Atualizar senha
+      // A sessão de recovery foi estabelecida pelo callback do link; aqui só
+      // definimos a nova senha e limpamos as flags de troca obrigatória.
       const { error: authError } = await supabase.auth.updateUser({
-        password: newPassword
+        password: newPassword,
+        data: { needs_password_change: false, temp_password: null },
       })
 
       if (authError) {

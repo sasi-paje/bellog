@@ -152,4 +152,48 @@ export class SMTPClient {
 
     return mime;
   }
+
+  // Teste de conexão: mesma sequência do envio (TCP → EHLO → STARTTLS → TLS →
+  // EHLO → AUTH LOGIN), mas sem MAIL FROM/DATA. Retorna true se autenticou.
+  async testConnection(): Promise<boolean> {
+    console.log('🔍 Testing SMTP connection...');
+    let conn: Deno.Conn | null = null;
+    let tlsConn: Deno.TlsConn | null = null;
+
+    try {
+      conn = await Deno.connect({ hostname: this.config.host, port: this.config.port });
+      await this.readResponse(conn);
+
+      await this.sendCommand(conn, `EHLO ${this.config.host}\r\n`);
+      await this.readResponse(conn);
+
+      await this.sendCommand(conn, 'STARTTLS\r\n');
+      await this.readResponse(conn);
+
+      tlsConn = await Deno.startTls(conn, { hostname: this.config.host });
+      await this.sendCommand(tlsConn, `EHLO ${this.config.host}\r\n`);
+      await this.readResponse(tlsConn);
+
+      await this.sendCommand(tlsConn, 'AUTH LOGIN\r\n');
+      await this.readResponse(tlsConn);
+      await this.sendCommand(tlsConn, `${btoa(this.config.username)}\r\n`);
+      await this.readResponse(tlsConn);
+      await this.sendCommand(tlsConn, `${btoa(this.config.password)}\r\n`);
+      await this.readResponse(tlsConn);
+      console.log('✅ Authentication successful');
+
+      try {
+        await this.sendCommand(tlsConn, 'QUIT\r\n');
+        await this.readResponse(tlsConn);
+      } catch (_) {}
+
+      try { if (tlsConn) tlsConn.close(); } catch (_) {}
+      return true;
+    } catch (error) {
+      console.error('❌ Connection test failed:', error);
+      try { if (tlsConn) tlsConn.close(); } catch (_) {}
+      try { if (conn) conn.close(); } catch (_) {}
+      return false;
+    }
+  }
 }

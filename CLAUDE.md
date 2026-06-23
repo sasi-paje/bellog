@@ -181,6 +181,45 @@ Se a query de páginas falhar, exibe `pagesError` e deixa o campo vazio. **Não 
 - **Schema cache**: após alterar o schema do banco, execute `supabase db reset` ou aguarde a invalidação de cache antes de testar queries que usam novos campos.
 - **Realtime**: usado em `hooks/useRealtime.ts` para sincronização de invoices e vehicles. Cuidado ao adicionar subscriptions — elas persistem enquanto o componente estiver montado.
 
+## Email, convite e primeiro acesso (AWS SES)
+
+Envio de email é feito por SMTP direto no AWS SES, via edge functions Deno.
+
+### Edge functions
+
+| Função | Papel | Autorização |
+|---|---|---|
+| `_shared/smtp-client.ts` | `SMTPClient`: handshake SMTP (TCP→EHLO→STARTTLS→TLS→AUTH LOGIN), `sendEmail()` e `testConnection()` | — |
+| `send-email` | Envio genérico interno (MIME texto+HTML) | **apenas** `service_role_key` (chamada interna entre functions) |
+| `invite-user` | Convida usuário: cria conta + registra em `master_system_user` + envia email | JWT válido + usuário ativo em `master_system_user` |
+| `send-password-reset` | Reset de senha (rate limit + anti-enumeração) | público (`verify_jwt=false`) |
+| `test-smtp-connection` | Testa credenciais SMTP sem enviar email | JWT válido + usuário ativo em `master_system_user` |
+
+> `send-first-access-email` e `enviar-email` usam um **AWS Lambda HTTP separado** (não o SMTP). Não confundir com o caminho `send-email`/SMTP acima.
+
+Todas com `verify_jwt = false` no `config.toml` — a validação é feita no código de cada função.
+
+### Secrets necessárias (Supabase → Edge Functions → Secrets)
+
+`SMTP_SERVER`, `SMTP_PORT` (587/STARTTLS), `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SENDER_EMAIL` (verificado no SES), `FRONTEND_URL`.
+As credenciais SMTP do SES são geradas em **SES → SMTP Settings** (diferentes das chaves IAM).
+`SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` são **injetadas automaticamente** — não configurar.
+
+> Deploy das functions é **separado** do Vercel (que só publica o frontend): `supabase functions deploy <nome>`.
+
+### Fluxo de convite + primeiro acesso (Opção B — senha temporária)
+
+1. Admin convida em **Usuários → Novo** → `UsersPage.handleSaveUser` → `inviteUser()` (`features/email/api/email.service.ts`) → edge function `invite-user`.
+2. `invite-user`: `auth.admin.createUser` com **senha temporária** (que também vira a senha real de login e é gravada em `user_metadata.temp_password`); faz upsert em `master_system_user`; retorna `user_id = master_system_user.id` (usado por `saveUserPageAccessFromRole`); envia email (template Bellog) com **email + senha temporária + link de login** via `send-email`/SMTP.
+3. O convidado faz login com a senha temporária → `LoginPage` propaga `temp_password` + `needs_password_change` → `AdminApp` mostra `FirstAccessPage`.
+4. `FirstAccessPage` valida a senha temporária, chama `supabase.auth.updateUser({ password })` e **limpa** `needs_password_change`/`temp_password`.
+
+**Contratos a preservar:** `invite-user` deve retornar `user_id = master_system_user.id` (não o id do Auth); a linha em `master_system_user` precisa nascer com o `is_test` que o frontend envia (`is_test` no payload), senão `saveUserPageAccessFromRole` falha com "Usuário não encontrado".
+
+**Tradeoff (Opção B):** a senha temporária trafega em texto no email e fica em `user_metadata` até a troca no primeiro acesso. Para endurecer, migrar para link de recovery nativo (`auth.admin.generateLink({ type: 'recovery' })`) — exige que `ForgotPasswordPage` entre no passo de formulário ao receber o callback `#access_token`.
+
+**Hardening já aplicado:** `invite-user` sanitiza email (rejeita CR/LF e formato inválido) e nome (strip CR/LF) contra injeção de cabeçalho SMTP/MIME.
+
 ## Padrão de settings
 
 As páginas de configuração em `modules/settings/pages/` seguem o padrão:

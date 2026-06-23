@@ -104,6 +104,7 @@ export const fiscalInvoiceService = {
   async list(params?: {
     search?: string
     isActive?: boolean
+    showInactive?: boolean
     showCancelled?: boolean
     page?: number
     limit?: number
@@ -112,7 +113,19 @@ export const fiscalInvoiceService = {
     minWeight?: number
     maxWeight?: number
     destinationIds?: string[]
+    supplierGroupIds?: string[]
+    supplierIds?: string[]
     onlyWithRoute?: boolean
+    // Filtros avançados da tela Notas
+    invoiceNumberStart?: number
+    invoiceNumberEnd?: number
+    tripNumber?: string
+    attemptMin?: number
+    attemptMax?: number
+    boxMin?: number
+    boxMax?: number
+    grossWeightMin?: number
+    grossWeightMax?: number
   }): Promise<{ data: InvoiceListItem[]; total: number }> {
     const isTest = getEnvironment() !== 'production'
     const page = params?.page || 1
@@ -149,12 +162,100 @@ export const fiscalInvoiceService = {
       matchingImportIds = (matchingImports || []).map((item) => item.id)
     }
 
+    // Nº Viagem — busca o import_id correspondente ao trip_number exato
+    let tripImportIds: number[] = []
+    if (params?.tripNumber) {
+      const { data: tripImports } = await supabase
+        .from('trx_fiscal_invoice_import')
+        .select('id')
+        .eq('trip_number', params.tripNumber)
+        .eq('is_test', isTest)
+      if (!tripImports || tripImports.length === 0) return { data: [], total: 0 }
+      tripImportIds = tripImports.map(i => i.id)
+    }
+
+    // Nº Tentativa — carrega MAX(attempt_number) por nota para filtrar corretamente
+    let attemptInvoiceIds: string[] | null = null
+    if (params?.attemptMin != null || params?.attemptMax != null) {
+      const { data: allAttemptRows } = await supabase
+        .from('rel_route_invoice')
+        .select('id_fiscal_invoice, attempt_number')
+        .eq('is_test', isTest)
+      const maxMap = new Map<string, number>()
+      for (const row of allAttemptRows || []) {
+        const id = String(row.id_fiscal_invoice)
+        maxMap.set(id, Math.max(maxMap.get(id) ?? 0, row.attempt_number ?? 0))
+      }
+      attemptInvoiceIds = [...maxMap.entries()]
+        .filter(([, max]) => {
+          if (params.attemptMin != null && max < params.attemptMin) return false
+          if (params.attemptMax != null && max > params.attemptMax) return false
+          return true
+        })
+        .map(([id]) => id)
+      if (attemptInvoiceIds.length === 0) return { data: [], total: 0 }
+    }
+
+    let supplierCompanyIds: string[] = []
+    if (params?.supplierGroupIds && params.supplierGroupIds.length > 0) {
+      const supplierGroupIds = params.supplierGroupIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id))
+
+      if (supplierGroupIds.length === 0) {
+        return { data: [], total: 0 }
+      }
+
+      const { data: supplierRoleType, error: supplierRoleTypeError } = await supabase
+        .from('ref_person_company_role_type')
+        .select('id')
+        .eq('code', 'SUPPLIER')
+        .maybeSingle()
+
+      if (supplierRoleTypeError) throw new Error(supplierRoleTypeError.message)
+      if (!supplierRoleType) {
+        return { data: [], total: 0 }
+      }
+
+      const { data: supplierRoleRelations, error: supplierRoleRelationsError } = await supabase
+        .from('rel_person_company_role_type')
+        .select('id_company')
+        .eq('id_company_role_type', supplierRoleType.id)
+        .eq('is_test', isTest)
+
+      if (supplierRoleRelationsError) throw new Error(supplierRoleRelationsError.message)
+
+      const roleSupplierIds = (supplierRoleRelations || []).map((relation) => relation.id_company)
+      if (roleSupplierIds.length === 0) {
+        return { data: [], total: 0 }
+      }
+
+      const { data: suppliersByGroup, error: suppliersByGroupError } = await supabase
+        .from('master_person_company')
+        .select('id')
+        .in('id', roleSupplierIds)
+        .in('id_company_group', supplierGroupIds)
+        .eq('is_test', isTest)
+        .eq('is_active', true)
+
+      if (suppliersByGroupError) throw new Error(suppliersByGroupError.message)
+
+      supplierCompanyIds = (suppliersByGroup || []).map((company) => String(company.id))
+      if (supplierCompanyIds.length === 0) {
+        return { data: [], total: 0 }
+      }
+    }
+
     const buildQuery = (select: string) => {
       let query = supabase
         .from('trx_fiscal_invoice')
         .select(select, { count: 'exact' })
         .eq('is_test', isTest)
-        .eq('is_active', true)
+
+      // Mostra inativos apenas quando explicitamente solicitado
+      if (!params?.showInactive) {
+        query = query.eq('is_active', true)
+      }
 
       if (params?.onlyWithRoute && invoiceIdsWithRoute.length > 0) {
         query = query.in('id', invoiceIdsWithRoute)
@@ -173,14 +274,40 @@ export const fiscalInvoiceService = {
       if (params?.endDate) {
         query = query.lte('invoice_issue_date', params.endDate)
       }
-      if (params?.minWeight) {
-        query = query.gte('weight', params.minWeight)
-      }
-      if (params?.maxWeight) {
-        query = query.lte('weight', params.maxWeight)
-      }
       if (params?.destinationIds && params.destinationIds.length > 0) {
         query = query.in('id_customer_company', params.destinationIds)
+      }
+      if (supplierCompanyIds.length > 0) {
+        query = query.in('id_supplier_company', supplierCompanyIds)
+      }
+
+      // Filtros avançados da tela Notas
+      if (params?.invoiceNumberStart != null) {
+        query = query.gte('invoice_number', String(params.invoiceNumberStart))
+      }
+      if (params?.invoiceNumberEnd != null) {
+        query = query.lte('invoice_number', String(params.invoiceNumberEnd))
+      }
+      if (params?.supplierIds && params.supplierIds.length > 0) {
+        query = query.in('id_supplier_company', params.supplierIds)
+      }
+      if (tripImportIds.length > 0) {
+        query = query.in('id_fiscal_invoice_import', tripImportIds)
+      }
+      if (attemptInvoiceIds !== null && attemptInvoiceIds.length > 0) {
+        query = query.in('id', attemptInvoiceIds)
+      }
+      if (params?.boxMin != null) {
+        query = query.gte('box_quantity', params.boxMin)
+      }
+      if (params?.boxMax != null) {
+        query = query.lte('box_quantity', params.boxMax)
+      }
+      if (params?.grossWeightMin != null) {
+        query = query.gte('gross_weight', params.grossWeightMin)
+      }
+      if (params?.grossWeightMax != null) {
+        query = query.lte('gross_weight', params.grossWeightMax)
       }
 
       return query.range(start, end)

@@ -32,6 +32,7 @@ interface RouteWithRelations {
   id_route_delivery_status: DbId | null
   id_vehicle: DbId | null
   id_driver: DbId | null
+  id_route_responsible: number | null
   responsible: string | null
   assistant: string[] | string | null
   starts_at: string | null
@@ -379,6 +380,7 @@ export const myRoutesService = {
         vehicleResult,
         driverResult,
         routeInvoicesResult,
+        responsibleRefResult,
       ] = await Promise.all([
         routeData.id_route_status
           ? supabase.from('ref_route_status').select('id, code, name, description').eq('id', routeData.id_route_status).maybeSingle()
@@ -398,6 +400,9 @@ export const myRoutesService = {
           .eq('id_route', toQueryId(routeId))
           .eq('is_test', isTest)
           .eq('is_active', true),
+        routeData.id_route_responsible
+          ? supabase.from('ref_route_responsible').select('id, name').eq('id', routeData.id_route_responsible).eq('is_active', true).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
       ])
 
       if (routeInvoicesResult.error) {
@@ -429,7 +434,12 @@ export const myRoutesService = {
         vehicle: (vehicleResult.data as MasterFleetVehicle | null) || undefined,
         drivers: driverResult.data ? [driverResult.data as MasterPersonDriver] : [],
         helpers: normalizeNames(routeData.assistant).map((name, index) => ({ id: String(index), name })),
-        responsibles: normalizeNames(routeData.responsible).map((name, index) => ({ id: String(index), name })),
+        responsibles: (() => {
+          const fromText = normalizeNames(routeData.responsible)
+          if (fromText.length > 0) return fromText.map((name, index) => ({ id: String(index), name }))
+          const refName = (responsibleRefResult.data as { id: number; name: string } | null)?.name
+          return refName ? [{ id: String(routeData.id_route_responsible || 0), name: refName }] : []
+        })(),
         destinations,
         starts_at: routeData.starts_at || undefined,
         ends_at: routeData.ends_at || undefined,

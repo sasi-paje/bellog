@@ -946,12 +946,13 @@ export const companyService = {
 
     const companyIds = roleRelations.map(r => r.id_company)
 
-    // Get distinct group IDs used by these companies
+    // Get distinct group IDs used by these companies (apenas ativas)
     const { data: companies } = await supabase
       .from('master_person_company')
       .select('id_company_group')
       .in('id', companyIds)
       .eq('is_test', isTest)
+      .eq('is_active', true)
       .not('id_company_group', 'is', null)
 
     const groupIds = [...new Set(

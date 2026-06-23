@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { FilterOption } from '../services/assign-notes.service'
+import { MultiSelect } from './MultiSelect'
 
 function getTodayDateOnly(): string {
   const today = new Date()
@@ -9,21 +10,47 @@ function getTodayDateOnly(): string {
   return `${year}-${month}-${day}`
 }
 
+function parseBrazilianDecimal(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null
+
+  const raw = String(value).trim()
+  if (!raw) return null
+
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw
+
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed)) return null
+
+  return Number(parsed.toFixed(2))
+}
+
+function formatBrazilianDecimal(value: string): string {
+  const parsed = parseBrazilianDecimal(value)
+  if (parsed === null) return ''
+  return parsed.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 export interface FilterValues {
-  // funcional — conectado a currentFilterDate na página
+  // referência interna dos filtros; independente da data da rota
   date: string
   // campo legado
   vehicle: string
-  // Da Indústria
-  grupoCliente: string
+  // Da Indústria — grupoCliente filtra pelo grupo do fornecedor (papel SUPPLIER)
+  grupoCliente: string[]
   razaoSocial: string
   // Do Destino
-  grupoDestino: string
+  grupoDestino: string[]
   nomeDestino: string
-  cidade: string
-  bairro: string
+  cidade: string[]
+  bairro: string[]
   // Da Nota
-  tempoNaCasa: string
+  minDiasNaCasa: string    // mínimo de dias no sistema (numérico)
+  maxDiasNaCasa: string    // máximo de dias no sistema (numérico)
   reentrega: string
   minWeight: string
   maxWeight: string
@@ -42,20 +69,22 @@ interface FilterPopoverProps {
   isLoadingOptions?: boolean
 }
 
-const emptyFilters = (date = ''): FilterValues => ({
+export const emptyFilters = (date = ''): FilterValues => ({
   date,
   vehicle: '',
-  grupoCliente: '',
+  grupoCliente: [],
   razaoSocial: '',
-  grupoDestino: '',
+  grupoDestino: [],
   nomeDestino: '',
-  cidade: '',
-  bairro: '',
-  tempoNaCasa: '',
+  cidade: [],
+  bairro: [],
+  minDiasNaCasa: '',
+  maxDiasNaCasa: '',
   reentrega: '',
   minWeight: '',
   maxWeight: '',
 })
+
 
 // ── estilos ────────────────────────────────────────────────────────────────────
 
@@ -102,22 +131,51 @@ export const FilterPopover = ({
 
   if (!isOpen) return null
 
-  const setField =
+  const setTextField =
     (field: keyof FilterValues) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      const value = e.target.value
-      setFilters(prev => {
-        const next = { ...prev, [field]: value }
-        // Ao trocar cidade, limpar bairro se não pertencer à nova cidade
-        if (field === 'cidade') {
-          const validBairros = value ? (neighborhoodsByCity[value] || []).map(o => o.value) : []
-          if (value && !validBairros.includes(prev.bairro)) {
-            next.bairro = ''
-          }
-        }
-        return next
-      })
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFilters(prev => ({ ...prev, [field]: e.target.value }))
     }
+
+  const formatWeightField = (field: 'minWeight' | 'maxWeight') => {
+    setFilters(prev => ({ ...prev, [field]: formatBrazilianDecimal(prev[field]) }))
+  }
+
+  // Ao selecionar cidade: remover apenas bairros incompatíveis com as cidades restantes
+  const handleCidadeChange = (newCidades: string[]) => {
+    setFilters(prev => {
+      // Sem cidade selecionada → sem restrição de cidade; bairros ficam intactos
+      if (newCidades.length === 0) {
+        return { ...prev, cidade: [] }
+      }
+      const validBairros = new Set(
+        newCidades.flatMap(c => (neighborhoodsByCity[c] || []).map(n => n.value))
+      )
+      return {
+        ...prev,
+        cidade: newCidades,
+        bairro: prev.bairro.filter(b => validBairros.has(b)),
+      }
+    })
+  }
+
+  // Ao selecionar bairro: auto-adicionar a cidade correspondente para que o par
+  // bairro↔cidade fique sempre sincronizado e o bairro não desapareça ao filtrar
+  const handleBairroChange = (newBairros: string[]) => {
+    setFilters(prev => {
+      const citiesFromBairros = newBairros.flatMap(b => {
+        for (const [city, nbs] of Object.entries(neighborhoodsByCity)) {
+          if (nbs.some(n => n.value === b)) return [city]
+        }
+        return []
+      })
+      const updatedCidade =
+        citiesFromBairros.length > 0
+          ? [...new Set([...prev.cidade, ...citiesFromBairros])]
+          : prev.cidade
+      return { ...prev, bairro: newBairros, cidade: updatedCidade }
+    })
+  }
 
   const handleApply = () => {
     onApply(filters)
@@ -129,19 +187,22 @@ export const FilterPopover = ({
     onApply(cleared)
   }
 
-  // Bairros disponíveis: se cidade selecionada → apenas os desta cidade; senão → todos
-  const availableNeighborhoods = filters.cidade
-    ? (neighborhoodsByCity[filters.cidade] || [])
-    : allNeighborhoods
-
-  const loadingPlaceholder = isLoadingOptions ? 'Carregando...' : undefined
+  // Bairros disponíveis: se cidades selecionadas → apenas os dessas cidades; senão → todos
+  const availableNeighborhoods: FilterOption[] =
+    filters.cidade.length > 0
+      ? [...new Set(
+          filters.cidade.flatMap(c => (neighborhoodsByCity[c] || []).map(n => n.value))
+        )]
+          .sort()
+          .map(v => ({ value: v, label: v }))
+      : allNeighborhoods
 
   return (
     <div
       ref={containerRef}
       className="absolute top-full right-0 mt-2 z-50 bg-white border border-[#e0e0e0] rounded-[8px] shadow-md w-[380px]"
     >
-      <div className="max-h-[calc(100vh-180px)] overflow-y-auto px-4 pt-4 pb-2">
+      <div className="max-h-[calc(100vh-180px)] overflow-y-auto overflow-x-hidden px-4 pt-4 pb-2">
 
         {/* ── Da Indústria ─────────────────────────────────────────────── */}
         <p className={SECTION_TITLE}>Da Indústria</p>
@@ -149,17 +210,13 @@ export const FilterPopover = ({
         <div className="flex flex-col gap-3 mb-1">
           <div>
             <label className={LABEL}>Grupo Cliente</label>
-            <select
+            <MultiSelect
+              options={supplierGroups}
               value={filters.grupoCliente}
-              onChange={setField('grupoCliente')}
+              onChange={v => setFilters(prev => ({ ...prev, grupoCliente: v }))}
+              placeholder={isLoadingOptions ? 'Carregando...' : 'Selecione grupo de Cliente'}
               disabled={isLoadingOptions}
-              className={INPUT}
-            >
-              <option value="">{loadingPlaceholder ?? 'Selecione grupo de Cliente'}</option>
-              {supplierGroups.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            />
           </div>
 
           <div>
@@ -168,7 +225,7 @@ export const FilterPopover = ({
               type="text"
               placeholder="Insira o nome de exibição"
               value={filters.razaoSocial}
-              onChange={setField('razaoSocial')}
+              onChange={setTextField('razaoSocial')}
               className={INPUT}
             />
           </div>
@@ -182,17 +239,13 @@ export const FilterPopover = ({
         <div className="flex flex-col gap-3 mb-1">
           <div>
             <label className={LABEL}>Grupo do Destino</label>
-            <select
+            <MultiSelect
+              options={destinationGroups}
               value={filters.grupoDestino}
-              onChange={setField('grupoDestino')}
+              onChange={v => setFilters(prev => ({ ...prev, grupoDestino: v }))}
+              placeholder={isLoadingOptions ? 'Carregando...' : 'Selecione grupo de Destino'}
               disabled={isLoadingOptions}
-              className={INPUT}
-            >
-              <option value="">{loadingPlaceholder ?? 'Selecione grupo de Destino'}</option>
-              {destinationGroups.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            />
           </div>
 
           <div>
@@ -201,45 +254,37 @@ export const FilterPopover = ({
               type="text"
               placeholder="Insira o nome do destino"
               value={filters.nomeDestino}
-              onChange={setField('nomeDestino')}
+              onChange={setTextField('nomeDestino')}
               className={INPUT}
             />
           </div>
 
-          <div className="flex gap-3">
-            <div className="flex-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
               <label className={LABEL}>Cidade</label>
-              <select
+              <MultiSelect
+                options={cities}
                 value={filters.cidade}
-                onChange={setField('cidade')}
+                onChange={handleCidadeChange}
+                placeholder={isLoadingOptions ? 'Carregando...' : 'Selecione a cidade'}
                 disabled={isLoadingOptions}
-                className={INPUT}
-              >
-                <option value="">{loadingPlaceholder ?? 'Selecione a cidade'}</option>
-                {cities.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0">
               <label className={LABEL}>Bairro</label>
-              <select
+              <MultiSelect
+                options={availableNeighborhoods}
                 value={filters.bairro}
-                onChange={setField('bairro')}
-                disabled={isLoadingOptions || availableNeighborhoods.length === 0}
-                className={INPUT}
-              >
-                <option value="">
-                  {isLoadingOptions
+                onChange={handleBairroChange}
+                placeholder={
+                  isLoadingOptions
                     ? 'Carregando...'
-                    : availableNeighborhoods.length === 0 && filters.cidade
+                    : availableNeighborhoods.length === 0 && filters.cidade.length > 0
                       ? 'Sem bairros'
-                      : 'Selecione o bairro'}
-                </option>
-                {availableNeighborhoods.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                      : 'Selecione o bairro'
+                }
+                disabled={isLoadingOptions || (filters.cidade.length > 0 && availableNeighborhoods.length === 0)}
+              />
             </div>
           </div>
         </div>
@@ -250,28 +295,43 @@ export const FilterPopover = ({
         <p className={SECTION_TITLE}>Da Nota</p>
 
         <div className="flex flex-col gap-3 mb-1">
-          <div>
-            <label className={LABEL}>Tempo na casa</label>
-            <input
-              type="number"
-              min="0"
-              placeholder="Insira o número de dias que a nota está na Bellog"
-              value={filters.tempoNaCasa}
-              onChange={setField('tempoNaCasa')}
-              className={INPUT}
-            />
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className={LABEL}>Dias mínimo</label>
+              <input
+                type="number"
+                min="0"
+                placeholder="Ex: 5"
+                value={filters.minDiasNaCasa}
+                onChange={setTextField('minDiasNaCasa')}
+                className={INPUT}
+              />
+            </div>
+            <div className="flex-1">
+              <label className={LABEL}>Dias máximo</label>
+              <input
+                type="number"
+                min="0"
+                placeholder="Ex: 20"
+                value={filters.maxDiasNaCasa}
+                onChange={setTextField('maxDiasNaCasa')}
+                className={INPUT}
+              />
+            </div>
           </div>
 
           <div>
             <label className={LABEL}>Reentrega</label>
-            <input
-              type="number"
-              min="0"
-              placeholder="Insira a quantidade de reentrega"
+            <select
               value={filters.reentrega}
-              onChange={setField('reentrega')}
+              onChange={(e) => setFilters(prev => ({ ...prev, reentrega: e.target.value }))}
               className={INPUT}
-            />
+              disabled={isLoadingOptions}
+            >
+              <option value="">{isLoadingOptions ? 'Carregando...' : 'Selecione'}</option>
+              <option value="nao">Não</option>
+              <option value="sim">Sim</option>
+            </select>
           </div>
 
           <div className="flex gap-3">
@@ -279,9 +339,11 @@ export const FilterPopover = ({
               <label className={LABEL}>Peso Mínimo</label>
               <input
                 type="text"
+                inputMode="decimal"
                 placeholder="Insira o Peso Mínimo"
                 value={filters.minWeight}
-                onChange={setField('minWeight')}
+                onChange={setTextField('minWeight')}
+                onBlur={() => formatWeightField('minWeight')}
                 className={INPUT}
               />
             </div>
@@ -289,9 +351,11 @@ export const FilterPopover = ({
               <label className={LABEL}>Peso Máximo</label>
               <input
                 type="text"
+                inputMode="decimal"
                 placeholder="Insira o Peso Máximo"
                 value={filters.maxWeight}
-                onChange={setField('maxWeight')}
+                onChange={setTextField('maxWeight')}
+                onBlur={() => formatWeightField('maxWeight')}
                 className={INPUT}
               />
             </div>

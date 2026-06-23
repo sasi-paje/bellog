@@ -48,7 +48,7 @@ interface RouteFormData {
 
 interface HistoricoItem {
   id: string
-  tipo: 'rota-criada' | 'em-rota' | 'entrega-parcial' | 'entrega-total' | 'rota-finalizada'
+  tipo: 'rota-criada' | 'em-rota' | 'em-andamento' | 'entrega-parcial' | 'entrega-total' | 'entrega-negada' | 'entrega-abortada' | 'rota-finalizada'
   titulo: string
   subtitulo?: string
   data: string
@@ -157,15 +157,20 @@ const convertRouteToFormData = (route: any): RouteFormData => {
   }
 }
 
-// Helper to determine event type from description
-function getEventTypeFromDescription(description: string): HistoricoItem['tipo'] {
-  const lowerDesc = description.toLowerCase()
-  if (lowerDesc.includes('criada')) return 'rota-criada'
-  if (lowerDesc.includes('iniciada') || lowerDesc.includes('rota')) return 'em-rota'
-  if (lowerDesc.includes('parcial')) return 'entrega-parcial'
-  if (lowerDesc.includes('total') || lowerDesc.includes('finalizada')) return 'entrega-total'
-  if (lowerDesc.includes('finalizada')) return 'rota-finalizada'
-  return 'rota-criada'
+const DELIVERY_EVENT_TYPES = new Set(['DELIVERY_TOTAL', 'DELIVERY_PARTIAL', 'DELIVERY_DENIED', 'DELIVERY_ABORTED'])
+
+function mapEventTypeToTipo(code: string | null | undefined): HistoricoItem['tipo'] {
+  switch (code) {
+    case 'CREATED': return 'rota-criada'
+    case 'IN_PROGRESS': return 'em-andamento'
+    case 'ROUTE_STARTED': return 'em-rota'
+    case 'DELIVERY_TOTAL': return 'entrega-total'
+    case 'DELIVERY_PARTIAL': return 'entrega-parcial'
+    case 'DELIVERY_DENIED': return 'entrega-negada'
+    case 'DELIVERY_ABORTED': return 'entrega-abortada'
+    case 'ROUTE_ENDED': return 'rota-finalizada'
+    default: return 'rota-criada'
+  }
 }
 
 export const RoutesPage = ({
@@ -615,25 +620,35 @@ export const RoutesPage = ({
             </div>
           )
         }
-        // Use real history data from database
         if (history.length > 0) {
-          const mappedHistory: HistoricoItem[] = history.map((h) => ({
-            id: h.id,
-            tipo: (h.history_type?.code as any) || getEventTypeFromDescription(h.description || ''),
-            titulo: h.history_type?.description || h.description || 'Evento',
-            data: h.event_at ? new Date(h.event_at).toLocaleDateString('pt-BR') : '',
-            hora: h.event_at ? new Date(h.event_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-            hasDetail: false,
-          }))
+          const mappedHistory: HistoricoItem[] = history.map((h) => {
+            const code = h.history_type?.code ?? null
+            const isDelivery = code !== null && DELIVERY_EVENT_TYPES.has(code)
+            const titulo = h.history_type?.description || h.description || 'Evento'
+            return {
+              id: h.id,
+              tipo: mapEventTypeToTipo(code),
+              titulo,
+              data: h.event_at ? new Date(h.event_at).toLocaleDateString('pt-BR') : '',
+              hora: h.event_at ? new Date(h.event_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+              hasDetail: isDelivery,
+              detail: isDelivery ? {
+                id: h.metadata?.invoice_id || h.id,
+                titulo,
+                local: h.metadata?.destination_name || '',
+                notas: [],
+                observacao: '',
+                anexos: [],
+              } : undefined,
+            }
+          })
           return <RouteHistory data={mappedHistory} onItemClick={handleHistoryItemClick} />
         }
-        return history.length > 0 ? (
-            <RouteHistory data={mappedHistory} onItemClick={handleHistoryItemClick} />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-[200px] text-[#919191]">
-              <span className="text-[14px]">Nenhum histórico disponível</span>
-            </div>
-          )
+        return (
+          <div className="flex flex-col items-center justify-center h-[200px] text-[#919191]">
+            <span className="text-[14px]">Nenhum histórico disponível</span>
+          </div>
+        )
       default:
         return null
     }

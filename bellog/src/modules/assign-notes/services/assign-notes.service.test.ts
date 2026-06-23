@@ -25,6 +25,7 @@ function qb(result: { data?: unknown; error?: unknown; count?: number | null }) 
   for (const m of [
     'select', 'eq', 'neq', 'limit', 'order', 'range',
     'ilike', 'or', 'not', 'in', 'is', 'update', 'insert', 'upsert',
+    'lt', 'lte', 'gt', 'gte',
   ]) {
     chain[m] = vi.fn().mockImplementation(self)
   }
@@ -66,7 +67,7 @@ function spyQb(result: { data?: unknown; error?: unknown }) {
 // ──────────────────────────────────────────────
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   vi.mocked(getEnvironment).mockReturnValue('development')
   vi.mocked(applyRefFilter).mockImplementation((q: any) => q)
 })
@@ -74,21 +75,22 @@ beforeEach(() => {
 // ──────────────────────────────────────────────
 // Ordem de chamadas a supabase.from por passo:
 //
-// Passo 1 (Promise.all — sempre 3 chamadas):
+// Passo 1 (Promise.all — sempre 4 chamadas):
 //   [1] ref_person_company_role_type  code=SUPPLIER  (via applyRefFilter)
 //   [2] ref_person_company_role_type  code=DESTINATION (via applyRefFilter)
 //   [3] master_person_company_address
+//   [4] rel_route_invoice             (max attempt_number — para availableAttempts)
 //
 // Passo 2 (Promise.all — 0, 1 ou 2 chamadas):
-//   [4] rel_person_company_role_type  SUPPLIER   (apenas se supplierRoleIds não for vazio)
-//   [5] rel_person_company_role_type  DESTINATION (apenas se destinationRoleIds não for vazio)
+//   [5] rel_person_company_role_type  SUPPLIER   (apenas se supplierRoleIds não for vazio)
+//   [6] rel_person_company_role_type  DESTINATION (apenas se destinationRoleIds não for vazio)
 //
 // Passo 3 (Promise.all — 0, 1 ou 2 chamadas):
-//   [6] master_person_company  SUPPLIER   (apenas se supplierCompanyIds não for vazio)
-//   [7] master_person_company  DESTINATION (apenas se destinationCompanyIds não for vazio)
+//   [7] master_person_company  SUPPLIER   (apenas se supplierCompanyIds não for vazio)
+//   [8] master_person_company  DESTINATION (apenas se destinationCompanyIds não for vazio)
 //
 // Passo 4 (sequencial — 0 ou 1 chamada):
-//   [8] master_person_company_group   (apenas se allGroupIds não for vazio)
+//   [9] master_person_company_group   (apenas se allGroupIds não for vazio)
 // ──────────────────────────────────────────────
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -107,7 +109,9 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }],  error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [{ id: 'role-dest-1' }], error: null }) as any) // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [{ id_supplier_company: 'co-100' }], error: null }) as any) // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                      error: null }) as any) // addresses
+        .mockReturnValueOnce(qb({ data: [],                      error: null }) as any) // rel_route_invoice (max attempt)
         // Passo 2
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-100' }], error: null }) as any) // rel SUPPLIER
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-200' }], error: null }) as any) // rel DESTINATION
@@ -134,7 +138,9 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }],  error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [{ id: 'role-dest-1' }], error: null }) as any) // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [],                      error: null }) as any) // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                      error: null }) as any) // addresses
+        .mockReturnValueOnce(qb({ data: [],                      error: null }) as any) // rel_route_invoice (max attempt)
         // Passo 2
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-100' }], error: null }) as any) // rel SUPPLIER
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-200' }], error: null }) as any) // rel DESTINATION
@@ -164,7 +170,9 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // ref DESTINATION → vazio
+        .mockReturnValueOnce(qb({ data: [{ id_supplier_company: 'co-100' }], error: null }) as any) // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // addresses
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // rel_route_invoice (max attempt)
         // Passo 2: apenas SUPPLIER (destRoleIds=[])
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-100' }], error: null }) as any) // rel SUPPLIER
         // rel DESTINATION: skipped → Promise.resolve
@@ -196,7 +204,9 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [{ id_supplier_company: 'co-ativo' }, { id_supplier_company: 'co-inativo' }], error: null }) as any) // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // addresses
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // rel_route_invoice (max attempt)
         // Passo 2
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-ativo' }, { id_company: 'co-inativo' }], error: null }) as any) // rel SUPPLIER
         // rel DESTINATION: skipped
@@ -227,7 +237,9 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }],  error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [{ id: 'role-dest-1' }], error: null }) as any) // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [{ id_supplier_company: 'co-shared' }], error: null }) as any) // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                      error: null }) as any) // addresses
+        .mockReturnValueOnce(qb({ data: [],                      error: null }) as any) // rel_route_invoice (max attempt)
         // Passo 2
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-shared' }], error: null }) as any) // rel SUPPLIER
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-shared' }], error: null }) as any) // rel DESTINATION
@@ -256,12 +268,15 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // ref DESTINATION → vazio
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // addresses
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // rel_route_invoice (max attempt)
         // Passo 2: apenas SUPPLIER usa supabase.from (destRoleIds=[])
         .mockReturnValueOnce(relSpyChain as any) // rel SUPPLIER ← spy
         // rel DESTINATION: skipped (destRoleIds=[])
         // Passo 3: supCompanyIds=[] (rel retornou []) → skipped
-        // Passo 4: allGroupIds=[] → skipped
+        // Passo 4: allGroupIds=[] → skipped; fallback supplier groups
+        .mockReturnValueOnce(qb({ data: [], error: null }) as any)
 
       await assignNotesService.getAdvancedFilterOptions()
 
@@ -275,10 +290,13 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
       const relSpyChain = spyQb({ data: [], error: null })
 
       vi.mocked(supabase.from)
-        .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)
-        .mockReturnValueOnce(relSpyChain as any)
+        .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any) // ref SUPPLIER
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // trx_fiscal_invoice suppliers
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // addresses
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // rel_route_invoice (max attempt)
+        .mockReturnValueOnce(relSpyChain as any)                                         // rel SUPPLIER ← spy
+        .mockReturnValueOnce(qb({ data: [], error: null }) as any)                       // fallback supplier groups
 
       await assignNotesService.getAdvancedFilterOptions()
 
@@ -299,10 +317,13 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // addresses
+        .mockReturnValueOnce(qb({ data: [],                    error: null }) as any)   // rel_route_invoice (max attempt)
         // Passo 2: supplierRoleIds=['role-sup-1'] → from chamado
         .mockReturnValueOnce(qb({ data: [], error: null }) as any) // rel SUPPLIER → vazio
         // Passo 3, 4: skipped (supCompanyIds=[], allGroupIds=[])
+        .mockReturnValueOnce(qb({ data: [], error: null }) as any) // fallback supplier groups
 
       await assignNotesService.getAdvancedFilterOptions()
 
@@ -319,7 +340,9 @@ describe('assignNotesService.getAdvancedFilterOptions', () => {
         // Passo 1
         .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-prod' }], error: null }) as any) // ref SUPPLIER
         .mockReturnValueOnce(qb({ data: [],                       error: null }) as any)   // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [{ id_supplier_company: 'co-prod' }], error: null }) as any) // trx_fiscal_invoice suppliers
         .mockReturnValueOnce(qb({ data: [],                       error: null }) as any)   // addresses
+        .mockReturnValueOnce(qb({ data: [],                       error: null }) as any)   // rel_route_invoice (max attempt)
         // Passo 2
         .mockReturnValueOnce(qb({ data: [{ id_company: 'co-prod' }], error: null }) as any) // rel SUPPLIER
         // Passo 3
@@ -428,7 +451,7 @@ describe('assignNotesService.getUnassignedNotes', () => {
   })
 
   // ────────────────────────────────────────────────────────────────────────────
-  // 3. grupoCliente aplica filtro em id_supplier_company
+  // 3. grupoCliente aplica filtro em id_supplier_company (grupo da empresa fornecedora)
   // ────────────────────────────────────────────────────────────────────────────
 
   describe('3. grupoCliente aplica filtro em id_supplier_company', () => {
@@ -437,12 +460,10 @@ describe('assignNotesService.getUnassignedNotes', () => {
 
       vi.mocked(supabase.from)
         .mockReturnValueOnce(qb({ data: [], error: null }) as any)                               // rel_route_invoice
-        .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any)          // ref SUPPLIER
-        .mockReturnValueOnce(qb({ data: [{ id_company: 'co-sup-100' }], error: null }) as any)  // rel SUPPLIER
-        .mockReturnValueOnce(qb({ data: [{ id: 'co-sup-100' }], error: null }) as any)          // master_company (group+role)
+        .mockReturnValueOnce(qb({ data: [{ id: 'co-sup-100' }], error: null }) as any)          // master_company (grupo fornecedor)
         .mockReturnValueOnce(invoiceSpy as any)                                                   // trx_fiscal_invoice
 
-      await assignNotesService.getUnassignedNotes({ grupoCliente: 'grp-1' })
+      await assignNotesService.getUnassignedNotes({ grupoCliente: ['grp-1'] })
 
       const inCalls = (invoiceSpy._calls as { method: string; args: any[] }[]).filter(c => c.method === 'in')
       const supplierFilter = inCalls.find(c => c.args[0] === 'id_supplier_company')
@@ -461,12 +482,10 @@ describe('assignNotesService.getUnassignedNotes', () => {
 
       vi.mocked(supabase.from)
         .mockReturnValueOnce(qb({ data: [], error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [{ id_company: 'co-sup-100' }], error: null }) as any)
         .mockReturnValueOnce(qb({ data: [{ id: 'co-sup-100' }], error: null }) as any)
         .mockReturnValueOnce(invoiceSpy as any)
 
-      await assignNotesService.getUnassignedNotes({ grupoCliente: 'grp-1' })
+      await assignNotesService.getUnassignedNotes({ grupoCliente: ['grp-1'] })
 
       const inCalls = (invoiceSpy._calls as { method: string; args: any[] }[]).filter(c => c.method === 'in')
       const customerFilter = inCalls.find(c => c.args[0] === 'id_customer_company')
@@ -502,14 +521,12 @@ describe('assignNotesService.getUnassignedNotes', () => {
     it('retorna { data: [], total: 0 } e não consulta invoices quando grupo não tem fornecedores', async () => {
       vi.mocked(supabase.from)
         .mockReturnValueOnce(qb({ data: [], error: null }) as any)                              // rel_route_invoice
-        .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any)         // ref SUPPLIER
-        .mockReturnValueOnce(qb({ data: [{ id_company: 'co-sup-999' }], error: null }) as any) // rel SUPPLIER (empresa em outro grupo)
         .mockReturnValueOnce(qb({ data: [], error: null }) as any)                              // master_company → nenhuma no grp-1
 
-      const result = await assignNotesService.getUnassignedNotes({ grupoCliente: 'grp-1' })
+      const result = await assignNotesService.getUnassignedNotes({ grupoCliente: ['grp-1'] })
 
       expect(result).toEqual({ data: [], total: 0 })
-      expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(4)
+      expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -539,34 +556,34 @@ describe('assignNotesService.getUnassignedNotes', () => {
   })
 
   // ────────────────────────────────────────────────────────────────────────────
-  // 8. grupoCliente + grupoDestino aplicam os dois filtros simultâneos
+  // 8. grupoCliente + grupoDestino geram filtros independentes (SUPPLIER e DESTINATION)
   // ────────────────────────────────────────────────────────────────────────────
 
-  describe('8. grupoCliente + grupoDestino aplicam ambos os filtros', () => {
-    it('invoice query recebe in("id_supplier_company",...) e in("id_customer_company",...) simultaneamente', async () => {
+  describe('8. grupoCliente filtra id_supplier_company e grupoDestino filtra id_customer_company independentemente', () => {
+    it('invoice query recebe in("id_supplier_company",...) de grupoCliente E in("id_customer_company",...) de grupoDestino', async () => {
       const invoiceSpy = spyQb({ data: [], error: null, count: 0 } as any)
 
       vi.mocked(supabase.from)
         .mockReturnValueOnce(qb({ data: [], error: null }) as any)                               // rel_route_invoice
-        // getCompanyIdsByGroupAndRole('SUPPLIER')
-        .mockReturnValueOnce(qb({ data: [{ id: 'role-sup-1' }], error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [{ id_company: 'co-sup-100' }], error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [{ id: 'co-sup-100' }], error: null }) as any)
-        // getCompanyIdsByGroupAndRole('DESTINATION')
-        .mockReturnValueOnce(qb({ data: [{ id: 'role-dest-1' }], error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [{ id_company: 'co-dest-200' }], error: null }) as any)
-        .mockReturnValueOnce(qb({ data: [{ id: 'co-dest-200' }], error: null }) as any)
+        // getCompanyIdsByGroups(['grp-1']) — grupoCliente/fornecedor
+        .mockReturnValueOnce(qb({ data: [{ id: 'co-sup-100' }], error: null }) as any)           // master_company fornecedor
+        // getCompanyIdsByGroupsAndRole(['grp-5'], DESTINATION) — grupoDestino
+        .mockReturnValueOnce(qb({ data: [{ id: 'role-dest-1' }], error: null }) as any)          // ref DESTINATION
+        .mockReturnValueOnce(qb({ data: [{ id_company: 'co-dest-200' }], error: null }) as any)  // rel DESTINATION
+        .mockReturnValueOnce(qb({ data: [{ id: 'co-dest-200' }], error: null }) as any)          // master_company DESTINATION
         // Invoice query
         .mockReturnValueOnce(invoiceSpy as any)
 
-      await assignNotesService.getUnassignedNotes({ grupoCliente: 'grp-1', grupoDestino: 'grp-5' })
+      await assignNotesService.getUnassignedNotes({ grupoCliente: ['grp-1'], grupoDestino: ['grp-5'] })
 
       const inCalls = (invoiceSpy._calls as { method: string; args: any[] }[]).filter(c => c.method === 'in')
       const supplierFilter = inCalls.find(c => c.args[0] === 'id_supplier_company')
       const customerFilter = inCalls.find(c => c.args[0] === 'id_customer_company')
 
+      // grupoCliente → SUPPLIER → id_supplier_company
       expect(supplierFilter).toBeDefined()
       expect(supplierFilter!.args[1]).toContain('co-sup-100')
+      // grupoDestino → DESTINATION → id_customer_company
       expect(customerFilter).toBeDefined()
       expect(customerFilter!.args[1]).toContain('co-dest-200')
     })
@@ -586,7 +603,7 @@ describe('assignNotesService.getUnassignedNotes', () => {
         .mockReturnValueOnce(relSpyChain as any)                                          // rel_person_company_role_type (spy)
         .mockReturnValueOnce(qb({ data: [], error: null }) as any)                       // master_company → [] (fail-closed)
 
-      await assignNotesService.getUnassignedNotes({ grupoDestino: 'grp-5' })
+      await assignNotesService.getUnassignedNotes({ grupoDestino: ['grp-5'] })
 
       const isActiveCalls = (relSpyChain._calls as { method: string; args: any[] }[]).filter(
         c => c.method === 'eq' && c.args[0] === 'is_active'
@@ -597,6 +614,40 @@ describe('assignNotesService.getUnassignedNotes', () => {
         c => c.method === 'eq' && c.args[0] === 'is_test'
       )
       expect(isTestCalls).toHaveLength(1)
+    })
+  })
+
+  describe('10. reentrega aplica filtro Sim/Não por histórico', () => {
+    it('Reentrega = Não exclui notas com histórico anterior', async () => {
+      const invoiceSpy = spyQb({ data: [], error: null, count: 0 } as any)
+
+      vi.mocked(supabase.from)
+        .mockReturnValueOnce(qb({ data: [], error: null }) as any)
+        .mockReturnValueOnce(qb({ data: [{ id_fiscal_invoice: 'inv-hist' }], error: null }) as any)
+        .mockReturnValueOnce(invoiceSpy as any)
+
+      await assignNotesService.getUnassignedNotes({ reentrega: false })
+
+      const notCalls = (invoiceSpy._calls as { method: string; args: any[] }[]).filter(c => c.method === 'not')
+      const historyExclusion = notCalls.find(c => c.args[0] === 'id' && c.args[1] === 'in')
+      expect(historyExclusion).toBeDefined()
+      expect(historyExclusion!.args[2]).toBe('(inv-hist)')
+    })
+
+    it('Reentrega = Sim inclui apenas notas com histórico anterior', async () => {
+      const invoiceSpy = spyQb({ data: [], error: null, count: 0 } as any)
+
+      vi.mocked(supabase.from)
+        .mockReturnValueOnce(qb({ data: [], error: null }) as any)
+        .mockReturnValueOnce(qb({ data: [{ id_fiscal_invoice: 'inv-hist' }], error: null }) as any)
+        .mockReturnValueOnce(invoiceSpy as any)
+
+      await assignNotesService.getUnassignedNotes({ reentrega: true })
+
+      const inCalls = (invoiceSpy._calls as { method: string; args: any[] }[]).filter(c => c.method === 'in')
+      const historyInclusion = inCalls.find(c => c.args[0] === 'id')
+      expect(historyInclusion).toBeDefined()
+      expect(historyInclusion!.args[1]).toContain('inv-hist')
     })
   })
 })

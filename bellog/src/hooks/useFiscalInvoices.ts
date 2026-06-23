@@ -19,10 +19,22 @@ interface UseFiscalInvoicesResult {
   fetchInvoices: (params?: {
     search?: string
     isActive?: boolean
-    showCancelled?: boolean
+    showInactive?: boolean
     idRoute?: string
     page?: number
     limit?: number
+    supplierGroupIds?: string[]
+    supplierIds?: string[]
+    destinationIds?: string[]
+    invoiceNumberStart?: number
+    invoiceNumberEnd?: number
+    tripNumber?: string
+    attemptMin?: number
+    attemptMax?: number
+    boxMin?: number
+    boxMax?: number
+    grossWeightMin?: number
+    grossWeightMax?: number
   }) => Promise<void>
   fetchUnassignedInvoices: (params?: {
     search?: string
@@ -48,6 +60,7 @@ export const useFiscalInvoices = (initialParams?: {
   idRoute?: string
   page?: number
   limit?: number
+  supplierGroupIds?: string[]
 }): UseFiscalInvoicesResult => {
   const [invoices, setInvoices] = useState<InvoiceListItem[]>([])
   const [total, setTotal] = useState(0)
@@ -58,10 +71,22 @@ export const useFiscalInvoices = (initialParams?: {
   const fetchInvoices = useCallback(async (params?: {
     search?: string
     isActive?: boolean
-    showCancelled?: boolean
+    showInactive?: boolean
     idRoute?: string
     page?: number
     limit?: number
+    supplierGroupIds?: string[]
+    supplierIds?: string[]
+    destinationIds?: string[]
+    invoiceNumberStart?: number
+    invoiceNumberEnd?: number
+    tripNumber?: string
+    attemptMin?: number
+    attemptMax?: number
+    boxMin?: number
+    boxMax?: number
+    grossWeightMin?: number
+    grossWeightMax?: number
   }) => {
     setLoading(true)
     setError(null)

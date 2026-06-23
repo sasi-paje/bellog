@@ -35,6 +35,22 @@ function getTodayDateOnly(): string {
   return `${year}-${month}-${day}`;
 }
 
+function parseBrazilianDecimal(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null
+
+  const raw = String(value).trim()
+  if (!raw) return null
+
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw
+
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed)) return null
+
+  return Number(parsed.toFixed(2))
+}
+
 // =====================================================
 // COMPONENTES AUXILIARES
 // =====================================================
@@ -174,18 +190,23 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
     try {
       setNotesLoading(true)
       const f = advFilters
+      const minWeight = parseBrazilianDecimal(f?.minWeight)
+      const maxWeight = parseBrazilianDecimal(f?.maxWeight)
       const result = await assignNotesService.getUnassignedNotes({
         page,
         search,
         limit: 50,
-        grupoCliente: f?.grupoCliente || undefined,
+        grupoCliente: f?.grupoCliente?.length ? f.grupoCliente : undefined,
         razaoSocial: f?.razaoSocial || undefined,
-        grupoDestino: f?.grupoDestino || undefined,
+        grupoDestino: f?.grupoDestino?.length ? f.grupoDestino : undefined,
         nomeDestino: f?.nomeDestino || undefined,
-        cidade: f?.cidade || undefined,
-        bairro: f?.bairro || undefined,
-        minWeight: f?.minWeight ? Number(f.minWeight) : undefined,
-        maxWeight: f?.maxWeight ? Number(f.maxWeight) : undefined,
+        cidade: f?.cidade?.length ? f.cidade : undefined,
+        bairro: f?.bairro?.length ? f.bairro : undefined,
+        minDiasNaCasa: f?.minDiasNaCasa ? Number(f.minDiasNaCasa) : undefined,
+        maxDiasNaCasa: f?.maxDiasNaCasa ? Number(f.maxDiasNaCasa) : undefined,
+        reentrega: f?.reentrega === 'sim' ? true : f?.reentrega === 'nao' ? false : undefined,
+        minWeight: minWeight ?? undefined,
+        maxWeight: maxWeight ?? undefined,
       })
 
       if (page === 1) {
@@ -618,7 +639,7 @@ const handleSaveNewRoute = useCallback(async () => {
       })
 
       await fetchRoutes({ departureDate: currentFilterDate })
-      await fetchUnassignedNotes(1, searchTerm)
+      await fetchUnassignedNotes(1, searchTerm, activeAdvancedFilters)
 
       setIsCreateDrawerOpen(false)
       setCreateRouteData(null)
@@ -629,7 +650,7 @@ const handleSaveNewRoute = useCallback(async () => {
     } finally {
       setLoading(false)
     }
-  }, [createRouteData, selectedVehicleId, vehicles, localRouteNotes, fetchRoutes, fetchUnassignedNotes, currentFilterDate, searchTerm])
+  }, [createRouteData, selectedVehicleId, vehicles, localRouteNotes, fetchRoutes, fetchUnassignedNotes, currentFilterDate, searchTerm, activeAdvancedFilters])
 
   const handleOpenEditDrawer = useCallback(async (routeId: string) => {
     const route = routes.find(r => String(r.id) === String(routeId))
@@ -736,7 +757,7 @@ const handleSaveNewRoute = useCallback(async () => {
 
       clearChanges(selectedRouteId)
       await fetchRoutes({ departureDate: currentFilterDate })
-      await fetchUnassignedNotes(1, searchTerm)
+      await fetchUnassignedNotes(1, searchTerm, activeAdvancedFilters)
 
       setIsEditDrawerOpen(false)
       setSelectedRouteId(null)
@@ -747,7 +768,7 @@ const handleSaveNewRoute = useCallback(async () => {
     } finally {
       setLoading(false)
     }
-  }, [selectedRouteId, editRouteData, localRouteNotes, routeNotes, deliveryStatuses, clearChanges, fetchRoutes, fetchUnassignedNotes, currentFilterDate, searchTerm])
+  }, [selectedRouteId, editRouteData, localRouteNotes, routeNotes, deliveryStatuses, clearChanges, fetchRoutes, fetchUnassignedNotes, currentFilterDate, searchTerm, activeAdvancedFilters])
 
   const handleLoadMoreNotes = useCallback(() => {
     fetchUnassignedNotes(notesPage + 1, searchTerm, activeAdvancedFilters)
@@ -826,7 +847,6 @@ const handleSaveNewRoute = useCallback(async () => {
             <FilterPopover
               isOpen={isFilterModalOpen}
               onClose={() => setIsFilterModalOpen(false)}
-              initialDate={currentFilterDate}
               supplierGroups={filterSupplierGroups}
               destinationGroups={filterDestinationGroups}
               cities={filterCities}

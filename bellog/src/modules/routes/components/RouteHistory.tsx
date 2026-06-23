@@ -11,7 +11,7 @@ interface OccurrenceDetail {
 
 interface HistoricoItem {
   id: string
-  tipo: 'rota-criada' | 'em-rota' | 'entrega-parcial' | 'entrega-total' | 'rota-finalizada'
+  tipo: 'rota-criada' | 'em-rota' | 'em-andamento' | 'entrega-parcial' | 'entrega-total' | 'entrega-negada' | 'entrega-abortada' | 'rota-finalizada'
   titulo: string
   subtitulo?: string
   data: string
@@ -125,7 +125,7 @@ const TimelineItem = ({ item, isFirst, isLast, onClick }: TimelineItemProps) => 
 
             {item.hasDetail && (
               <div className="shrink-0">
-                <AppIcon name="open_in_new" size={20} color={TEXT_LIGHT25} />
+                <AppIcon name="open_in_new" size={20} color={ACCENT_ORANGE} />
               </div>
             )}
           </div>

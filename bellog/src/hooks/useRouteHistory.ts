@@ -36,12 +36,21 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
           id_route: routeId,
           id_history_type: null,
           event_at: h.event_at,
-          description: h.event_description,
+          description: h.event_label,
           is_active: true,
           is_test: true,
           created_at: h.event_at,
           updated_at: h.event_at,
-          history_type: undefined,
+          history_type: {
+            id: `synthetic-${h.event_type}`,
+            code: h.event_type,
+            description: h.event_label,
+            is_active: true,
+            is_test: true,
+            created_at: h.event_at,
+            updated_at: h.event_at,
+          },
+          metadata: h.metadata ?? undefined,
         }))
         setHistory(convertedHistory)
       } else {
@@ -57,12 +66,21 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
           id_route: routeId,
           id_history_type: null,
           event_at: h.event_at,
-          description: h.event_description,
+          description: h.event_label,
           is_active: true,
           is_test: true,
           created_at: h.event_at,
           updated_at: h.event_at,
-          history_type: undefined,
+          history_type: {
+            id: `synthetic-${h.event_type}`,
+            code: h.event_type,
+            description: h.event_label,
+            is_active: true,
+            is_test: true,
+            created_at: h.event_at,
+            updated_at: h.event_at,
+          },
+          metadata: h.metadata ?? undefined,
         }))
         setHistory(convertedHistory)
       } catch (fallbackErr) {

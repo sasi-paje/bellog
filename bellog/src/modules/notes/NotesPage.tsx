@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { PageHeader, Pagination, useToast, ToastContainer } from '../../shared/components'
+import { PageHeader, Pagination, Toggle, useToast, ToastContainer } from '../../shared/components'
 import { NotesTable } from './components/NotesTable'
-import { NotesToolbar } from './components/NotesToolbar'
+import { NotesToolbar, NotesFilterValues, emptyNotesFilter } from './components/NotesToolbar'
 import { CreateNoteModal, CreateNoteFormData } from './components/CreateNoteModal'
 import { ImportNotesModal } from './components/ImportNotesModal'
 import { ImportNotesMetadataModal, ImportMetadata } from './components/ImportNotesMetadataModal'
@@ -32,8 +32,9 @@ export const NotesPage = ({
   const { invoices, total, loading, fetchInvoices } = useFiscalInvoices()
   const { showSuccess, showError, toasts, removeToast } = useToast()
 
-  const [showCancelledOnly, setShowCancelledOnly] = useState(false)
+  const [showInactive, setShowInactive] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [appliedFilters, setAppliedFilters] = useState<NotesFilterValues>(emptyNotesFilter())
   const [page, setPage] = useState(1)
   const limit = 20
 
@@ -43,7 +44,7 @@ export const NotesPage = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [importStep, setImportStep] = useState<ImportStep>('metadata')
   const [importMetadata, setImportMetadata] = useState<ImportMetadata>({
-    supplierId: '',
+    supplierGroupId: '',
     tripNumber: '',
     arrivalDate: '',
   })
@@ -58,33 +59,68 @@ export const NotesPage = ({
 
   const [deliveryLocations, setDeliveryLocations] = useState<CompanyOption[]>([])
   const [suppliers, setSuppliers] = useState<CompanyOption[]>([])
+  const [supplierGroups, setSupplierGroups] = useState<CompanyOption[]>([])
 
   const totalPages = Math.ceil(total / limit) || 1
 
   useEffect(() => {
+    const parseWeight = (v: string) => {
+      if (!v.trim()) return undefined
+      const n = parseFloat(v.replace(',', '.'))
+      return isNaN(n) ? undefined : Math.round(n * 100) / 100
+    }
+    const parseNum = (v: string) => {
+      if (!v.trim()) return undefined
+      const n = Number(v)
+      return isNaN(n) ? undefined : n
+    }
+
     fetchInvoices({
       search: searchTerm || undefined,
-      isActive: true,
-      showCancelled: showCancelledOnly,
+      showInactive,
+      supplierGroupIds: appliedFilters.supplierGroupIds.length > 0 ? appliedFilters.supplierGroupIds : undefined,
+      supplierIds: appliedFilters.supplierIds.length > 0 ? appliedFilters.supplierIds : undefined,
+      destinationIds: appliedFilters.destinationIds.length > 0 ? appliedFilters.destinationIds : undefined,
+      invoiceNumberStart: parseNum(appliedFilters.invoiceNumberStart),
+      invoiceNumberEnd: parseNum(appliedFilters.invoiceNumberEnd),
+      tripNumber: appliedFilters.tripNumber.trim() || undefined,
+      attemptMin: parseNum(appliedFilters.attemptMin),
+      attemptMax: parseNum(appliedFilters.attemptMax),
+      boxMin: parseNum(appliedFilters.boxMin),
+      boxMax: parseNum(appliedFilters.boxMax),
+      grossWeightMin: parseWeight(appliedFilters.grossWeightMin),
+      grossWeightMax: parseWeight(appliedFilters.grossWeightMax),
       page,
       limit,
     })
-  }, [searchTerm, showCancelledOnly, page])
+  }, [searchTerm, showInactive, appliedFilters, page])
 
   useEffect(() => {
     Promise.all([
       companyService.listDeliveryLocations(),
       companyService.listSuppliersByRole(),
+      companyService.listGroups('supplier'),
     ])
-      .then(([locations, supps]) => {
+      .then(([locations, supps, groups]) => {
         setDeliveryLocations(locations)
         setSuppliers(supps)
+        setSupplierGroups(groups.map(g => ({ value: String(g.id), label: g.name || '-' })))
       })
       .catch(console.error)
   }, [])
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
+    setPage(1)
+  }
+
+  const handleApplyFilters = (filters: NotesFilterValues) => {
+    setAppliedFilters(filters)
+    setPage(1)
+  }
+
+  const handleClearFilters = () => {
+    setAppliedFilters(emptyNotesFilter())
     setPage(1)
   }
 
@@ -114,7 +150,7 @@ export const NotesPage = ({
   const handleImportModalClose = () => {
     setIsImportModalOpen(false)
     setImportStep('metadata')
-    setImportMetadata({ supplierId: '', tripNumber: '', arrivalDate: '' })
+    setImportMetadata({ supplierGroupId: '', tripNumber: '', arrivalDate: '' })
   }
 
   const handleCreateNote = async (data: CreateNoteFormData) => {
@@ -215,25 +251,34 @@ export const NotesPage = ({
         <NotesToolbar
           onSearch={handleSearch}
           searchValue={searchTerm}
+          supplierGroups={supplierGroups.map(g => ({ value: String(g.value), label: g.label }))}
+          suppliers={suppliers.map(s => ({ value: String(s.value), label: s.label }))}
+          destinations={deliveryLocations.map(d => ({ value: String(d.value), label: d.label }))}
+          appliedFilters={appliedFilters}
+          onApplyFilters={handleApplyFilters}
+          onClearFilters={handleClearFilters}
           onAddNew={() => setIsCreateModalOpen(true)}
           onImport={() => {
-            setImportMetadata({ supplierId: '', tripNumber: '', arrivalDate: '' })
+            setImportMetadata({ supplierGroupId: '', tripNumber: '', arrivalDate: '' })
             setImportStep('metadata')
             setIsImportModalOpen(true)
           }}
           onExport={() => setIsExportSelectionMode(true)}
           onExportSelected={handleExportSelected}
-          onToggleCancelled={(show) => {
-            setShowCancelledOnly(show)
-            setPage(1)
-          }}
-          showCancelled={showCancelledOnly}
           loading={creating}
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedNoteIds.size}
         />
 
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="flex items-center justify-between shrink-0 w-full">
+          <Toggle
+            label="Exibir inativos"
+            checked={showInactive}
+            onChange={(checked) => {
+              setShowInactive(checked)
+              setPage(1)
+            }}
+          />
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
 
@@ -291,7 +336,7 @@ export const NotesPage = ({
               const result = await xmlImportService.importFromXml(files, importMetadata)
               setIsImportModalOpen(false)
               setImportStep('metadata')
-              setImportMetadata({ supplierId: '', tripNumber: '', arrivalDate: '' })
+              setImportMetadata({ supplierGroupId: '', tripNumber: '', arrivalDate: '' })
               fetchInvoices({ page, limit })
               if (result.success === 0) {
                 showError('Nenhuma nota foi importada. Verifique os arquivos.')

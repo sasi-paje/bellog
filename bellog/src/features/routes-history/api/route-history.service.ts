@@ -12,6 +12,7 @@ export interface RouteHistoryItem {
 
 export interface HistoryWithDetails extends TrxRouteHistory {
   history_type?: RefRouteHistoryType
+  metadata?: Record<string, any>
 }
 
 export const routeHistoryService = {

@@ -1,6 +1,7 @@
 // Feature XML Import - API Service
 import { supabase, getEnvironment } from '../../../lib/supabase'
 import { resolveDestinationByCnpj } from '../../company-resolver/api/company-resolver.service'
+import { companyService } from '../../companies/api/company.service'
 
 export interface XmlInvoiceData {
   invoice_number: string
@@ -16,7 +17,7 @@ export interface XmlInvoiceData {
 }
 
 export interface ImportMetadata {
-  supplierId: string   // id do fornecedor selecionado no modal (string para compatibilidade com select)
+  supplierGroupId: string // id do grupo de fornecedor selecionado no modal
   tripNumber: string   // texto livre, ex: "023"
   arrivalDate: string  // 'YYYY-MM-DD'
 }
@@ -91,10 +92,29 @@ const findDestinationCompany = async (cnpj: string): Promise<number | null> => {
   }
 }
 
+const findSupplierCompanyFromGroup = async (groupId: string): Promise<number | null> => {
+  const parsedGroupId = Number(groupId)
+  if (!Number.isFinite(parsedGroupId)) return null
+
+  // Não filtra por is_active: o id_supplier_company no lote de importação
+  // é apenas referência — a company não precisa estar ativa para ser registrada.
+  const result = await companyService.listSuppliers({
+    groupId: parsedGroupId,
+    limit: 1,
+  })
+
+  const supplier = result.data[0]
+  return supplier?.id ? Number(supplier.id) : null
+}
+
 export const xmlImportService = {
   async importFromXml(files: File[], metadata: ImportMetadata): Promise<ImportResult> {
     const isTest = getEnvironment() !== 'production'
-    const supplierCompanyId = Number(metadata.supplierId)
+    const supplierCompanyId = await findSupplierCompanyFromGroup(metadata.supplierGroupId)
+
+    if (!supplierCompanyId) {
+      throw new Error('Nenhum fornecedor ativo encontrado para o grupo selecionado.')
+    }
 
     // 1. Buscar status DISPONÍVEL
     const { data: statusData, error: statusError } = await supabase

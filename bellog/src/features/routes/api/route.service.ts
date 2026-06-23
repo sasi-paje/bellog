@@ -778,6 +778,19 @@ export const routeService = {
   async getHistory(routeId: string): Promise<RouteHistoryItem[]> {
     const isTest = getEnvironment() !== 'production'
 
+    const DELIVERY_TYPE_LABEL: Record<number, string> = {
+      1: 'ENTREGA TOTAL',
+      2: 'ENTREGA PARCIAL',
+      3: 'ENTREGA NEGADA',
+      4: 'ENTREGA ABORTADA',
+    }
+    const DELIVERY_TYPE_EVENT: Record<number, string> = {
+      1: 'DELIVERY_TOTAL',
+      2: 'DELIVERY_PARTIAL',
+      3: 'DELIVERY_DENIED',
+      4: 'DELIVERY_ABORTED',
+    }
+
     try {
       const { data: route, error: routeError } = await supabase
         .from('trx_route')
@@ -786,83 +799,105 @@ export const routeService = {
         .eq('is_test', isTest)
         .single()
 
-      if (routeError || !route) {
-        return []
-      }
+      if (routeError || !route) return []
 
-      let statusName = ''
       let deliveryStatusName = ''
-
-      if (route.id_route_status) {
-        const { data: statusData } = await supabase
-          .from('ref_route_status')
-          .select('name')
-          .eq('id', route.id_route_status)
-          .single()
-        statusName = statusData?.name || ''
-      }
-
       if (route.id_route_delivery_status) {
-        const { data: deliveryStatusData } = await supabase
+        const { data: ds } = await supabase
           .from('ref_route_delivery_status')
           .select('name')
           .eq('id', route.id_route_delivery_status)
           .single()
-        deliveryStatusName = deliveryStatusData?.name || ''
+        deliveryStatusName = ds?.name || ''
+      }
+
+      // Buscar entregas de notas fiscais desta rota
+      const { data: deliveries } = await supabase
+        .from('trx_route_invoice_delivery')
+        .select('id, id_fiscal_invoice, id_delivery_type, delivered_at, created_at')
+        .eq('id_route', routeId)
+        .eq('is_active', true)
+        .eq('is_test', isTest)
+
+      // Resolver nomes dos destinos para os eventos de entrega
+      const invoiceIds = [...new Set((deliveries || []).map(d => d.id_fiscal_invoice).filter(Boolean))]
+      const invoiceDestMap = new Map<string, string>()
+      if (invoiceIds.length > 0) {
+        const { data: invoices } = await supabase
+          .from('trx_fiscal_invoice')
+          .select('id, id_customer_company')
+          .in('id', invoiceIds)
+          .eq('is_test', isTest)
+        const companyIds = [...new Set((invoices || []).map(i => i.id_customer_company).filter(Boolean))]
+        if (companyIds.length > 0) {
+          const { data: companies } = await supabase
+            .from('master_person_company')
+            .select('id, trade_name, legal_name')
+            .in('id', companyIds)
+          const companyNameMap = new Map((companies || []).map(c => [c.id, c.trade_name || c.legal_name || '']))
+          for (const inv of invoices || []) {
+            if (inv.id_customer_company) {
+              invoiceDestMap.set(String(inv.id), companyNameMap.get(inv.id_customer_company) || '')
+            }
+          }
+        }
       }
 
       const history: RouteHistoryItem[] = []
 
+      // Evento: Rota Criada
       if (route.created_at) {
         history.push({
           id: `${routeId}-created`,
           event_type: 'CREATED',
           event_label: 'Rota Criada',
-          event_description: `A rota ${route.route_code} foi criada no sistema`,
+          event_description: 'Rota Criada',
           event_at: route.created_at,
           metadata: null,
         })
       }
 
-      if (route.updated_at && route.updated_at !== route.created_at) {
+      // Evento: Rota em Andamento (quando status de entrega indica que iniciou)
+      if (/andamento/i.test(deliveryStatusName) && (route.starts_at || route.updated_at)) {
         history.push({
-          id: `${routeId}-status-${route.id_route_status}`,
-          event_type: 'STATUS_CHANGE',
-          event_label: statusName || 'Status Atualizado',
-          event_description: `Status da rota alterado para: ${statusName}`,
-          event_at: route.updated_at,
-          metadata: { status: route.id_route_status },
-        })
-      }
-
-      if (route.updated_at) {
-        history.push({
-          id: `${routeId}-delivery-${route.id_route_delivery_status}`,
-          event_type: 'DELIVERY_STATUS',
-          event_label: deliveryStatusName || 'Status de Entrega',
-          event_description: `Status de entrega: ${deliveryStatusName}`,
-          event_at: route.updated_at,
-          metadata: { delivery_status: route.id_route_delivery_status },
-        })
-      }
-
-      if (route.starts_at) {
-        history.push({
-          id: `${routeId}-started`,
-          event_type: 'ROUTE_STARTED',
-          event_label: 'Rota Iniciada',
-          event_description: 'A rota foi iniciada para distribuição',
-          event_at: route.starts_at,
+          id: `${routeId}-in-progress`,
+          event_type: 'IN_PROGRESS',
+          event_label: 'Rota em Andamento',
+          event_description: 'Rota em Andamento',
+          event_at: route.starts_at || route.updated_at,
           metadata: null,
         })
       }
 
+      // Eventos de entrega das notas fiscais
+      for (const delivery of deliveries || []) {
+        const typeId = delivery.id_delivery_type
+        if (!typeId || !DELIVERY_TYPE_LABEL[typeId]) continue
+        const destName = invoiceDestMap.get(String(delivery.id_fiscal_invoice)) || ''
+        const label = destName
+          ? `${DELIVERY_TYPE_LABEL[typeId]} em ${destName}`
+          : DELIVERY_TYPE_LABEL[typeId]
+        history.push({
+          id: `${routeId}-delivery-${delivery.id}`,
+          event_type: DELIVERY_TYPE_EVENT[typeId],
+          event_label: label,
+          event_description: label,
+          event_at: delivery.delivered_at || delivery.created_at,
+          metadata: {
+            invoice_id: String(delivery.id_fiscal_invoice),
+            delivery_type: typeId,
+            destination_name: destName,
+          },
+        })
+      }
+
+      // Evento: Rota Finalizada
       if (route.ends_at) {
         history.push({
           id: `${routeId}-ended`,
           event_type: 'ROUTE_ENDED',
           event_label: 'Rota Finalizada',
-          event_description: 'A rota foi finalizada',
+          event_description: 'Rota Finalizada',
           event_at: route.ends_at,
           metadata: null,
         })

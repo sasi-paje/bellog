@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { companyService, CompanyOption } from '../../../features/companies'
+import { companyService, MasterPersonCompanyGroup } from '../../../features/companies'
 
 export interface ImportMetadata {
-  supplierId: string
+  supplierGroupId: string
   tripNumber: string
   arrivalDate: string
 }
@@ -27,16 +27,16 @@ export const ImportNotesMetadataModal = ({
   onClose,
   onContinue,
 }: ImportNotesMetadataModalProps) => {
-  const [suppliers, setSuppliers] = useState<CompanyOption[]>([])
+  const [supplierGroups, setSupplierGroups] = useState<MasterPersonCompanyGroup[]>([])
   const [errors, setErrors] = useState<Partial<Record<keyof ImportMetadata, string>>>({})
 
   useEffect(() => {
-    companyService.listSuppliersByRole().then(setSuppliers).catch(console.error)
+    companyService.listGroups('supplier').then(setSupplierGroups).catch(console.error)
   }, [])
 
   const validate = (): boolean => {
     const newErrors: Partial<Record<keyof ImportMetadata, string>> = {}
-    if (!values.supplierId) newErrors.supplierId = 'Campo obrigatório'
+    if (!values.supplierGroupId) newErrors.supplierGroupId = 'Campo obrigatório'
     if (!values.tripNumber.trim()) newErrors.tripNumber = 'Campo obrigatório'
     if (!values.arrivalDate) newErrors.arrivalDate = 'Campo obrigatório'
     setErrors(newErrors)
@@ -74,35 +74,35 @@ export const ImportNotesMetadataModal = ({
               Fornecedor
             </label>
             <select
-              value={values.supplierId}
-              onChange={(e) => onChange({ ...values, supplierId: e.target.value })}
+              value={values.supplierGroupId}
+              onChange={(e) => onChange({ ...values, supplierGroupId: e.target.value })}
               className="h-[45px] px-4 rounded-[5px] w-full bg-white text-[14px] appearance-none"
               style={{
                 fontFamily: 'Inter, sans-serif',
-                color: values.supplierId ? TEXT_LIGHT75 : TEXT_LIGHT25,
-                border: `1px solid ${errors.supplierId ? '#eb5757' : BORDER_COLOR}`,
+                color: values.supplierGroupId ? TEXT_LIGHT75 : TEXT_LIGHT25,
+                border: `1px solid ${errors.supplierGroupId ? '#eb5757' : BORDER_COLOR}`,
               }}
             >
               <option value="" disabled>
                 Selecione o Fornecedor
               </option>
-              {suppliers.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
+              {supplierGroups.map((group) => (
+                <option key={group.id} value={String(group.id)}>
+                  {group.name}
                 </option>
               ))}
             </select>
-            {errors.supplierId && (
+            {errors.supplierGroupId && (
               <span className="text-[12px]" style={{ color: '#eb5757', fontFamily: 'Inter, sans-serif' }}>
-                {errors.supplierId}
+                {errors.supplierGroupId}
               </span>
             )}
           </div>
 
-          {/* Número de viagens */}
+          {/* Viagem - Transporte */}
           <div className="flex flex-col gap-2">
             <label className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT75 }}>
-              Número de viagens
+              Viagem - Transporte
             </label>
             <input
               type="text"

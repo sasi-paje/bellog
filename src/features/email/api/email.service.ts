@@ -22,6 +22,24 @@ export interface InviteUserResponse extends EmailServiceResponse {
 }
 
 /**
+ * supabase.functions.invoke retorna uma mensagem genérica ("non-2xx status code")
+ * em erro HTTP — o motivo real vem no corpo da resposta (error.context). Extrai-o.
+ */
+const extractFunctionError = async (error: { message?: string }): Promise<string> => {
+  let detail = error?.message || 'Erro na função'
+  try {
+    const ctx = (error as { context?: Response }).context
+    if (ctx && typeof ctx.json === 'function') {
+      const body = await ctx.json()
+      if (body?.error) detail = body.error
+    }
+  } catch {
+    // mantém a mensagem genérica se o corpo não puder ser lido
+  }
+  return detail
+}
+
+/**
  * Convida um novo usuário.
  * Cria a conta no Supabase Auth + master_system_user e envia email de convite via AWS SES.
  */
@@ -32,7 +50,7 @@ export const inviteUser = async (data: InviteUserRequest): Promise<InviteUserRes
     })
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: await extractFunctionError(error) }
     }
 
     return {
@@ -57,7 +75,7 @@ export const resendInvite = async (email: string): Promise<EmailServiceResponse>
     })
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: await extractFunctionError(error) }
     }
 
     return {
@@ -80,7 +98,7 @@ export const testSmtpConnection = async (): Promise<EmailServiceResponse> => {
     })
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: await extractFunctionError(error) }
     }
 
     return {

@@ -5,7 +5,7 @@ import { LoginIllustration } from '../../shared/icons'
 import { supabase, getEnvironment } from '../../lib/supabase'
 
 interface LoginPageProps {
-  onLogin: (user: { id: string; email: string; full_name: string; needs_password_change?: boolean }) => void
+  onLogin: (user: { id: string; email: string; full_name: string; needs_password_change?: boolean; temp_password?: string }) => void
   onForgotPassword: () => void
 }
 
@@ -72,6 +72,7 @@ export const LoginPage = ({ onLogin, onForgotPassword }: LoginPageProps) => {
           email: data.user.email || '',
           full_name: fullName,
           needs_password_change: needsPasswordChange,
+          temp_password: data.user.user_metadata?.temp_password,
         })
       }
     } catch (err) {

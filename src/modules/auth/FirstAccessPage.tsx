@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { AppIcon } from '../../shared/components'
 import bellogLogoLogin from '../../shared/icons/brand/bellog-logo-login.png'
 import { LoginIllustration } from '../../shared/icons'
+import { supabase } from '../../lib/supabase'
 
 interface FirstAccessPageProps {
   user: { id: string; email: string; full_name: string; temp_password?: string }
@@ -93,14 +94,21 @@ export const FirstAccessPage = ({ user, onComplete, onCancel }: FirstAccessPageP
     setError(null)
 
     try {
-      // Simular atualização de senha
-      console.log('[FirstAccess] Password changed for user:', user.email)
+      // Persiste a nova senha e limpa as flags de primeiro acesso
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+        data: { needs_password_change: false, temp_password: null },
+      })
 
-      // Mostrar tela de sucesso
+      if (updateError) {
+        throw new Error(updateError.message)
+      }
+
+      console.log('[FirstAccess] Password updated for user:', user.email)
       setStep('success')
     } catch (err) {
       console.error('[FirstAccess] Error:', err)
-      setError('Erro ao processar. Tente novamente.')
+      setError(err instanceof Error ? err.message : 'Erro ao processar. Tente novamente.')
     } finally {
       setLoading(false)
     }

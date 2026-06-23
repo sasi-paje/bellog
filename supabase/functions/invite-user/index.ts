@@ -44,8 +44,10 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function getInviteHtml(fullName: string, inviteLink: string): string {
+function getInviteHtml(fullName: string, email: string, tempPassword: string, loginLink: string): string {
   const name = escapeHtml(fullName)
+  const safeEmail = escapeHtml(email)
+  const safePw = escapeHtml(tempPassword)
   return `
 <!DOCTYPE html>
 <html>
@@ -56,6 +58,8 @@ function getInviteHtml(fullName: string, inviteLink: string): string {
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
     .header { background-color: #e67c26; color: white; padding: 20px; text-align: center; }
     .content { background-color: #f9fafb; padding: 30px; border-radius: 8px; margin-top: 20px; }
+    .creds { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px;
+             padding: 16px; margin: 20px 0; font-family: monospace; word-break: break-all; }
     .button { display: inline-block; background-color: #e67c26; color: #ffffff !important;
               padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
     .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
@@ -68,10 +72,13 @@ function getInviteHtml(fullName: string, inviteLink: string): string {
     </div>
     <div class="content">
       <p>Olá <strong>${name}</strong>,</p>
-      <p>Você foi convidado para acessar o sistema Bellog.</p>
-      <p>Clique no botão abaixo para definir sua senha e acessar:</p>
-      <a href="${inviteLink}" class="button">Definir Senha</a>
-      <p><strong>Este link expira em breve</strong> por motivos de segurança.</p>
+      <p>Você foi convidado para acessar o sistema Bellog. Use as credenciais temporárias abaixo para entrar — no primeiro acesso você definirá sua senha definitiva.</p>
+      <div class="creds">
+        <div><strong>Email:</strong> ${safeEmail}</div>
+        <div><strong>Senha temporária:</strong> ${safePw}</div>
+      </div>
+      <a href="${loginLink}" class="button">Acessar o sistema</a>
+      <p>Por segurança, troque a senha temporária assim que entrar.</p>
       <p>Se você não esperava este convite, ignore este email.</p>
     </div>
     <div class="footer">
@@ -83,18 +90,19 @@ function getInviteHtml(fullName: string, inviteLink: string): string {
 `
 }
 
-function getInviteText(fullName: string, inviteLink: string): string {
+function getInviteText(fullName: string, email: string, tempPassword: string, loginLink: string): string {
   return `Bellog - Convite de Acesso
 
 Olá ${fullName},
 
 Você foi convidado para acessar o sistema Bellog.
+Use as credenciais temporárias abaixo para entrar — no primeiro acesso você definirá sua senha definitiva.
 
-Clique no link abaixo para definir sua senha e acessar:
-${inviteLink}
+Acessar: ${loginLink}
+Email: ${email}
+Senha temporária: ${tempPassword}
 
-Este link expira em breve por motivos de segurança.
-
+Por segurança, troque a senha temporária assim que entrar.
 Se você não esperava este convite, ignore este email.
 
 Atenciosamente,
@@ -170,12 +178,16 @@ serve(async (req) => {
       return json({ error: 'SMTP configuration incomplete' }, 500)
     }
 
-    // 6. Criar usuário no Supabase Auth (confirmado, com senha temporária descartável)
+    // 6. Criar usuário no Supabase Auth (confirmado, com senha temporária).
+    //    Opção B: a senha temporária é a senha real de login E fica no metadata
+    //    (temp_password) para o fluxo de primeiro acesso validá-la; também é enviada
+    //    por email. needs_password_change força a troca no primeiro login.
+    const tempPassword = generateTempPassword()
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
       email,
-      password: generateTempPassword(),
+      password: tempPassword,
       email_confirm: true,
-      user_metadata: { full_name: fullName, needs_password_change: true },
+      user_metadata: { full_name: fullName, needs_password_change: true, temp_password: tempPassword },
     })
 
     if (createError || !created?.user) {
@@ -207,9 +219,9 @@ serve(async (req) => {
     }
     committed = true
 
-    // 8. Link de convite (usuário define a senha) — mesmo padrão do send-password-reset
-    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'
-    const inviteLink = `${frontendUrl}/reset-password?token=${created.user.id}&email=${encodeURIComponent(email)}`
+    // 8. Link de login. No primeiro acesso o usuário entra com a senha temporária
+    //    e define a senha definitiva (FirstAccessPage).
+    const loginLink = Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'
 
     // 9. Enviar email de convite via SMTP (AWS SES). Falha de email NÃO desfaz o
     //    provisionamento — o usuário já existe e o admin pode reenviar.
@@ -225,8 +237,8 @@ serve(async (req) => {
       await smtp.sendEmail({
         to: email,
         subject: 'Bellog - Convite de Acesso',
-        body: getInviteText(fullName, inviteLink),
-        html: getInviteHtml(fullName, inviteLink),
+        body: getInviteText(fullName, email, tempPassword, loginLink),
+        html: getInviteHtml(fullName, email, tempPassword, loginLink),
       })
     } catch (mailError) {
       console.error('[invite-user] Falha ao enviar email de convite:', mailError)

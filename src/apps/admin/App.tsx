@@ -77,6 +77,10 @@ export const AdminApp: React.FC = () => {
   const isSupabaseCallback = window.location.pathname === '/reset-password' &&
     (window.location.hash.includes('access_token') || window.location.hash.includes('refresh_token'))
 
+  // Link do convite (Opção B): /?first_access=<email> abre o primeiro acesso
+  // direto na raiz (rotas profundas dão 404 no Vercel, sem fallback de SPA).
+  const firstAccessEmail = new URLSearchParams(window.location.search).get('first_access')
+
   useEffect(() => {
     if (isSupabaseCallback) {
       setIsAuthCallback(true)
@@ -170,6 +174,17 @@ export const AdminApp: React.FC = () => {
       setIsAuthCallback(false)
     }
     setShowForgotPassword(false)
+  }
+
+  if (firstAccessEmail !== null) {
+    return (
+      <FirstAccessPage
+        standalone
+        inviteEmail={firstAccessEmail}
+        onComplete={() => { window.location.href = '/' }}
+        onCancel={() => { window.location.href = '/' }}
+      />
+    )
   }
 
   if (isAuthCallback || showForgotPassword) {

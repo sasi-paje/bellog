@@ -5,7 +5,12 @@ import { LoginIllustration } from '../../shared/icons'
 import { supabase } from '../../lib/supabase'
 
 interface FirstAccessPageProps {
-  user: { id: string; email: string; full_name: string; temp_password?: string }
+  user?: { id: string; email: string; full_name: string; temp_password?: string }
+  /** true quando aberto pelo link do convite (sem sessão): autentica com a
+   *  senha temporária antes de definir a nova. */
+  standalone?: boolean
+  /** email do convidado, vindo da URL (?first_access=...) no modo standalone. */
+  inviteEmail?: string
   onComplete: (user: { id: string; email: string; full_name: string }) => void
   onCancel: () => void
 }
@@ -31,7 +36,7 @@ const PASSWORD_RULES = [
   { key: 'special', label: 'Pelo menos 1 caractere especial', validate: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
 ]
 
-export const FirstAccessPage = ({ user, onComplete, onCancel }: FirstAccessPageProps) => {
+export const FirstAccessPage = ({ user, standalone, inviteEmail, onComplete, onCancel }: FirstAccessPageProps) => {
   const [step, setStep] = useState<'form' | 'success'>('form')
   const [tempPassword, setTempPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -74,12 +79,6 @@ export const FirstAccessPage = ({ user, onComplete, onCancel }: FirstAccessPageP
   const handleSubmit = async () => {
     if (!canSubmit) return
 
-    // Validar senha temporária
-    if (tempPassword !== user.temp_password) {
-      setError('Senha temporária incorreta')
-      return
-    }
-
     if (newPassword !== confirmPassword) {
       setError('As senhas não conferem')
       return
@@ -94,6 +93,23 @@ export const FirstAccessPage = ({ user, onComplete, onCancel }: FirstAccessPageP
     setError(null)
 
     try {
+      if (standalone) {
+        // Veio pelo link do convite (sem sessão): autentica com a senha
+        // temporária; se ok, há sessão para trocar a senha em seguida.
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: (inviteEmail || '').trim(),
+          password: tempPassword,
+        })
+        if (signInError) {
+          setError('Senha temporária incorreta')
+          return
+        }
+      } else if (tempPassword !== user?.temp_password) {
+        // Fluxo já logado: confere a senha temporária do metadata
+        setError('Senha temporária incorreta')
+        return
+      }
+
       // Persiste a nova senha e limpa as flags de primeiro acesso
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
@@ -104,7 +120,7 @@ export const FirstAccessPage = ({ user, onComplete, onCancel }: FirstAccessPageP
         throw new Error(updateError.message)
       }
 
-      console.log('[FirstAccess] Password updated for user:', user.email)
+      console.log('[FirstAccess] Password updated for:', inviteEmail || user?.email)
       setStep('success')
     } catch (err) {
       console.error('[FirstAccess] Error:', err)

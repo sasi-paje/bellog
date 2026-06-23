@@ -72,13 +72,12 @@ function getInviteHtml(fullName: string, email: string, tempPassword: string, lo
     </div>
     <div class="content">
       <p>Olá <strong>${name}</strong>,</p>
-      <p>Você foi convidado para acessar o sistema Bellog. Use as credenciais temporárias abaixo para entrar — no primeiro acesso você definirá sua senha definitiva.</p>
+      <p>Você foi convidado para acessar o sistema Bellog. Clique no botão abaixo para definir sua senha — você vai precisar da senha temporária a seguir.</p>
       <div class="creds">
         <div><strong>Email:</strong> ${safeEmail}</div>
         <div><strong>Senha temporária:</strong> ${safePw}</div>
       </div>
-      <a href="${loginLink}" class="button">Acessar o sistema</a>
-      <p>Por segurança, troque a senha temporária assim que entrar.</p>
+      <a href="${loginLink}" class="button">Definir minha senha</a>
       <p>Se você não esperava este convite, ignore este email.</p>
     </div>
     <div class="footer">
@@ -96,13 +95,12 @@ function getInviteText(fullName: string, email: string, tempPassword: string, lo
 Olá ${fullName},
 
 Você foi convidado para acessar o sistema Bellog.
-Use as credenciais temporárias abaixo para entrar — no primeiro acesso você definirá sua senha definitiva.
+Clique no link abaixo para definir sua senha — você vai precisar da senha temporária a seguir.
 
-Acessar: ${loginLink}
+Definir minha senha: ${loginLink}
 Email: ${email}
 Senha temporária: ${tempPassword}
 
-Por segurança, troque a senha temporária assim que entrar.
 Se você não esperava este convite, ignore este email.
 
 Atenciosamente,
@@ -217,9 +215,11 @@ serve(async (req) => {
     }
     committed = true
 
-    // 8. Link de login. No primeiro acesso o usuário entra com a senha temporária
-    //    e define a senha definitiva (FirstAccessPage).
-    const loginLink = Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'
+    // 8. Link do convite: abre a tela de primeiro acesso na raiz (?first_access),
+    //    onde o convidado informa a senha temporária e define a definitiva.
+    //    Usa query na raiz porque rotas profundas dão 404 no Vercel (sem SPA fallback).
+    const baseUrl = (Deno.env.get('FRONTEND_URL') || 'http://localhost:5173').replace(/\/$/, '')
+    const loginLink = `${baseUrl}/?first_access=${encodeURIComponent(email)}`
 
     // 9. Enviar email de convite via SMTP (AWS SES). Falha de email NÃO desfaz o
     //    provisionamento — o usuário já existe e o admin pode reenviar.

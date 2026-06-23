@@ -1,7 +1,7 @@
 import { supabase } from '../../../lib/supabase'
 
 export async function saveUserPageAccessFromRole(params: {
-  userId: string
+  userId: string | number
   roleId: string | number
   pageIds: (string | number)[]
   isTest: boolean
@@ -9,7 +9,7 @@ export async function saveUserPageAccessFromRole(params: {
   const { userId, roleId, pageIds, isTest } = params
 
   const { error } = await supabase.rpc('save_user_page_access_from_role', {
-    p_user_id: userId,
+    p_user_id: Number(userId),
     p_role_id: Number(roleId),
     p_page_ids: pageIds.map(Number),
     p_is_test: isTest,

@@ -26,8 +26,28 @@ function isRateLimited(email: string): boolean {
   return false
 }
 
-// Template HTML de reset de senha
-function getPasswordResetHtml(resetLink: string): string {
+// Senha temporária descartável (o usuário define a definitiva no primeiro acesso).
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const bytes = new Uint8Array(20)
+  crypto.getRandomValues(bytes)
+  let pw = ''
+  for (const b of bytes) pw += chars[b % chars.length]
+  return pw + 'aZ9#'
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function getResetHtml(email: string, tempPassword: string, link: string): string {
+  const safeEmail = escapeHtml(email)
+  const safePw = escapeHtml(tempPassword)
   return `
 <!DOCTYPE html>
 <html>
@@ -38,6 +58,8 @@ function getPasswordResetHtml(resetLink: string): string {
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }
     .header { background-color: #e67c26; color: white; padding: 20px; text-align: center; }
     .content { background-color: #f9fafb; padding: 30px; border-radius: 8px; margin-top: 20px; }
+    .creds { background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px;
+             padding: 16px; margin: 20px 0; font-family: monospace; word-break: break-all; }
     .button { display: inline-block; background-color: #e67c26; color: #ffffff !important;
               padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
     .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
@@ -50,11 +72,13 @@ function getPasswordResetHtml(resetLink: string): string {
     </div>
     <div class="content">
       <p>Olá,</p>
-      <p>Recebemos uma solicitação para redefinir sua senha.</p>
-      <p>Clique no botão abaixo para criar uma nova senha:</p>
-      <a href="${resetLink}" class="button">Redefinir Senha</a>
-      <p><strong>Este link expirará em 1 hora</strong> por motivos de segurança.</p>
-      <p>Se você não solicitou a redefinição, ignore este email.</p>
+      <p>Recebemos uma solicitação para redefinir sua senha. Clique no botão abaixo para definir uma nova senha — você vai precisar da senha temporária a seguir.</p>
+      <div class="creds">
+        <div><strong>Email:</strong> ${safeEmail}</div>
+        <div><strong>Senha temporária:</strong> ${safePw}</div>
+      </div>
+      <a href="${link}" class="button">Redefinir minha senha</a>
+      <p>Se você não solicitou a redefinição, ignore este email — sua senha anterior deixou de valer apenas se você concluir o processo acima.</p>
     </div>
     <div class="footer">
       <p>Atenciosamente,<br>Equipe Bellog</p>
@@ -65,18 +89,17 @@ function getPasswordResetHtml(resetLink: string): string {
 `
 }
 
-// Template texto puro
-function getPasswordResetText(resetLink: string): string {
+function getResetText(email: string, tempPassword: string, link: string): string {
   return `Bellog - Redefinir Senha
 
 Olá,
 
 Recebemos uma solicitação para redefinir sua senha.
+Clique no link abaixo para definir uma nova senha — você vai precisar da senha temporária a seguir.
 
-Clique no link abaixo para criar uma nova senha:
-${resetLink}
-
-Este link expirará em 1 hora por motivos de segurança.
+Redefinir minha senha: ${link}
+Email: ${email}
+Senha temporária: ${tempPassword}
 
 Se você não solicitou a redefinição, ignore este email.
 
@@ -89,18 +112,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders })
   }
 
+  // Resposta genérica (previne enumeração de usuários)
+  const responseMessage = 'Se este email existir, um link de redefinição será enviado'
+  const genericOk = () =>
+    new Response(
+      JSON.stringify({ success: true, message: responseMessage }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+
   try {
     const { email } = await req.json()
-
     if (!email) {
       return new Response(
         JSON.stringify({ error: 'Email é obrigatório' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+    const emailLower = String(email).trim().toLowerCase()
 
-    // Rate limiting
-    if (isRateLimited(email)) {
+    if (isRateLimited(emailLower)) {
       return new Response(
         JSON.stringify({ error: 'Muitas tentativas. Tente novamente mais tarde.' }),
         { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -109,34 +139,20 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'
-
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Verificar se usuário existe
+    // Verificar se o usuário existe (sem revelar)
     const { data: userData, error: userError } = await supabase.auth.admin.listUsers()
-
-    let user = null
-    if (!userError && userData?.users) {
-      user = userData.users.find(u => u.email?.toLowerCase() === email.toLowerCase())
-    }
-
-    // Sempre retornar mensagem genérica (prevenir enumeração de usuários)
-    const responseMessage = 'Se este email existir, um link de redefinição será enviado'
+    const user = (!userError && userData?.users)
+      ? userData.users.find(u => u.email?.toLowerCase() === emailLower)
+      : null
 
     if (!user) {
-      console.log('[send-password-reset] Usuário não encontrado:', email)
-      return new Response(
-        JSON.stringify({ success: true, message: responseMessage }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      console.log('[send-password-reset] Usuário não encontrado:', emailLower)
+      return genericOk()
     }
 
-    // Gerar link de redefinição
-    const resetLink = `${frontendUrl}/reset-password?token=${user.id}&email=${encodeURIComponent(email)}`
-
-    // Configurar SMTP
+    // Validar SMTP (sem vazar detalhe ao cliente)
     const smtpServer = Deno.env.get('SMTP_SERVER')
     const smtpPort = Deno.env.get('SMTP_PORT')
     const smtpUsername = Deno.env.get('SMTP_USERNAME')
@@ -144,11 +160,29 @@ serve(async (req) => {
     const smtpSender = Deno.env.get('SMTP_SENDER_EMAIL')
 
     if (!smtpServer || !smtpPort || !smtpUsername || !smtpPassword || !smtpSender) {
-      return new Response(
-        JSON.stringify({ success: true, message: responseMessage }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      console.error('[send-password-reset] SMTP configuration incomplete')
+      return genericOk()
     }
+
+    // Gerar senha temporária e marcar troca obrigatória (mesmo fluxo do convite)
+    const tempPassword = generateTempPassword()
+    const { error: updError } = await supabase.auth.admin.updateUserById(user.id, {
+      password: tempPassword,
+      user_metadata: {
+        ...user.user_metadata,
+        needs_password_change: true,
+        temp_password: tempPassword,
+      },
+    })
+
+    if (updError) {
+      console.error('[send-password-reset] Falha ao atualizar usuário:', updError)
+      return genericOk()
+    }
+
+    // Link para a tela de primeiro acesso (raiz + query; rotas profundas dão 404 no Vercel)
+    const baseUrl = (Deno.env.get('FRONTEND_URL') || 'http://localhost:5173').replace(/\/$/, '')
+    const link = `${baseUrl}/?first_access=${encodeURIComponent(emailLower)}`
 
     const smtpClient = new SMTPClient({
       host: smtpServer,
@@ -159,21 +193,17 @@ serve(async (req) => {
     })
 
     await smtpClient.sendEmail({
-      to: email,
+      to: emailLower,
       subject: 'Bellog - Redefinir Senha',
-      body: getPasswordResetText(resetLink),
-      html: getPasswordResetHtml(resetLink),
+      body: getResetText(emailLower, tempPassword, link),
+      html: getResetHtml(emailLower, tempPassword, link),
     })
 
-    console.log('[send-password-reset] Email enviado para:', email)
-
-    return new Response(
-      JSON.stringify({ success: true, message: responseMessage }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    console.log('[send-password-reset] Email enviado para:', emailLower)
+    return genericOk()
   } catch (error: any) {
     console.error('[send-password-reset] Error:', error)
-    // Sempre retornar mensagem genérica em caso de erro
+    // Sempre genérico em caso de erro (anti-enumeração)
     return new Response(
       JSON.stringify({ success: true, message: 'Se este email existir, um link de redefinição será enviado' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

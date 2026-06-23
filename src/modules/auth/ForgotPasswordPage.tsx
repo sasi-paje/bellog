@@ -30,9 +30,6 @@ const PASSWORD_RULES = [
   { key: 'special', label: 'Pelo menos 1 caractere especial', validate: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
 ]
 
-// URL base para redirecionamento após clique no e-mail
-const RESET_PASSWORD_URL = window.location.origin + '/reset-password'
-
 export const ForgotPasswordPage = ({ onComplete, onCancel }: ForgotPasswordPageProps) => {
   const [step, setStep] = useState<'email' | 'form' | 'success'>('email')
   const [email, setEmail] = useState('')
@@ -85,16 +82,17 @@ export const ForgotPasswordPage = ({ onComplete, onCancel }: ForgotPasswordPageP
     setError(null)
 
     try {
-      const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: RESET_PASSWORD_URL,
+      // Usa nossa edge function (AWS SES / template Bellog), não o mailer do Supabase
+      const { error: fnError } = await supabase.functions.invoke('send-password-reset', {
+        body: { email },
       })
 
-      if (authError) {
-        console.error('[ForgotPassword] Reset email error:', authError)
-        throw new Error(authError.message)
+      if (fnError) {
+        console.error('[ForgotPassword] Reset email error:', fnError)
+        throw new Error(fnError.message)
       }
 
-      console.log('[ForgotPassword] Reset email sent to:', email)
+      console.log('[ForgotPassword] Reset solicitado para:', email)
       setSuccessMessage('E-mail de redefinição enviado! Verifique sua caixa de entrada.')
       setStep('success')
     } catch (err) {

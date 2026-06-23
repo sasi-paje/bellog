@@ -25,5 +25,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["node_modules", "../atomic-component-library"]
+  "exclude": ["node_modules"]
 }

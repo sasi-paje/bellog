@@ -3,7 +3,6 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
-    "../atomic-component-library/src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {

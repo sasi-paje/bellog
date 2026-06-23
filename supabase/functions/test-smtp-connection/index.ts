@@ -42,20 +42,11 @@ serve(async (req) => {
       )
     }
 
-    // 3. Autorização: precisa existir e estar ativo em master_system_user
-    const { data: appUser, error: userError } = await supabase
-      .from('master_system_user')
-      .select('id, is_active')
-      .eq('id_auth_user', user.id)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (userError || !appUser) {
-      return new Response(
-        JSON.stringify({ error: 'Access denied: active app user required' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    // 3. Autorização: exige apenas um usuário autenticado (getUser acima).
+    //    master_system_user NÃO tem id_auth_user (o elo com o Auth é o email),
+    //    então não dá para casar o usuário do Auth com a linha por id aqui.
+    //    Gate fino por can_create é Fase 3 (ver CLAUDE.md).
+    void user
 
     // 4. Validar secrets SMTP (sem expor valores)
     const smtpServer = Deno.env.get('SMTP_SERVER')

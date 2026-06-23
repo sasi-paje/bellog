@@ -187,23 +187,29 @@ serve(async (req) => {
     }
     authUserId = created.user.id
 
-    // 7. Registrar em master_system_user e obter o id (usado pelo front para
-    //    salvar o acesso às páginas). Upsert por id_auth_user (idempotente).
-    const { data: appUser, error: insertError } = await supabase
+    // 7. Registrar em master_system_user. O elo com o Supabase Auth é o EMAIL
+    //    (a tabela NÃO tem id_auth_user). Retorna o id (bigint) usado pelo front
+    //    em saveUserPageAccessFromRole. Idempotente por (email, is_test).
+    const nowIso = new Date().toISOString()
+    const { data: existing } = await supabase
       .from('master_system_user')
-      .upsert(
-        {
-          id_auth_user: created.user.id,
-          full_name: fullName,
-          email,
-          id_user_role: id_user_role || null,
-          is_active: true,
-          is_test: isTest,
-        },
-        { onConflict: 'id_auth_user' }
-      )
       .select('id')
-      .single()
+      .eq('email', email)
+      .eq('is_test', isTest)
+      .maybeSingle()
+
+    const rowData = {
+      email,
+      full_name: fullName,
+      id_user_role: id_user_role || null,
+      is_active: true,
+      is_test: isTest,
+      invitation_sent_at: nowIso,
+    }
+
+    const { data: appUser, error: insertError } = existing
+      ? await supabase.from('master_system_user').update(rowData).eq('id', existing.id).select('id').single()
+      : await supabase.from('master_system_user').insert(rowData).select('id').single()
 
     if (insertError || !appUser) {
       try { await supabase.auth.admin.deleteUser(created.user.id) } catch (_) {}

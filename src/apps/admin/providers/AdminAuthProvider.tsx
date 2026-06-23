@@ -98,18 +98,28 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                          data.user.email?.split('@')[0] ||
                          'Usuário'
 
-        // Sync user to master_system_user table
+        // Sync user to master_system_user (elo com o Auth é o email — sem id_auth_user).
+        // Localiza por (email, is_test); atualiza last_login_at ou cria se não existir.
         const isTest = getEnvironment() !== 'production'
-        await supabase
+        const emailLower = (data.user.email || '').toLowerCase()
+        const nowIso = new Date().toISOString()
+        const { data: existingUser } = await supabase
           .from('master_system_user')
-          .upsert({
-            id_auth_user: data.user.id,
-            full_name: fullName,
-            email: data.user.email || '',
-            is_test: isTest,
-            is_active: true,
-            last_login_at: new Date().toISOString(),
-          }, { onConflict: 'id_auth_user' })
+          .select('id')
+          .eq('email', emailLower)
+          .eq('is_test', isTest)
+          .maybeSingle()
+
+        if (existingUser) {
+          await supabase
+            .from('master_system_user')
+            .update({ full_name: fullName, last_login_at: nowIso })
+            .eq('id', existingUser.id)
+        } else {
+          await supabase
+            .from('master_system_user')
+            .insert({ email: emailLower, full_name: fullName, is_active: true, is_test: isTest, last_login_at: nowIso })
+        }
 
         setUser({
           id: data.user.id,

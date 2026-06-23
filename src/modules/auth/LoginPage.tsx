@@ -49,19 +49,25 @@ export const LoginPage = ({ onLogin, onForgotPassword }: LoginPageProps) => {
         const needsPasswordChange = data.user.user_metadata?.needs_password_change === true
 
         const isTest = getEnvironment() !== 'production'
-        const { error: syncError } = await supabase
+        const emailLower = (data.user.email || '').toLowerCase()
+        const nowIso = new Date().toISOString()
+        // O elo com o Auth é o email (master_system_user não tem id_auth_user).
+        // Localiza por (email, is_test); atualiza last_login_at ou cria se não existir.
+        const { data: existingUser } = await supabase
           .from('master_system_user')
-          .upsert({
-            id_auth_user: data.user.id,
-            full_name: fullName,
-            email: data.user.email || '',
-            is_test: isTest,
-            is_active: true,
-            last_login_at: new Date().toISOString(),
-          }, {
-            onConflict: 'id_auth_user',
-            ignoreDuplicates: false
-          })
+          .select('id')
+          .eq('email', emailLower)
+          .eq('is_test', isTest)
+          .maybeSingle()
+
+        const { error: syncError } = existingUser
+          ? await supabase
+              .from('master_system_user')
+              .update({ full_name: fullName, last_login_at: nowIso })
+              .eq('id', existingUser.id)
+          : await supabase
+              .from('master_system_user')
+              .insert({ email: emailLower, full_name: fullName, is_active: true, is_test: isTest, last_login_at: nowIso })
 
         if (syncError) {
           console.error('[LoginPage] Sync error:', syncError)

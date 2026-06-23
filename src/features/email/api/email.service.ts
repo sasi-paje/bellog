@@ -10,10 +10,15 @@ export interface InviteUserRequest {
   email: string
   full_name: string
   id_user_role?: string
+  /** Ambiente do solicitante (getEnvironment() !== 'production'). A edge function
+   *  precisa disso para criar a linha em master_system_user com o is_test correto. */
+  is_test?: boolean
 }
 
 export interface InviteUserResponse extends EmailServiceResponse {
   user_id?: string
+  /** false quando o usuário foi criado mas o email de convite não pôde ser enviado. */
+  email_sent?: boolean
 }
 
 /**
@@ -34,6 +39,7 @@ export const inviteUser = async (data: InviteUserRequest): Promise<InviteUserRes
       success: true,
       message: result?.message || 'Convite enviado com sucesso',
       user_id: result?.user_id,
+      email_sent: result?.email_sent,
     }
   } catch (e: any) {
     return { success: false, error: e?.message || 'Erro ao convidar usuário' }
@@ -60,6 +66,30 @@ export const resendInvite = async (email: string): Promise<EmailServiceResponse>
     }
   } catch (e: any) {
     return { success: false, error: e?.message || 'Erro ao reenviar convite' }
+  }
+}
+
+/**
+ * Testa a conexão SMTP (AWS SES) sem enviar email.
+ * Requer usuário autenticado e ativo (master_system_user). Uso: admin/diagnóstico.
+ */
+export const testSmtpConnection = async (): Promise<EmailServiceResponse> => {
+  try {
+    const { data: result, error } = await supabase.functions.invoke('test-smtp-connection', {
+      body: {},
+    })
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    return {
+      success: result?.success ?? false,
+      message: result?.message,
+      error: result?.error,
+    }
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Erro ao testar conexão SMTP' }
   }
 }
 

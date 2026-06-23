@@ -331,6 +331,7 @@ export const UsersPage = ({
     try {
       const isTest = getEnvironment() !== 'production'
       let userId = data.id
+      let inviteEmailFailed = false
 
       if (data.id) {
         const { error } = await supabase
@@ -351,6 +352,7 @@ export const UsersPage = ({
           email: data.email,
           full_name: data.full_name,
           id_user_role: data.id_user_role || undefined,
+          is_test: isTest,
         })
 
         if (!inviteResult.success) {
@@ -358,6 +360,7 @@ export const UsersPage = ({
         }
 
         userId = inviteResult.user_id!
+        inviteEmailFailed = inviteResult.email_sent === false
       }
 
       if (userId) {
@@ -369,7 +372,13 @@ export const UsersPage = ({
         })
       }
 
-      showSuccess(data.id ? 'Usuário atualizado com sucesso.' : 'Usuário criado com sucesso.')
+      if (data.id) {
+        showSuccess('Usuário atualizado com sucesso.')
+      } else if (inviteEmailFailed) {
+        showError('Usuário criado, mas o email de convite falhou. Use "Reenviar convite".')
+      } else {
+        showSuccess('Usuário criado com sucesso.')
+      }
       setIsModalOpen(false)
       fetchUsers()
     } catch (err) {

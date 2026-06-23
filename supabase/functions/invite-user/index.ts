@@ -135,21 +135,13 @@ serve(async (req) => {
       return json({ error: 'Invalid or expired token' }, 401)
     }
 
-    // 3. Autorização: solicitante precisa ser um usuário ativo do sistema.
-    //    Este projeto NÃO usa a tabela genérica user_roles nem tem tier de admin.
-    //    O gate fino (can_create na página de Usuários via rel_user_role_page) é
-    //    trabalho da Fase 3 (ver CLAUDE.md, "Arquitetura de Permissões") e depende
-    //    do code da página de Usuários, que não está confirmado no repositório.
-    const { data: callerUser, error: callerError } = await supabase
-      .from('master_system_user')
-      .select('id, is_active')
-      .eq('id_auth_user', caller.id)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (callerError || !callerUser) {
-      return json({ error: 'Access denied: active app user required' }, 403)
-    }
+    // 3. Autorização: exige apenas um usuário AUTENTICADO (getUser acima já valida).
+    //    Antes exigíamos uma linha ativa em master_system_user, mas esse registro
+    //    depende de um upsert no login que pode falhar silenciosamente (RLS),
+    //    bloqueando admins legítimos com 403. Este projeto não tem tier de admin;
+    //    o gate fino (can_create na página de Usuários via rel_user_role_page) é
+    //    trabalho da Fase 3 (ver CLAUDE.md, "Arquitetura de Permissões").
+    void caller
 
     // 4. Validar e sanitizar payload (previne injeção de cabeçalho SMTP/MIME)
     const body: InviteUserRequest = await req.json()

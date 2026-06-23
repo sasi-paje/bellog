@@ -191,7 +191,7 @@ Envio de email é feito por SMTP direto no AWS SES, via edge functions Deno.
 |---|---|---|
 | `_shared/smtp-client.ts` | `SMTPClient`: handshake SMTP (TCP→EHLO→STARTTLS→TLS→AUTH LOGIN), `sendEmail()` e `testConnection()` | — |
 | `send-email` | Envio genérico interno (MIME texto+HTML) | **apenas** `service_role_key` (chamada interna entre functions) |
-| `invite-user` | Convida usuário: cria conta + registra em `master_system_user` + envia email | JWT válido + usuário ativo em `master_system_user` |
+| `invite-user` | Convida usuário: cria conta + registra em `master_system_user` + envia email | JWT válido (autenticado) — gate fino é Fase 3 |
 | `send-password-reset` | Reset de senha (rate limit + anti-enumeração) | público (`verify_jwt=false`) |
 | `test-smtp-connection` | Testa credenciais SMTP sem enviar email | JWT válido + usuário ativo em `master_system_user` |
 

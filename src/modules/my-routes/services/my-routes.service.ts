@@ -2,7 +2,7 @@
  * Servico para gerenciamento de rotas mobile (Minhas Rotas)
  */
 
-import { supabase, getEnvironment, type MasterFleetVehicle, type MasterPersonDriver } from '../../../lib/supabase'
+import { supabase, IS_TEST, type MasterFleetVehicle, type MasterPersonDriver } from '../../../lib/supabase'
 import type {
   MyRouteListItem,
   MyRouteDetail,
@@ -95,7 +95,7 @@ const toQueryId = (id: string): string | number => {
   return /^\d+$/.test(id) ? Number(id) : id
 }
 
-const getIsTest = (): boolean => getEnvironment() !== 'production'
+const getIsTest = (): boolean => IS_TEST
 
 const NORMALIZED_STATUS_MAPPING: StatusMapping = {
   pending: 'available',

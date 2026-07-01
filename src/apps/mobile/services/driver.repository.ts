@@ -3,7 +3,7 @@
  * Ninguém deve acessar Supabase diretamente além deste repositório
  */
 
-import { supabase, getEnvironment, type MasterPersonDriver } from '../../../lib/supabase'
+import { supabase, IS_TEST, type MasterPersonDriver } from '../../../lib/supabase'
 
 export class DriverNotFoundError extends Error {
   constructor(public readonly email: string) {
@@ -35,7 +35,7 @@ export class EmailNotFoundError extends Error {
 
 class DriverRepository {
   async findByEmail(email: string): Promise<MasterPersonDriver> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     if (!email || typeof email !== 'string') {
       throw new EmailNotFoundError()
@@ -70,7 +70,7 @@ class DriverRepository {
   }
 
   async findById(id: string): Promise<MasterPersonDriver | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     if (!id) {
       return null
@@ -92,7 +92,7 @@ class DriverRepository {
   }
 
   async findActiveByEmail(email: string): Promise<{ driver: MasterPersonDriver; isUnique: boolean }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     if (!email || typeof email !== 'string') {
       throw new EmailNotFoundError()

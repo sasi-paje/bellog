@@ -29,3 +29,5 @@ coverage/
 # Pastas externas ao projeto principal
 atomic-component-library/
 bellog/
+.vercel
+.env*

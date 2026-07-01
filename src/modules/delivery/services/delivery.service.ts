@@ -6,7 +6,7 @@
  * - Separa queries de transforms
  */
 
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import {
   DeliveryDestination,
   FiscalNoteData,
@@ -17,8 +17,7 @@ import {
   DELIVERY_TYPE_MAP,
 } from '../domain/entities/DeliveryEntities'
 
-const getEnv = () => getEnvironment()
-const isTestEnv = () => getEnv() !== 'production'
+const isTestEnv = () => IS_TEST
 
 export interface DeliveryDestinationResult {
   destinations: DeliveryDestination[]
@@ -335,7 +334,7 @@ export const deliveryService = {
       .from('ref_delivery_reason_type')
       .select('id, code, name')
       .eq('is_active', true)
-      .eq('is_test', false)
+      .eq('is_test', IS_TEST)
 
     if (typesError || !reasonTypes || reasonTypes.length === 0) {
       console.error('[deliveryService] getDeliveryReasons: failed to load reason types', typesError)
@@ -357,7 +356,7 @@ export const deliveryService = {
       .select('id, name, id_reason_type, id_reason_category, sort_order, ref_delivery_reason_category(name)')
       .eq('id_reason_type', matched.id)
       .eq('is_active', true)
-      .eq('is_test', false)
+      .eq('is_test', IS_TEST)
       .order('sort_order', { ascending: true })
 
     if (error) {

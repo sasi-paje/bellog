@@ -1,6 +1,6 @@
-// Attachment Service - Sistema centralizado de anexos
+﻿// Attachment Service - Sistema centralizado de anexos
 // Suporta tanto a estrutura atual (campos na tabela) quanto a nova tabela (trx_attachment)
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { storageService } from '../../storage'
 
 // Tipos de entidade suportados
@@ -63,7 +63,7 @@ export const attachmentService = {
     entityId: number,
     attachmentTypeFilter?: AttachmentType
   ): Promise<Attachment[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     let query = supabase
       .from('trx_attachment')
@@ -123,7 +123,7 @@ export const attachmentService = {
     }
 
     try {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
 
       // Definir pasta base baseada no tipo de entidade
       const baseFolder = folder || this.getBaseFolder(entityType, entityId)
@@ -342,7 +342,7 @@ export const attachmentService = {
    * Contar anexos por tipo no sistema
    */
   async countByType(): Promise<Record<string, number>> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('trx_attachment')

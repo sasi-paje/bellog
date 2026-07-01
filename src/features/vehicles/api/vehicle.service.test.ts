@@ -11,6 +11,7 @@ import { makeVehicle } from '../../../testing/factories'
 vi.mock('../../../lib/supabase', () => ({
   supabase: { from: vi.fn() },
   getEnvironment: vi.fn().mockReturnValue('development'),
+  IS_TEST: true,
 }))
 
 /**

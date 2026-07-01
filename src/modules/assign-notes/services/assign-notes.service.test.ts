@@ -10,6 +10,7 @@ import { supabase, getEnvironment, applyRefFilter } from '../../../lib/supabase'
 vi.mock('../../../lib/supabase', () => ({
   supabase: { from: vi.fn() },
   getEnvironment: vi.fn().mockReturnValue('development'),
+  IS_TEST: true,
   applyRefFilter: vi.fn().mockImplementation((q: any) => q), // dev: pass-through
 }))
 

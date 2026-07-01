@@ -1,8 +1,8 @@
-// Feature Routes - API Service
+﻿// Feature Routes - API Service
 // Este arquivo contém a lógica de acesso a dados de rotas
 // Usado por admin e mobile
 
-import { supabase, getEnvironment, TrxRoute, RefRouteStatus, RefRouteDeliveryStatus, RefRouteType, MasterRouteArea, MasterFleetVehicle, MasterPersonDriver, MasterPersonHelper, MasterPersonResponsible } from '../../../lib/supabase'
+import { supabase, IS_TEST, TrxRoute, RefRouteStatus, RefRouteDeliveryStatus, RefRouteType, MasterRouteArea, MasterFleetVehicle, MasterPersonDriver, MasterPersonHelper, MasterPersonResponsible } from '../../../lib/supabase'
 
 // Extended route types with relations
 export interface RouteWithDetails extends TrxRoute {
@@ -88,7 +88,7 @@ export const routeService = {
     responsavel?: string
   }): Promise<{ data: RouteListItem[]; total: number }> {
     const { search, isActive, page = 1, limit = 20, dataInicio, dataFim, status, statusEntrega, motorist, area, veiculo, ordenar = 'recentes', rotaInicio, rotaFim, responsavel } = params || {}
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     // Look up filter IDs from reference tables in parallel
     const [statusData, deliveryData, driverData, vehicleData] = await Promise.all([
@@ -341,7 +341,7 @@ export const routeService = {
 
   // Get route by ID with all details
   async getById(id: string): Promise<RouteWithDetails | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     try {
       const { data: route, error } = await supabase
@@ -532,7 +532,7 @@ export const routeService = {
 
   // Create route
   async create(dto: CreateRouteDTO): Promise<TrxRoute> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const insertData: any = {
       ...dto,
@@ -571,7 +571,7 @@ export const routeService = {
 
   // Update route
   async update(id: string, dto: UpdateRouteDTO): Promise<TrxRoute> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: currentRoute } = await supabase
       .from('trx_route')
@@ -630,7 +630,7 @@ export const routeService = {
   async checkRouteCodeExists(routeCode: string, excludeId?: string): Promise<boolean> {
     if (!routeCode) return false
 
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const normalizedCode = routeCode.trim()
 
     let query = supabase
@@ -653,7 +653,7 @@ export const routeService = {
 
   // Delete (soft) route
   async delete(id: string): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { error } = await supabase
       .from('trx_route')
@@ -666,7 +666,7 @@ export const routeService = {
 
   // Get reference data for dropdowns
   async getReferenceData() {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const [statuses, deliveryStatuses, routeTypes, routeAreas, vehicles] = await Promise.all([
       supabase.from('ref_route_status').select('*').eq('is_active', true).order('name'),
@@ -689,7 +689,7 @@ export const routeService = {
   },
 
   async getDrivers(): Promise<MasterPersonDriver[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_driver')
@@ -703,7 +703,7 @@ export const routeService = {
   },
 
   async getHelpers(): Promise<MasterPersonHelper[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_helper')
@@ -717,7 +717,7 @@ export const routeService = {
   },
 
   async getResponsibles(): Promise<MasterPersonResponsible[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_responsible')
@@ -731,7 +731,7 @@ export const routeService = {
   },
 
   async getCompanies(): Promise<{ id: string; trade_name: string }[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_company')
@@ -746,7 +746,7 @@ export const routeService = {
 
   // Assign driver to route
   async assignDriver(routeId: string, driverId: string): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { error } = await supabase
       .from('rel_route_driver')
@@ -762,7 +762,7 @@ export const routeService = {
 
   // Remove driver from route
   async removeDriver(routeId: string, driverId: string): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { error } = await supabase
       .from('rel_route_driver')
@@ -776,7 +776,7 @@ export const routeService = {
 
   // Get route history/timeline
   async getHistory(routeId: string): Promise<RouteHistoryItem[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const DELIVERY_TYPE_LABEL: Record<number, string> = {
       1: 'ENTREGA TOTAL',

@@ -11,6 +11,7 @@ import { makeCompany, makePersonCompanyRoleType } from '../../../testing/factori
 vi.mock('../../../lib/supabase', () => ({
   supabase: { from: vi.fn() },
   getEnvironment: vi.fn().mockReturnValue('development'),
+  IS_TEST: true,
 }))
 
 function qb(result: { data?: unknown; error?: unknown; count?: number | null }) {

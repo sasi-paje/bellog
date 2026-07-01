@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { PageHeader, Pagination, Toggle, PageToolbar, FormDropdown, useToast, ToastContainer } from '../../../shared/components'
 import { CargosTable } from '../components/CargosTable'
 import { CargoModal, CargoFormData } from '../components/CargoModal'
 import { InactivateConfirmModal } from '../components/InactivateConfirmModal'
 import { useRefData, RefData } from '../../../hooks/useRefData'
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { SystemPermission, fetchActivePermissions } from '../../../features/roles/api/role-permissions.service'
 import { activateCargo, inactivateCargo } from '../../../features/roles/api/cargo.service'
 import { saveCargoWithPermissions } from '../../../features/roles/api/save-cargo.service'
@@ -111,7 +111,7 @@ export const CargosPage = ({
     if (selectedPermissionId === '') {
       setPermissionFilterRoleIds(null)
     } else {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
 
       // 1ª query: role_ids com a permissão selecionada (master_user_role_permission não tem is_test)
       const { data: permData } = await supabase
@@ -165,7 +165,7 @@ export const CargosPage = ({
   }
 
   const handleSaveCargo = async (data: CargoFormData) => {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const isEditing = !!selectedCargo?.id
 
     await saveCargoWithPermissions({
@@ -202,7 +202,7 @@ export const CargosPage = ({
 
   const handleConfirmActivate = async () => {
     if (!pendingActivate) return
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     setIsConfirming(true)
     try {
       await activateCargo(pendingActivate.id, isTest)
@@ -226,7 +226,7 @@ export const CargosPage = ({
 
   const handleConfirmInactivate = async () => {
     if (!pendingInactivate) return
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     setIsConfirming(true)
     try {
       await inactivateCargo(pendingInactivate.id, isTest)

@@ -1,5 +1,5 @@
-// Feature Vehicles - API Service
-import { supabase, getEnvironment, MasterFleetVehicle } from '../../../lib/supabase'
+﻿// Feature Vehicles - API Service
+import { supabase, IS_TEST, MasterFleetVehicle } from '../../../lib/supabase'
 
 export interface VehicleListItem {
   id: string
@@ -51,7 +51,7 @@ export const vehicleService = {
     responsible_type?: string
   }): Promise<{ data: VehicleListItem[]; total: number }> {
     const { search, isActive, showInactive = false, page = 1, limit = 20, max_capacity, responsible_name, responsible_type } = params || {}
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     let query = supabase
       .from('master_fleet_vehicle')
@@ -90,7 +90,7 @@ export const vehicleService = {
   },
 
   async getById(id: string): Promise<VehicleListItem | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: vehicle, error } = await supabase
       .from('master_fleet_vehicle')
@@ -106,7 +106,7 @@ export const vehicleService = {
   },
 
   async create(data: CreateVehicleDTO): Promise<VehicleListItem> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     if (data.plate) {
       const { data: existing } = await supabase
@@ -141,7 +141,7 @@ export const vehicleService = {
   },
 
   async update(id: string, data: UpdateVehicleDTO): Promise<VehicleListItem> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     if (data.plate) {
       const { data: existing } = await supabase
@@ -182,7 +182,7 @@ export const vehicleService = {
 
   // Explicit activate/inactivate (does not auto-toggle)
   async setActive(id: string, isActive: boolean): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const { error } = await supabase
       .from('master_fleet_vehicle')
       .update({ is_active: isActive, updated_at: new Date().toISOString() })
@@ -193,7 +193,7 @@ export const vehicleService = {
 
   // Legacy toggle (kept for backward compat with useVehicles hook)
   async toggleActive(id: string): Promise<VehicleListItem> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: vehicle, error: fetchError } = await supabase
       .from('master_fleet_vehicle')
@@ -208,7 +208,7 @@ export const vehicleService = {
   },
 
   async canInactivateVehicle(id: string): Promise<{ canInactivate: boolean; reason?: string }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: vehicle, error: vehicleError } = await supabase
       .from('master_fleet_vehicle')

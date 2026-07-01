@@ -1,5 +1,5 @@
-// Feature Routes History - API Service
-import { supabase, getEnvironment, TrxRouteHistory, RefRouteHistoryType } from '../../../lib/supabase'
+﻿// Feature Routes History - API Service
+import { supabase, IS_TEST, TrxRouteHistory, RefRouteHistoryType } from '../../../lib/supabase'
 
 export interface RouteHistoryItem {
   id: string
@@ -17,7 +17,7 @@ export interface HistoryWithDetails extends TrxRouteHistory {
 
 export const routeHistoryService = {
   async getByRouteId(routeId: string): Promise<HistoryWithDetails[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: history, error } = await supabase
       .from('trx_route_history')
@@ -43,7 +43,7 @@ export const routeHistoryService = {
   },
 
   async create(routeId: string, historyTypeId: string, description?: string): Promise<TrxRouteHistory> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('trx_route_history')

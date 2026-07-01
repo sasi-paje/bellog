@@ -1,5 +1,5 @@
-// Feature Drivers - API Service
-import { supabase, getEnvironment, MasterPersonDriver } from '../../../lib/supabase'
+﻿// Feature Drivers - API Service
+import { supabase, IS_TEST, MasterPersonDriver } from '../../../lib/supabase'
 
 // Driver types
 export interface DriverWithAddress extends MasterPersonDriver {}
@@ -36,7 +36,7 @@ export const driverService = {
     phone?: string
   }): Promise<{ data: DriverWithAddress[]; total: number }> {
     const { search, isActive, page = 1, limit = 20, taxId, email, phone } = params || {}
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     let query = supabase
       .from('master_person_driver')
@@ -88,7 +88,7 @@ export const driverService = {
 
   // Get driver by ID
   async getById(id: string): Promise<DriverWithAddress | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_driver')
@@ -105,7 +105,7 @@ export const driverService = {
 
   // Create driver
   async create(dto: CreateDriverDTO): Promise<MasterPersonDriver> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_driver')
@@ -123,7 +123,7 @@ export const driverService = {
 
   // Update driver
   async update(id: string, dto: UpdateDriverDTO): Promise<MasterPersonDriver> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_driver')
@@ -147,7 +147,7 @@ export const driverService = {
 
   // Check if CPF exists
   async cpfExists(cpf: string, excludeDriverId?: string): Promise<boolean> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const normalizedCpf = cpf.replace(/\D/g, '')
 
     let query = supabase
@@ -169,7 +169,7 @@ export const driverService = {
 
   // Check if driver can be inactivated
   async canInactivateDriver(driverId: string): Promise<{ canInactivate: boolean; reason?: string }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: driver, error: driverError } = await supabase
       .from('master_person_driver')

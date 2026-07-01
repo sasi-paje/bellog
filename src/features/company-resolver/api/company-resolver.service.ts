@@ -1,5 +1,5 @@
-// Feature Company Resolver - API Service
-import { supabase, getEnvironment } from '../../../lib/supabase'
+﻿// Feature Company Resolver - API Service
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { fetchCNPJData, CNPJProviderData } from '../../cnpj/api/cnpj-provider'
 
 export interface ResolvedCompany {
@@ -212,7 +212,7 @@ export async function findOrCreateCompanyByCnpj(
   console.log('[Company Resolve] === Starting findOrCreateCompanyByCnpj ===')
   console.log('[Company Resolve] CNPJ:', cnpj, 'Role:', roleTypeCode)
 
-  const isTest = getEnvironment() !== 'production'
+  const isTest = IS_TEST
   const cleanCnpj = normalizeCNPJ(cnpj)
 
   const existingId = await findExistingCompany(cleanCnpj, isTest)

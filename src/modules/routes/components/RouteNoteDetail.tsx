@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { AppIcon, Tabs, TabId, useToast, ToastContainer } from '../../../shared/components'
 import { InsertAttachmentModal } from './InsertAttachmentModal'
 import { ViewerModal } from './ViewerModal'
 import { storageService } from '../../../features/storage'
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 
 interface AttachmentFile {
   name: string
@@ -357,7 +357,7 @@ export const RouteNoteDetail = ({ nota, routeCode, routeId, onBack, onDesassocia
       }
 
       try {
-        const isTest = getEnvironment() !== 'production'
+        const isTest = IS_TEST
         const { data: delivery } = await supabase
           .from('trx_route_invoice_delivery')
           .select('id_delivery_type')
@@ -570,7 +570,7 @@ export const RouteNoteDetail = ({ nota, routeCode, routeId, onBack, onDesassocia
     }
 
     try {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
       const folder = `routes/${routeId}/invoices`
 
       // Upload de todos os arquivos

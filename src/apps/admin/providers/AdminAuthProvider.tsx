@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AdminAuthContext - Contexto de autenticação para Admin App
  *
  * Usa Supabase Auth para gerenciamento de sessão admin.
@@ -6,7 +6,7 @@
  */
 
 import React, { createContext, useEffect, useState, useCallback } from 'react'
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 
 export interface AdminUser {
   id: string
@@ -100,7 +100,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         // Sync user to master_system_user (elo com o Auth é o email — sem id_auth_user).
         // Localiza por (email, is_test); atualiza last_login_at ou cria se não existir.
-        const isTest = getEnvironment() !== 'production'
+        const isTest = IS_TEST
         const emailLower = (data.user.email || '').toLowerCase()
         const nowIso = new Date().toISOString()
         const { data: existingUser } = await supabase

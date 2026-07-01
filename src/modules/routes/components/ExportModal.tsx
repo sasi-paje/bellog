@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppIcon, Toast, MultiSelectDropdown } from '../../../shared/components'
-import { getEnvironment } from '../../../lib/supabase'
 
 interface RouteData {
   id: string

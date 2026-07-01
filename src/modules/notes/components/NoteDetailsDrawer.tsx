@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Drawer, TabId, FormDropdown, AppIcon } from '../../../shared/components'
 import { CompanyOption } from '../../../features/companies'
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { ViewerModal } from '../../routes/components/ViewerModal'
 
 export interface NoteDetailData {
@@ -194,7 +194,7 @@ export function NoteDetailsDrawer({
       setAttachmentsLoading(true)
       setAttachmentsError(false)
       try {
-        const isTest = getEnvironment() !== 'production'
+        const isTest = IS_TEST
         const { data, error } = await supabase
           .from('trx_route_invoice_delivery')
           .select('id, receipt_image_path, nfd_image_path, nfd_number')

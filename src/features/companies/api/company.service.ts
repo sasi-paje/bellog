@@ -1,5 +1,5 @@
-// Feature Companies - API Service
-import { supabase, getEnvironment, MasterPersonCompany, MasterPersonCompanyAddress, MasterPersonCompanyGroup } from '../../../lib/supabase'
+﻿// Feature Companies - API Service
+import { supabase, IS_TEST, MasterPersonCompany, MasterPersonCompanyAddress, MasterPersonCompanyGroup } from '../../../lib/supabase'
 
 // Company types
 export interface CompanyGroup {
@@ -60,7 +60,7 @@ export const companyService = {
     limit?: number
   }): Promise<{ data: CompanyWithAddress[]; total: number }> {
     const { search, isActive, page = 1, limit = 20 } = params || {}
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     let query = supabase
       .from('master_person_company')
@@ -116,7 +116,7 @@ export const companyService = {
     district?: string
   }): Promise<{ data: CompanyWithAddress[]; total: number }> {
     const { search, isActive, page = 1, limit = 20, groupId, cnpj, zipCode, street, district } = params || {}
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     try {
       const { data: roleType } = await supabase
@@ -224,7 +224,7 @@ export const companyService = {
     district?: string
   }): Promise<{ data: CompanyWithAddress[]; total: number }> {
     const { search, isActive, page = 1, limit = 20, groupId, cnpj, zipCode, street, district } = params || {}
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     try {
       const { data: roleType } = await supabase
@@ -321,7 +321,7 @@ export const companyService = {
   },
 
   async getById(id: string): Promise<CompanyWithAddress | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: company, error } = await supabase
       .from('master_person_company')
@@ -354,7 +354,7 @@ export const companyService = {
   },
 
   async getCompanyByCnpj(cnpj: string): Promise<CompanyWithAddress | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: company, error } = await supabase
       .from('master_person_company')
@@ -379,7 +379,7 @@ export const companyService = {
   },
 
   async canInactivateDestination(destinationId: string): Promise<{ canInactivate: boolean; reason?: string }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     // 1. Verify current state
     const { data: company, error: companyError } = await supabase
@@ -448,7 +448,7 @@ export const companyService = {
   },
 
   async canInactivateSupplier(supplierId: string): Promise<{ canInactivate: boolean; reason?: string }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: company, error: companyError } = await supabase
       .from('master_person_company')
@@ -512,7 +512,7 @@ export const companyService = {
   },
 
   async createCompany(dto: CreateCompanyDTO): Promise<MasterPersonCompany> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_company')
@@ -525,7 +525,7 @@ export const companyService = {
   },
 
   async updateCompany(id: string, dto: UpdateCompanyDTO): Promise<MasterPersonCompany> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_person_company')
@@ -548,7 +548,7 @@ export const companyService = {
   },
 
   async deleteCompany(id: string): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { error } = await supabase
       .from('master_person_company')
@@ -560,7 +560,7 @@ export const companyService = {
   },
 
   async getAddressTypeByCode(code: string): Promise<{ id: string; code: string } | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('ref_person_company_address_type')
@@ -581,7 +581,7 @@ export const companyService = {
     addressTypeCode: string = 'DELIVERY',
     roleTypeCode?: string
   ): Promise<CompanyWithAddress> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const normalizedCnpj = formData.cnpj.replace(/\D/g, '')
     const entity = roleTypeCode === 'DESTINATION' ? 'destino'
       : roleTypeCode === 'SUPPLIER' ? 'fornecedor'
@@ -738,7 +738,7 @@ export const companyService = {
     formData: CompanyFormData,
     addressTypeCode: string = 'DELIVERY'
   ): Promise<CompanyWithAddress> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const addressType = await this.getAddressTypeByCode(addressTypeCode)
     if (!addressType) throw new Error(`Address type ${addressTypeCode} not found`)
@@ -822,7 +822,7 @@ export const companyService = {
   },
 
   async cnpjExists(cnpj: string, excludeCompanyId?: string): Promise<boolean> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const normalizedCnpj = cnpj.replace(/\D/g, '')
 
     let query = supabase
@@ -855,7 +855,7 @@ export const companyService = {
     isActive?: boolean
   }): Promise<CompanyOption[]> {
     const { roleTypeCode, isActive = true } = params || {}
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     if (!roleTypeCode) return []
 
@@ -923,7 +923,7 @@ export const companyService = {
   },
 
   async listGroups(context: 'supplier' | 'destination'): Promise<MasterPersonCompanyGroup[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const roleCode = context === 'supplier' ? 'SUPPLIER' : 'DESTINATION'
 
     // Resolve role type ID
@@ -973,7 +973,7 @@ export const companyService = {
   },
 
   async findOrCreateGroup(name: string): Promise<number> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const trimmed = name.trim()
 
     const { data: existing } = await supabase

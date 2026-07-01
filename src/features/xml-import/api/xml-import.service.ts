@@ -1,5 +1,5 @@
-// Feature XML Import - API Service
-import { supabase, getEnvironment } from '../../../lib/supabase'
+﻿// Feature XML Import - API Service
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { resolveDestinationByCnpj } from '../../company-resolver/api/company-resolver.service'
 import { companyService } from '../../companies/api/company.service'
 
@@ -109,7 +109,7 @@ const findSupplierCompanyFromGroup = async (groupId: string): Promise<number | n
 
 export const xmlImportService = {
   async importFromXml(files: File[], metadata: ImportMetadata): Promise<ImportResult> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const supplierCompanyId = await findSupplierCompanyFromGroup(metadata.supplierGroupId)
 
     if (!supplierCompanyId) {

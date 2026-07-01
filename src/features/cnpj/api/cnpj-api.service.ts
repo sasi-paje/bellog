@@ -1,5 +1,5 @@
-// Feature CNPJ - API Service
-import { supabase, getEnvironment } from '../../../lib/supabase'
+﻿// Feature CNPJ - API Service
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { fetchCompanyData, CompanyData } from './cnpj-consult.service'
 
 export const findCompanyByCnpj = async (cnpj: string): Promise<number | null> => {
@@ -37,7 +37,7 @@ const fetchCnpjFromApi = async (cnpj: string): Promise<CompanyData | null> => {
 }
 
 const createCompany = async (companyData: CompanyData, roleTypeCode?: string): Promise<number | null> => {
-  const isTest = getEnvironment() !== 'production'
+  const isTest = IS_TEST
   console.log('[CNPJ API] Creating company, isTest:', isTest, 'CNPJ:', companyData.cnpj, 'roleType:', roleTypeCode)
 
   try {
@@ -140,7 +140,7 @@ const createCompany = async (companyData: CompanyData, roleTypeCode?: string): P
 }
 
 const addRoleToCompany = async (companyId: number, roleTypeCode: string): Promise<void> => {
-  const isTest = getEnvironment() !== 'production'
+  const isTest = IS_TEST
 
   try {
     const { data: roleType } = await supabase

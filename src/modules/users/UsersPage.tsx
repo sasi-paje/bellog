@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { PageHeader, Pagination, SharedTable, TableColumn, AppIcon, Toggle, useToast, ToastContainer } from '../../shared/components'
-import { supabase, getEnvironment } from '../../lib/supabase'
+import { supabase, IS_TEST } from '../../lib/supabase'
 import { UserModal, UserFormData } from './components/UserModal'
 import { UsersToolbar, UserFilterData, EMPTY_USER_FILTERS } from './components/UsersToolbar'
 import { inviteUser, resendInvite } from '../../features/email'
@@ -115,7 +115,7 @@ export const UsersPage = ({
   const fetchUsers = async () => {
     setLoading(true)
     try {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
       const start = (currentPage - 1) * LIMIT
       const end = start + LIMIT - 1
 
@@ -260,7 +260,7 @@ export const UsersPage = ({
 
   const handleEdit = async (user: UserData) => {
     try {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
       let permissions: string[] = []
       let cargoId = ''
 
@@ -329,7 +329,7 @@ export const UsersPage = ({
 
   const handleSaveUser = async (data: UserFormData) => {
     try {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
       let userId = data.id
       let inviteEmailFailed = false
 

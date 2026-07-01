@@ -1,5 +1,5 @@
-// Feature Import - API Service
-import { supabase, getEnvironment, StgIntegrationRouteCsv, StgIntegrationFiscalInvoiceXml, EtlIntegrationExecution, EtlIntegrationError } from '../../../lib/supabase'
+﻿// Feature Import - API Service
+import { supabase, IS_TEST, StgIntegrationRouteCsv, StgIntegrationFiscalInvoiceXml, EtlIntegrationExecution, EtlIntegrationError } from '../../../lib/supabase'
 
 export interface ImportExecution {
   id: string
@@ -21,7 +21,7 @@ export interface ImportError {
 
 export const importService = {
   async startExecution(integrationType: 'route_csv' | 'invoice_xml'): Promise<EtlIntegrationExecution> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('etl_integration_execution')
@@ -60,7 +60,7 @@ export const importService = {
   },
 
   async saveCsvStaging(csvContent: string): Promise<StgIntegrationRouteCsv> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('stg_integration_route_csv')
@@ -77,7 +77,7 @@ export const importService = {
   },
 
   async saveXmlStaging(xmlContent: string): Promise<StgIntegrationFiscalInvoiceXml> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('stg_integration_fiscal_invoice_xml')
@@ -123,7 +123,7 @@ export const importService = {
     lineNumber?: number,
     dataJson?: string
   ): Promise<EtlIntegrationError> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('etl_integration_error')
@@ -145,7 +145,7 @@ export const importService = {
     integrationType?: 'route_csv' | 'invoice_xml',
     limit: number = 10
   ): Promise<ImportExecution[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     let query = supabase
       .from('etl_integration_execution')

@@ -1,9 +1,9 @@
-// =====================================================
+﻿// =====================================================
 // ASSIGN-NOTES SERVICE - Lógica de negócio centralizada
 // =====================================================
 // Arquivo: src/modules/assign-notes/services/assign-notes.service.ts
 
-import { supabase, getEnvironment, applyRefFilter } from '../../../lib/supabase'
+import { supabase, IS_TEST, applyRefFilter } from '../../../lib/supabase'
 import { companyService } from '../../../features/companies/api/company.service'
 import { AssignedNote, NoteItem, RouteListItem, FleetVehicle, DriverOption, StatusOption, ResponsibleOption } from '../types/assign-notes.types'
 
@@ -148,7 +148,7 @@ export const assignNotesService = {
     departureDate?: string
     limit?: number
   }): Promise<{ data: RouteListItem[]; total: number }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const limit = params?.limit || 50
     const departureDate = params?.departureDate || getTodayDateOnly()
@@ -176,7 +176,7 @@ export const assignNotesService = {
   async getAllRouteNotes(routeIds: string[]): Promise<Record<string, AssignedNote[]>> {
     if (routeIds.length === 0) return {}
 
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     // Passo 1: vínculos rota-nota
     const { data: relData, error: relError } = await supabase
@@ -263,7 +263,7 @@ export const assignNotesService = {
    * Busca veículos ativos com capacidade
    */
   async getActiveVehicles(): Promise<FleetVehicle[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('master_fleet_vehicle')
@@ -289,7 +289,7 @@ export const assignNotesService = {
     deliveryStatuses: StatusOption[]
     responsibles: ResponsibleOption[]
   }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const [driversResult, statusesResult, deliveryResult, responsibles] = await Promise.all([
       supabase
@@ -348,7 +348,7 @@ export const assignNotesService = {
     neighborhoodsByCity: Record<string, FilterOption[]>
     availableAttempts: FilterOption[]
   }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     // Passo 1: buscar roles, fornecedores reais das notas, endereços e tentativas (paralelo)
     const [supplierRoleResult, destinationRoleResult, supplierInvoiceResult, addressesResult, maxAttemptResult] = await Promise.all([
@@ -550,7 +550,7 @@ export const assignNotesService = {
     reentrega?: boolean        // false = sem histórico; true = já teve tentativa anterior
     tentativas?: number[]      // próximas tentativas das notas (1 = nunca tentada, 2 = 2ª vez, ...)
   }): Promise<{ data: NoteItem[]; total: number }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const page = params?.page || 1
     const limit = params?.limit || 50
     const start = (page - 1) * limit
@@ -873,7 +873,7 @@ export const assignNotesService = {
       assistant?: string
     }
   ): Promise<string> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const params = {
       p_id_vehicle: Number(vehicleId),
@@ -923,7 +923,7 @@ export const assignNotesService = {
     },
     noteIds: string[]
   ): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const params = {
       p_route_id: Number(routeId),
@@ -999,7 +999,7 @@ export const assignNotesService = {
    * Verifica se uma nota pode ser transferida
    */
   async canTransferNote(noteId: string, fromRouteId: string, toRouteId: string): Promise<boolean> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: existingAssignment, error } = await supabase
       .from('rel_route_invoice')

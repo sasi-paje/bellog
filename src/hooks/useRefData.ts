@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { supabase, getEnvironment } from '../lib/supabase'
+﻿import { useState, useEffect, useCallback } from 'react'
+import { supabase, IS_TEST } from '../lib/supabase'
 
 export interface RefData {
   id: string
@@ -52,7 +52,7 @@ export const useRefData = (tableName: string): UseRefDataResult => {
         .range(start, end)
 
       if (!isReferenceTable) {
-        const isTest = getEnvironment() !== 'production'
+        const isTest = IS_TEST
         query = query.eq('is_test', isTest)
       }
 
@@ -83,7 +83,7 @@ export const useRefData = (tableName: string): UseRefDataResult => {
   }, [tableName])
 
   const create = async (item: Partial<RefData>) => {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     // Generate a unique code if not provided
     const code = item.code || `REF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
     // For master_user_role table, use 'name' instead of 'description'

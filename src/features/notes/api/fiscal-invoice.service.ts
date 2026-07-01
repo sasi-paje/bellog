@@ -1,5 +1,5 @@
-// Feature Notes (Fiscal Invoice) - API Service
-import { supabase, getEnvironment } from '../../../lib/supabase'
+﻿// Feature Notes (Fiscal Invoice) - API Service
+import { supabase, IS_TEST } from '../../../lib/supabase'
 
 export interface InvoiceListItem {
   id: string
@@ -127,7 +127,7 @@ export const fiscalInvoiceService = {
     grossWeightMin?: number
     grossWeightMax?: number
   }): Promise<{ data: InvoiceListItem[]; total: number }> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const page = params?.page || 1
     const limit = params?.limit || 20
 
@@ -492,7 +492,7 @@ export const fiscalInvoiceService = {
   },
 
   async getById(id: string): Promise<InvoiceListItem | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     let { data, error } = await supabase
       .from('trx_fiscal_invoice')
@@ -578,7 +578,7 @@ export const fiscalInvoiceService = {
   },
 
   async createFromForm(data: CreateInvoiceFormData): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { error } = await supabase
       .from('trx_fiscal_invoice')
@@ -600,7 +600,7 @@ export const fiscalInvoiceService = {
   },
 
   async getByRouteId(routeId: string): Promise<InvoiceListItem[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     // Get invoice IDs from route
     const { data: routeInvoices, error: routeError } = await supabase
@@ -788,7 +788,7 @@ export const fiscalInvoiceService = {
     attempt_number?: number
     id_route?: string
   }): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { error } = await supabase
       .from('trx_fiscal_invoice')

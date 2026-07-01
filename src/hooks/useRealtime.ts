@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { supabase, getEnvironment } from '../lib/supabase'
+﻿import { useEffect, useRef, useCallback } from 'react'
+import { supabase, IS_TEST } from '../lib/supabase'
 
 export type TableName = 'trx_route' | 'trx_fiscal_invoice' | 'master_fleet_vehicle' | 'master_person_driver' | 'master_person_company'
 
@@ -31,7 +31,7 @@ export const useRealtime = ({
   useEffect(() => {
     if (!enabled) return
 
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const channel = supabase
       .channel(`${table}-realtime-${Date.now()}`)

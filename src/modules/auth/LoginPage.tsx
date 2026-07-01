@@ -1,8 +1,8 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { AppIcon } from '../../shared/components'
 import bellogLogoLogin from '../../shared/icons/brand/bellog-logo-login.png'
 import { LoginIllustration } from '../../shared/icons'
-import { supabase, getEnvironment } from '../../lib/supabase'
+import { supabase, IS_TEST } from '../../lib/supabase'
 
 interface LoginPageProps {
   onLogin: (user: { id: string; email: string; full_name: string; needs_password_change?: boolean; temp_password?: string }) => void
@@ -48,7 +48,7 @@ export const LoginPage = ({ onLogin, onForgotPassword }: LoginPageProps) => {
         const fullName = data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'Usuário'
         const needsPasswordChange = data.user.user_metadata?.needs_password_change === true
 
-        const isTest = getEnvironment() !== 'production'
+        const isTest = IS_TEST
         const emailLower = (data.user.email || '').toLowerCase()
         const nowIso = new Date().toISOString()
         // O elo com o Auth é o email (master_system_user não tem id_auth_user).

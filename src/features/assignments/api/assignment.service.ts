@@ -1,5 +1,5 @@
-// Feature Assignments - API Service
-import { supabase, getEnvironment, RelRouteInvoice } from '../../../lib/supabase'
+﻿// Feature Assignments - API Service
+import { supabase, IS_TEST, RelRouteInvoice } from '../../../lib/supabase'
 
 export const assignmentService = {
   normalizeId(value: string | number): number {
@@ -11,7 +11,7 @@ export const assignmentService = {
   },
 
   async getInvoicesByRouteId(routeId: string): Promise<RelRouteInvoice[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const routeIdNum = this.normalizeId(routeId)
 
     const { data, error } = await supabase
@@ -27,7 +27,7 @@ export const assignmentService = {
   },
 
   async getActiveRouteForInvoice(invoiceId: string): Promise<RelRouteInvoice | null> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const invoiceIdNum = this.normalizeId(invoiceId)
 
     const { data, error } = await supabase
@@ -47,7 +47,7 @@ export const assignmentService = {
     invoiceId: string | number,
     userId?: string | number | null,
   ): Promise<RelRouteInvoice> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const routeIdNum = this.normalizeId(routeId)
     const invoiceIdNum = this.normalizeId(invoiceId)
     const now = new Date().toISOString()
@@ -137,7 +137,7 @@ export const assignmentService = {
     invoiceId: string,
     userId?: string | number | null,
   ): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const routeIdNum = this.normalizeId(routeId)
     const invoiceIdNum = this.normalizeId(invoiceId)
     const now = new Date().toISOString()
@@ -169,7 +169,7 @@ export const assignmentService = {
     finalInvoiceIds: string[],
     userId?: string | number | null,
   ): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const routeIdNum = this.normalizeId(routeId)
     const now = new Date().toISOString()
 
@@ -293,7 +293,7 @@ export const assignmentService = {
   },
 
   async getUnassignedInvoices(): Promise<{ id: string; invoice_number: string }[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: allInvoices, error: invoiceError } = await supabase
       .from('trx_fiscal_invoice')
@@ -318,7 +318,7 @@ export const assignmentService = {
   },
 
   async getRouteCurrentLoad(routeId: string): Promise<number> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
     const routeIdNum = this.normalizeId(routeId)
 
     const { data: assignments, error } = await supabase

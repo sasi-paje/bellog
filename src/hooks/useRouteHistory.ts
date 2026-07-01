@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
+import { IS_TEST } from '../lib/supabase'
 import { routeHistoryService, HistoryWithDetails } from '../features/routes-history'
 import { routeService, RouteHistoryItem } from '../features/routes'
 
@@ -38,7 +39,7 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
           event_at: h.event_at,
           description: h.event_label,
           is_active: true,
-          is_test: true,
+          is_test: IS_TEST,
           created_at: h.event_at,
           updated_at: h.event_at,
           history_type: {
@@ -46,7 +47,7 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
             code: h.event_type,
             description: h.event_label,
             is_active: true,
-            is_test: true,
+            is_test: IS_TEST,
             created_at: h.event_at,
             updated_at: h.event_at,
           },
@@ -68,7 +69,7 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
           event_at: h.event_at,
           description: h.event_label,
           is_active: true,
-          is_test: true,
+          is_test: IS_TEST,
           created_at: h.event_at,
           updated_at: h.event_at,
           history_type: {
@@ -76,7 +77,7 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
             code: h.event_type,
             description: h.event_label,
             is_active: true,
-            is_test: true,
+            is_test: IS_TEST,
             created_at: h.event_at,
             updated_at: h.event_at,
           },

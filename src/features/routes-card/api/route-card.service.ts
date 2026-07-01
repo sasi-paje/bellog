@@ -1,4 +1,4 @@
-// =====================================================
+﻿// =====================================================
 // DEPRECATED - ROUTE CARD SERVICE
 // =====================================================
 // Este arquivo é LEGACY e não deve ser usado em novos fluxos.
@@ -20,7 +20,7 @@
 // =====================================================
 
 // Feature Routes Card - API Service
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 
 /**
  * @deprecated Esta interface é legacy. Não usar em novos desenvolvimentos.
@@ -68,7 +68,7 @@ export const routeCardService = {
    * @deprecated Não usar em novos fluxos
    */
   async getOrCreateCard(vehicleId: string, vehiclePlate: string, capacidade: number): Promise<StgRouteCard> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: existing } = await supabase
       .from('stg_route_card')
@@ -98,7 +98,7 @@ export const routeCardService = {
    * @deprecated LEGACY - Não usar em novos fluxos. Usar get_assign_notes_board RPC.
    */
   async getAllCards(): Promise<StgRouteCardWithNotes[]> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: cards, error } = await supabase
       .from('stg_route_card')
@@ -127,7 +127,7 @@ export const routeCardService = {
    * @deprecated LEGACY - Não usar em novos fluxos. Usar RPC para criar/atualizar rota.
    */
   async addNote(cardId: string, invoiceId: string, invoiceNumber: string, peso: number): Promise<StgRouteCardNotes> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: existingNotes } = await supabase
       .from('stg_route_card_notes')
@@ -160,7 +160,7 @@ export const routeCardService = {
    * @deprecated LEGACY - Não usar em novos fluxos. A nota é removida da rota via sync_route_invoices RPC.
    */
   async removeNote(cardId: string, noteId: string): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { error } = await supabase
       .from('stg_route_card_notes')
@@ -176,7 +176,7 @@ export const routeCardService = {
    * @deprecated LEGACY - Não usar em novos fluxos.
    */
   async deleteCard(cardId: string): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     await supabase
       .from('stg_route_card_notes')
@@ -197,7 +197,7 @@ export const routeCardService = {
    * @deprecated LEGACY - Não usar em novos fluxos.
    */
   async clearAll(): Promise<void> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     await supabase.from('stg_route_card_notes').delete().eq('is_test', isTest)
     await supabase.from('stg_route_card').delete().eq('is_test', isTest)
@@ -207,7 +207,7 @@ export const routeCardService = {
    * @deprecated LEGACY - Não usar em novos fluxos. Peso da carga vem de rel_route_invoice.
    */
   async getCardWeight(cardId: string): Promise<number> {
-    const isTest = getEnvironment() !== 'production'
+    const isTest = IS_TEST
 
     const { data: notes } = await supabase
       .from('stg_route_card_notes')

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { AppIcon } from '../../../shared/components'
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { fetchAvailablePages } from '../../../features/users/api/user-pages.service'
 
 interface UserModalProps {
@@ -146,7 +146,7 @@ export const UserModal = ({
   // ── Data fetchers ─────────────────────────────────────────────
   const fetchRoles = async () => {
     try {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
       const { data } = await supabase
         .from('master_user_role')
         .select('id, name')

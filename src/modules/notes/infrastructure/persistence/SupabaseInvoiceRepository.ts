@@ -1,4 +1,4 @@
-import { supabase, getEnvironment } from '../../../../lib/supabase'
+﻿import { supabase, IS_TEST } from '../../../../lib/supabase'
 import { IInvoiceRepository, FindInvoicesParams, FindResult } from '../../../domain/repositories/IInvoiceRepository'
 import { InvoiceViewModel } from '../../../domain/entities/Invoice'
 import { CreateInvoiceInput, UpdateInvoiceInput } from '../../schemas/invoice.validation'
@@ -45,7 +45,7 @@ export class SupabaseInvoiceRepository implements IInvoiceRepository {
   private readonly isTest: boolean
 
   constructor() {
-    this.isTest = getEnvironment() !== 'production'
+    this.isTest = IS_TEST
   }
 
   async findWithRelations(params: FindInvoicesParams): Promise<FindResult<InvoiceViewModel>> {

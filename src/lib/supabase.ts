@@ -26,9 +26,7 @@ export const STORAGE_ENV_FOLDER: 'test' | 'prod' = IS_TEST ? 'test' : 'prod'
 // Environment context - determines if we're using test data
 export type Environment = 'development' | 'test' | 'production'
 
-// Ambiente derivado de IS_TEST (build-time, determinístico).
-// Mantido por compatibilidade: o padrão `getEnvironment() !== 'production'`
-// usado em todos os services agora resolve exatamente para IS_TEST.
+/** @deprecated Use IS_TEST diretamente. Mantido apenas para testes que ainda mockam este export. */
 export const getEnvironment = (): Environment => {
   return IS_TEST ? 'development' : 'production'
 }

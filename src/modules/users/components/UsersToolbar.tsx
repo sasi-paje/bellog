@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { AppIcon, FormDropdown } from '../../../shared/components'
-import { supabase, getEnvironment } from '../../../lib/supabase'
+import { supabase, IS_TEST } from '../../../lib/supabase'
 import { fetchActivePermissions } from '../../../features/roles/api/role-permissions.service'
 import { fetchAvailablePages } from '../../../features/users/api/user-pages.service'
 
@@ -51,7 +51,7 @@ export const UsersToolbar = ({
 
   useEffect(() => {
     const loadRefData = async () => {
-      const isTest = getEnvironment() !== 'production'
+      const isTest = IS_TEST
       try {
         const [cargosRes, paginas, acoes] = await Promise.all([
           supabase

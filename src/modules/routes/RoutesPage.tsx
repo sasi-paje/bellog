@@ -500,6 +500,7 @@ export const RoutesPage = ({
         id_route_status: statusItem?.id,
         id_route_delivery_status: deliveryStatusItem?.id,
         id_vehicle: vehicleItem?.id,
+        id_driver: formData.motorista?.[0]?.value || undefined,
         assistant: helperNames,
         departure_date: convertToDbDate(formData.dataSaida),
         area: formData.areaRota,

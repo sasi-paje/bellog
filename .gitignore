@@ -25,3 +25,7 @@ dist-ssr
 .env
 coverage/
 .claude/
+
+# Pastas externas ao projeto principal
+atomic-component-library/
+bellog/

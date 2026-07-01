@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, IS_TEST } from '../lib/supabase'
 
 export interface MotivosData {
   id: string
@@ -70,7 +70,7 @@ export const useMotivos = (): UseMotivosResult => {
       let query = supabase
         .from('vw_delivery_reasons_admin' as any)
         .select('*', { count: 'exact' })
-        .eq('is_test', false)
+        .eq('is_test', IS_TEST)
 
       if (params?.isActive) {
         query = query.eq('is_active', true)
@@ -135,7 +135,7 @@ export const useMotivos = (): UseMotivosResult => {
       const { data: types, error: fetchError } = await supabase
         .from('ref_delivery_reason_type')
         .select('id, code, name, description, is_active, is_test')
-        .eq('is_test', false)
+        .eq('is_test', IS_TEST)
         .eq('is_active', true)
         .order('name')
 
@@ -151,7 +151,7 @@ export const useMotivos = (): UseMotivosResult => {
       const { data: cats, error: fetchError } = await (supabase as any)
         .from('ref_delivery_reason_category')
         .select('id, name')
-        .eq('is_test', false)
+        .eq('is_test', IS_TEST)
         .order('name')
 
       if (fetchError) throw new Error(fetchError.message)
@@ -169,7 +169,7 @@ export const useMotivos = (): UseMotivosResult => {
         id_reason_type: item.id_reason_type,
         id_reason_category: item.id_reason_category ?? null,
         is_active: item.is_active,
-        is_test: false,
+        is_test: IS_TEST,
         sort_order: item.sort_order ?? null,
       })
 

@@ -1,42 +1,29 @@
 /**
- * Tipos para a autenticação mobile de motoristas
+ * Tipos para a autenticação mobile de motoristas via SASI
  */
 
-export interface ExternalProviderCustomProps {
+export interface SasiProfile {
+  id: string | number
+  name?: string
   email?: string
-  phone?: string
-  code?: string
-  isTestTeam?: boolean
-  [key: string]: unknown
-}
-
-export interface ExternalProviderResponse {
-  id: number
-  name: string
-  role: string
-  status: string
-  TeamId?: number
-  ClientId?: number
-  customProps?: ExternalProviderCustomProps
+  customProps?: {
+    email?: string
+    phone?: string
+    code?: string
+    isTestTeam?: boolean
+    [key: string]: unknown
+  }
   profileProps?: {
     name?: string
     email?: string
     phone?: string
   }
-  App?: {
-    id: number
-    name: string
-    versionNumber: number
-    description: string
-    status: string
-  }
-  Terms?: unknown
-  deactivatedReason?: unknown
+  [key: string]: unknown
 }
 
 export interface AuthSession {
   driver: AuthenticatedDriver
-  provider: ExternalProviderResponse
+  sasiProfileId: string | number
   authenticatedAt: string
   expiresAt?: string
 }
@@ -59,13 +46,11 @@ export interface AuthError {
 }
 
 export type AuthErrorCode =
-  | 'PROVIDER_API_ERROR'
-  | 'PROVIDER_UNAUTHORIZED'
-  | 'EMAIL_NOT_FOUND'
-  | 'DRIVER_NOT_FOUND'
-  | 'MULTIPLE_DRIVERS_FOUND'
-  | 'DRIVER_INACTIVE'
-  | 'NETWORK_ERROR'
+  | 'missing-token'
+  | 'auth-failed'
+  | 'profile-failed'
+  | 'profile-id-missing'
+  | 'load-failed'
   | 'UNKNOWN'
 
 export interface AuthState {

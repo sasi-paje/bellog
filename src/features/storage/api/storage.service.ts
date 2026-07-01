@@ -3,7 +3,7 @@
  * Gerencia upload de arquivos para Supabase Storage
  */
 
-import { supabase } from '../../../lib/supabase'
+import { supabase, STORAGE_ENV_FOLDER } from '../../../lib/supabase'
 
 const STORAGE_BUCKET = 'bellog-files'
 
@@ -39,7 +39,10 @@ export const storageService = {
       // Sanitizar nome do arquivo - remover caracteres especiais
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
       const extension = sanitizedName.split('.').pop()?.toLowerCase() || 'jpg'
-      const fileName = `${folder}/${timestamp}-${randomId}.${extension}`
+      // Separa arquivos novos por ambiente: test/ ou prod/.
+      // Leitura/exclusão usam o path completo, mantendo compatibilidade
+      // com arquivos antigos gravados sem esse prefixo.
+      const fileName = `${STORAGE_ENV_FOLDER}/${folder}/${timestamp}-${randomId}.${extension}`
 
       console.log('[storageService] Final filename:', fileName)
       console.log('[storageService] Content-Type:', file.type || 'image/jpeg')

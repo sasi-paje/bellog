@@ -1,82 +1,65 @@
 /**
- * MobileAuthService - Serviço centralizado de autenticação para motoristas mobile
+ * MobileAuthService - Serviço de autenticação para motoristas mobile via SASI
  *
  * Fluxo:
- * 1. Consumir API /providers/external/me
- * 2. Extrair customProps.email
- * 3. Buscar motorista no banco usando email (case insensitive)
- * 4. Montar sessão autenticada
+ * 1. Lê sasi-token da URL (JWT de acesso)
+ * 2. GET /v2/profile/self com Bearer token → profile (id numérico + email)
+ * 3. Busca motorista no banco pelo email do perfil SASI
+ * 4. Monta sessão autenticada
  *
  * Regras:
  * - Nenhum componente UI acessa API ou Supabase diretamente
- * - Validação rigorosa de email
- * - Tratamento de erros específicos
- * - 401/403 invalida sessão
+ * - Validação rigorosa do perfil SASI
+ * - Tratamento de erros tipado
  */
 
-import { externalProviderApi, ProviderApiError } from './external-provider.api'
+import {
+  getSasiTokenFromUrl,
+  getSasiProfile,
+  SasiProfileFetchError,
+  SasiProfileError,
+  externalProviderApi,
+} from './external-provider.api'
 import {
   driverRepository,
   DriverNotFoundError,
   MultipleDriversFoundError,
   DriverInactiveError,
-  EmailNotFoundError
+  EmailNotFoundError,
 } from './driver.repository'
 import type {
   AuthSession,
   AuthenticatedDriver,
   AuthError,
-  AuthErrorCode,
-  ExternalProviderResponse,
+  SasiProfile,
 } from './types'
 
 class MobileAuthService {
-  private mapError(err: unknown, providerData?: ExternalProviderResponse | null): AuthError {
-    console.error('[MobileAuthService] Error:', err)
-
-    if (err instanceof ProviderApiError) {
-      if (err.statusCode === 401 || err.statusCode === 403) {
-        return {
-          code: 'PROVIDER_UNAUTHORIZED',
-          message: 'Não autorizado - faça login novamente',
-          details: { statusCode: err.statusCode },
-        }
-      }
+  private mapError(err: unknown): AuthError {
+    if (err instanceof SasiProfileFetchError) {
       return {
-        code: 'PROVIDER_API_ERROR',
+        code: 'profile-failed',
         message: err.message,
         details: err.statusCode ? { statusCode: err.statusCode } : undefined,
       }
     }
 
-    if (err instanceof DriverNotFoundError) {
+    if (err instanceof SasiProfileError) {
       return {
-        code: 'DRIVER_NOT_FOUND',
+        code: 'profile-id-missing',
         message: err.message,
-        details: { email: err.email },
       }
     }
 
-    if (err instanceof MultipleDriversFoundError) {
+    if (
+      err instanceof DriverNotFoundError ||
+      err instanceof MultipleDriversFoundError ||
+      err instanceof DriverInactiveError ||
+      err instanceof EmailNotFoundError
+    ) {
       return {
-        code: 'MULTIPLE_DRIVERS_FOUND',
-        message: err.message,
-        details: { count: err.count, email: err.email },
-      }
-    }
-
-    if (err instanceof DriverInactiveError) {
-      return {
-        code: 'DRIVER_INACTIVE',
-        message: 'Sua conta está inativa. Entre em contato com o administrador.',
-      }
-    }
-
-    if (err instanceof EmailNotFoundError) {
-      return {
-        code: 'EMAIL_NOT_FOUND',
-        message: 'Email do provider não encontrado nos dados retornados',
-        details: { customProps: providerData?.customProps },
+        code: 'load-failed',
+        message: (err as Error).message,
       }
     }
 
@@ -96,37 +79,55 @@ class MobileAuthService {
   }
 
   async authenticate(signal?: AbortSignal): Promise<AuthSession> {
-    let providerData: ExternalProviderResponse | null = null
+    const accessToken = getSasiTokenFromUrl()
 
+    if (!accessToken) {
+      throw {
+        code: 'missing-token',
+        message: 'Token de acesso não encontrado na URL (sasi-token)',
+      } as AuthError
+    }
+
+    // Busca perfil SASI com o token da URL
+    let profile: SasiProfile
     try {
-      providerData = await externalProviderApi.getMe(signal)
+      profile = await getSasiProfile(accessToken, signal)
     } catch (err) {
       throw this.mapError(err)
     }
 
-    const email = providerData.customProps?.email
+    // email vem em customProps.email (campo principal do SASI)
+    const email =
+      profile.customProps?.email ||
+      profile.email ||
+      profile.profileProps?.email
 
     if (!email || typeof email !== 'string' || email.trim() === '') {
-      throw this.mapError(new EmailNotFoundError(), providerData)
+      throw {
+        code: 'profile-id-missing',
+        message: 'Email não encontrado no perfil SASI',
+        details: { profileId: profile.id },
+      } as AuthError
     }
 
     const normalizedEmail = email.trim().toLowerCase()
 
+    // Busca motorista ativo pelo email
     let driverData: Awaited<ReturnType<typeof driverRepository.findByEmail>> | null = null
 
     try {
       const result = await driverRepository.findActiveByEmail(normalizedEmail)
       driverData = result.driver
     } catch (err) {
-      throw this.mapError(err, providerData)
+      throw this.mapError(err)
     }
 
     if (!driverData) {
       throw {
-        code: 'DRIVER_NOT_FOUND' as AuthErrorCode,
-        message: 'Motorista não encontrado para o email: ' + normalizedEmail,
-        details: { email: normalizedEmail },
-      }
+        code: 'load-failed',
+        message: `Motorista não encontrado para o email: ${normalizedEmail}`,
+        details: { email: normalizedEmail, sasiProfileId: profile.id },
+      } as AuthError
     }
 
     const authenticatedDriver: AuthenticatedDriver = {
@@ -142,29 +143,23 @@ class MobileAuthService {
 
     const session: AuthSession = {
       driver: authenticatedDriver,
-      provider: providerData,
+      sasiProfileId: profile.id,
       authenticatedAt: new Date().toISOString(),
     }
-
-    console.log('[MobileAuthService] Authentication successful for driver:', authenticatedDriver.id)
 
     return session
   }
 
   async validateSession(): Promise<boolean> {
     try {
-      const isValid = await externalProviderApi.validateToken()
-      return isValid
-    } catch (err) {
-      console.error('[MobileAuthService] Session validation failed:', err)
+      return await externalProviderApi.validateToken()
+    } catch {
       return false
     }
   }
 
   isUnauthorizedError(error: AuthError): boolean {
-    return error.code === 'PROVIDER_UNAUTHORIZED' ||
-           error.code === 'PROVIDER_API_ERROR' ||
-           error.code === 'NETWORK_ERROR'
+    return error.code === 'auth-failed' || error.code === 'missing-token'
   }
 }
 

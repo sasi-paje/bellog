@@ -3,5 +3,11 @@
   "framework": "vite",
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/my-routes(.*)", "destination": "/index.html" },
+    { "source": "/delivery(.*)", "destination": "/index.html" },
+    { "source": "/chegada(.*)", "destination": "/index.html" },
+    { "source": "/arrival-client(.*)", "destination": "/index.html" }
+  ]
 }

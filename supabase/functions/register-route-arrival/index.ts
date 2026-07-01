@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Ambiente teste x produção (banco único).
+// APP_ENV=production → produção (is_test = false); qualquer outro valor → teste.
+const IS_TEST = Deno.env.get('APP_ENV') !== 'production'
+const STORAGE_ENV_FOLDER = IS_TEST ? 'test' : 'prod'
+
 const ARRIVAL_PHOTO_BUCKET = Deno.env.get('ARRIVAL_PHOTO_BUCKET') ?? 'route-arrivals'
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 const ALLOWED_MIME_TYPES = new Set([
@@ -173,6 +178,7 @@ const hasRouteDriverRelation = async (
     .eq('id_route', routeId)
     .eq('id_driver', driverId)
     .eq('is_active', true)
+    .eq('is_test', IS_TEST)
     .limit(1)
 
   if (error) {
@@ -245,6 +251,7 @@ serve(async (req) => {
       .select('id, name, email, is_active')
       .ilike('email', providerEmail)
       .eq('is_active', true)
+      .eq('is_test', IS_TEST)
       .limit(2)
 
     if (driverError) {
@@ -265,6 +272,7 @@ serve(async (req) => {
       .select('id, id_driver, is_active')
       .eq('id', routeId)
       .eq('is_active', true)
+      .eq('is_test', IS_TEST)
       .maybeSingle<Route>()
 
     if (routeError) {
@@ -290,6 +298,7 @@ serve(async (req) => {
       .eq('id_route', routeId)
       .eq('id_company', companyId)
       .eq('is_active', true)
+      .eq('is_test', IS_TEST)
       .maybeSingle<RouteStop>()
 
     if (stopError) {
@@ -310,7 +319,7 @@ serve(async (req) => {
 
     const timestamp = Date.now()
     const fileName = sanitizeFileName(fileEntry.name)
-    const storagePath = `route-${routeId}/company-${companyId}/${timestamp}-${fileName}`
+    const storagePath = `${STORAGE_ENV_FOLDER}/route-${routeId}/company-${companyId}/${timestamp}-${fileName}`
     const fileBytes = new Uint8Array(await fileEntry.arrayBuffer())
 
     const { error: uploadError } = await supabase.storage

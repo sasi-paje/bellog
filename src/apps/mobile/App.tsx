@@ -6,14 +6,14 @@
  *
  * Fluxo:
  * 1. Extrai sasi-token da URL
- * 2. Chama ExternalProviderApi.getMe()
- * 3. Extrai email de customProps
- * 4. Busca motorista no banco via DriverRepository
+ * 2. POST /v2/public/auth/refresh → accessToken
+ * 3. GET /v2/profile/self → profile (id + email)
+ * 4. Busca motorista no banco via DriverRepository pelo email
  * 5. Cria sessão e libera páginas
  */
 
 import React, { useEffect, useState } from 'react'
-import { MobileAuthProvider, useMobileAuth } from './services'
+import { MobileAuthProvider, useMobileAuth, getSasiTokenFromUrl } from './services'
 import { MyRoutesPage } from '../../modules/my-routes/pages/MyRoutesPage'
 import { DeliveryPage } from '../../modules/delivery/pages/DeliveryPage'
 import { ArrivalClientPage } from '../../modules/arrival-client'
@@ -89,8 +89,7 @@ const MobileAppContent: React.FC = () => {
         : '/my-routes'
 
     const params = new URLSearchParams()
-    const currentParams = new URLSearchParams(window.location.search)
-    const token = currentParams.get('sasi-token')
+    const token = getSasiTokenFromUrl()
 
     if (token) params.set('sasi-token', token)
     if (routeId) params.set('routeId', routeId)

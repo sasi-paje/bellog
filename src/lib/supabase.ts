@@ -7,22 +7,30 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 // Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// =====================================================
+// AMBIENTE TESTE x PRODUÇÃO — fonte ÚNICA da verdade
+// =====================================================
+// Controlado em build-time pela variável VITE_IS_TEST:
+//   VITE_IS_TEST=true  → ambiente de teste/desenvolvimento (is_test = true)
+//   VITE_IS_TEST=false → produção (is_test = false)
+//
+// Em .env.local (local/teste):       VITE_IS_TEST=true
+// Em produção (Vercel):              VITE_IS_TEST=false
+//
+// Regra: is_test = false → produção | is_test = true → teste
+export const IS_TEST: boolean = import.meta.env.VITE_IS_TEST === 'true'
+
+// Pasta de Storage por ambiente (separa arquivos novos test/ x prod/)
+export const STORAGE_ENV_FOLDER: 'test' | 'prod' = IS_TEST ? 'test' : 'prod'
+
 // Environment context - determines if we're using test data
 export type Environment = 'development' | 'test' | 'production'
 
-// Get current environment from localStorage or default to development
+// Ambiente derivado de IS_TEST (build-time, determinístico).
+// Mantido por compatibilidade: o padrão `getEnvironment() !== 'production'`
+// usado em todos os services agora resolve exatamente para IS_TEST.
 export const getEnvironment = (): Environment => {
-  if (typeof window === 'undefined') return 'development'
-  const env = localStorage.getItem('bellog-environment')
-  if (env === 'test' || env === 'production') return env
-  return 'development'
-}
-
-// Set environment
-export const setEnvironment = (env: Environment): void => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('bellog-environment', env)
-  }
+  return IS_TEST ? 'development' : 'production'
 }
 
 // Helper to add is_test filter to queries (trx_*, rel_*, master_*, stg_*)

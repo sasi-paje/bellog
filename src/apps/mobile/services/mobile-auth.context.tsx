@@ -3,9 +3,9 @@
  *
  * Fluxo:
  * 1. Extrai sasi-token da URL
- * 2. Chama ExternalProviderApi.getMe()
- * 3. Extrai email de customProps
- * 4. Busca motorista no banco via DriverRepository
+ * 2. POST /v2/public/auth/refresh → accessToken
+ * 3. GET /v2/profile/self → profile (id + email)
+ * 4. Busca motorista no banco via DriverRepository pelo email do perfil
  * 5. Cria sessão mobile
  *
  * IMPORTANTE: Este contexto NÃO usa Supabase Auth.
@@ -100,7 +100,7 @@ export const MobileAuthProvider: React.FC<{ children: React.ReactNode }> = ({
       authInProgress.current = false
       dispatch({
         type: 'AUTH_ERROR',
-        payload: { code: 'NO_TOKEN', message: 'Token de acesso não fornecido' },
+        payload: { code: 'missing-token', message: 'Token de renovação não fornecido na URL (sasi-token)' },
       })
       return
     }
@@ -118,14 +118,8 @@ export const MobileAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return
       }
 
-      const error = mobileAuthService.isUnauthorizedError(err as Record<string, unknown>)
-        ? (err as Record<string, unknown>)
-        : {
-            code: (err as Record<string, unknown>)?.code || 'UNKNOWN',
-            message: (err as Record<string, unknown>)?.message || 'Erro desconhecido',
-            details: (err as Record<string, unknown>)?.details,
-          }
-      dispatch({ type: 'AUTH_ERROR', payload: error as AuthError })
+      const error = err as AuthError
+      dispatch({ type: 'AUTH_ERROR', payload: error })
     } finally {
       authInProgress.current = false
     }
@@ -140,7 +134,9 @@ export const MobileAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const url = new URL(window.location.href)
     url.searchParams.delete('sasi-token')
-    window.history.replaceState({}, '', url.pathname + url.search)
+    // Remove token embutido no path (quando SASI usa & em vez de ?)
+    const cleanPath = url.pathname.replace(/&sasi-token=[^&]*/g, '')
+    window.history.replaceState({}, '', cleanPath + url.search)
   }, [])
 
   const clearError = useCallback(() => {

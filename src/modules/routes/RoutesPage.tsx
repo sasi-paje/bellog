@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { PageHeader, Pagination, Drawer, TabId, AppIcon, useToast, ToastContainer } from '../../shared/components'
+import { PageHeader, Pagination, Drawer, TabId, AppIcon, Toggle, useToast, ToastContainer } from '../../shared/components'
 import { RoutesTable } from './components/RoutesTable'
 import { RoutesToolbar } from './components/RoutesToolbar'
 import { RouteForm } from './components/RouteForm'
@@ -8,6 +8,7 @@ import { RouteNoteDetail, setGlobalRefreshCallback, triggerGlobalRefresh } from 
 import { RouteHistory } from './components/RouteHistory'
 import { OccurrenceDetailModal } from './components/OccurrenceDetailModal'
 import { ExportModal } from './components/ExportModal'
+import { InactivateConfirmModal } from '../settings/components/InactivateConfirmModal'
 import { useRoutes } from '../../hooks/useRoutes'
 import { useFiscalInvoices } from '../../hooks/useFiscalInvoices'
 import { useRouteHistory } from '../../hooks/useRouteHistory'
@@ -207,6 +208,10 @@ export const RoutesPage = ({
   // Estado para modal de exportação
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
+  // Estado para modal de confirmação de inativação
+  const [isInactivateModalOpen, setIsInactivateModalOpen] = useState(false)
+  const [isInactivating, setIsInactivating] = useState(false)
+
   // Estado para seleção de linhas
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set())
   const [isExportSelectionMode, setIsExportSelectionMode] = useState(false)
@@ -255,8 +260,8 @@ export const RoutesPage = ({
   const LIMIT = 50
   const totalPages = Math.ceil(total / LIMIT) || 1
 
-  // Fetch routes on mount and when filters change
-  useEffect(() => {
+  // Recarrega a lista de rotas com os filtros atuais
+  const reloadRoutes = () => {
     const today = new Date()
     const day = String(today.getDate()).padStart(2, '0')
     const month = String(today.getMonth() + 1).padStart(2, '0')
@@ -271,6 +276,12 @@ export const RoutesPage = ({
       dataInicio: todayStr,
       dataFim: todayStr,
     })
+  }
+
+  // Fetch routes on mount and when filters change
+  useEffect(() => {
+    reloadRoutes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, showInactive, currentPage, fetchRoutes])
 
   // Fetch reference data
@@ -335,23 +346,33 @@ export const RoutesPage = ({
     setIsHistoryLoading(false)
   }
 
-  const handleInativar = async () => {
+  // Abre o modal de confirmação de inativação
+  const handleInativar = () => {
     if (!selectedRouteId || !canInativar) return
+    setIsInactivateModalOpen(true)
+  }
+
+  // Executa a inativação após confirmação no modal
+  const confirmInativar = async () => {
+    if (!selectedRouteId) return
+    setIsInactivating(true)
     try {
       await routeService.delete(selectedRouteId)
+      setIsInactivateModalOpen(false)
       handleCloseDrawerOnly()
+      showSuccess('Rota inativada com sucesso')
+      reloadRoutes()
     } catch (err) {
       console.error('Error deleting route:', err)
+      showError(err instanceof Error ? err.message : 'Erro ao inativar rota')
+    } finally {
+      setIsInactivating(false)
     }
   }
 
   // Handler para fechar drawer (X button) sem inativar
   const handleCloseDrawer = () => {
-    if (canInativar) {
-      handleInativar()
-    } else {
-      handleCloseDrawerOnly()
-    }
+    handleCloseDrawerOnly()
   }
 
   // Handler para abrir modal de importação
@@ -764,10 +785,18 @@ export const RoutesPage = ({
           }}
         />
 
-        {/* Cancelar Seleção + Pagination row */}
+        {/* Exibir inativos + Cancelar Seleção + Pagination row */}
         <div className="flex items-center justify-between">
-          {isExportSelectionMode ? (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <Toggle
+              label="Exibir inativos"
+              checked={showInactive}
+              onChange={(checked) => {
+                setShowInactive(checked)
+                setCurrentPage(1)
+              }}
+            />
+            {isExportSelectionMode && (
               <button
                 type="button"
                 onClick={handleClearSelection}
@@ -778,8 +807,8 @@ export const RoutesPage = ({
                   Cancelar Seleção
                 </span>
               </button>
-            </div>
-          ) : <div />}
+            )}
+          </div>
 
           {/* Pagination - always on right */}
           <div className="flex items-center">
@@ -891,6 +920,17 @@ export const RoutesPage = ({
           setSelectedRouteIds(new Set())
         }}
         routes={selectedRouteIds.size > 0 ? routes.filter(r => selectedRouteIds.has(String(r.id))) : routes}
+      />
+
+      {/* Modal de confirmação de inativação de rota */}
+      <InactivateConfirmModal
+        isOpen={isInactivateModalOpen}
+        onClose={() => setIsInactivateModalOpen(false)}
+        onConfirm={confirmInativar}
+        isLoading={isInactivating}
+        companyName={formData?.numeroRota || ''}
+        action="inactivate"
+        entityLabel="Rota"
       />
 
       {/* Toast notifications */}

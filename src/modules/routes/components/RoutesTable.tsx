@@ -38,6 +38,7 @@ export interface RouteData {
 const NEUTRAL_LIGHT75 = '#2A2A2A'
 const NEUTRAL_LIGHT50 = '#4C4C4C'
 const NEUTRAL_LIGHT25 = '#919191'
+const INACTIVE_COLOR = '#2A2A2A'
 
 // Helper para estilo do texto de status
 // Concluído/Finalizado → Light75 (#2A2A2A)
@@ -65,6 +66,15 @@ const getStatusColor = (status: string | undefined): string => {
 }
 
 const renderStatusBadge = (row: RouteData) => {
+  // Rota inativa: exibe "Inativa" em vermelho, sobrepondo o status real
+  if (row.is_active === false) {
+    return (
+      <span className="whitespace-nowrap" style={{ ...getStatusStyle(''), color: INACTIVE_COLOR }}>
+        Inativa
+      </span>
+    )
+  }
+
   const status = row.status_description || row.status || ''
 
   // Texto puro, sem badge, com estilo correto
@@ -76,6 +86,15 @@ const renderStatusBadge = (row: RouteData) => {
 }
 
 const renderStatusEntrega = (row: RouteData) => {
+  // Rota inativa: exibe "Inativa" em vermelho, sobrepondo o status de entrega real
+  if (row.is_active === false) {
+    return (
+      <span className="whitespace-nowrap" style={{ ...getStatusStyle(''), color: INACTIVE_COLOR }}>
+        Inativa
+      </span>
+    )
+  }
+
   const status = row.delivery_status_description || row.statusEntrega || ''
 
   // Texto puro, sem badge, com estilo correto

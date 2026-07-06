@@ -655,13 +655,25 @@ export const routeService = {
   async delete(id: string): Promise<void> {
     const isTest = IS_TEST
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('trx_route')
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('is_test', isTest)
+      .eq('is_active', true)
+      .select('id')
 
     if (error) throw new Error(error.message)
+
+    // Sem .select() o Supabase não acusa erro quando 0 linhas são afetadas,
+    // gerando falso sucesso. Com o filtro is_active=true, 0 linhas significa
+    // que a rota não existe neste ambiente, já está inativa, ou o UPDATE foi
+    // bloqueado (RLS). Em qualquer caso, não houve inativação de verdade.
+    if (!data || data.length === 0) {
+      throw new Error(
+        'Nenhuma rota foi inativada. A rota pode já estar inativa, não existir neste ambiente, ou você não ter permissão para inativá-la.'
+      )
+    }
   },
 
   // Get reference data for dropdowns

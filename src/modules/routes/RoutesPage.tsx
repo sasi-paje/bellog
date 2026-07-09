@@ -9,6 +9,7 @@ import { RouteHistory } from './components/RouteHistory'
 import { OccurrenceDetailModal } from './components/OccurrenceDetailModal'
 import { ExportModal } from './components/ExportModal'
 import { InactivateConfirmModal } from '../settings/components/InactivateConfirmModal'
+import { DisassociateNoteModal } from './components/DisassociateNoteModal'
 import { useRoutes } from '../../hooks/useRoutes'
 import { useFiscalInvoices } from '../../hooks/useFiscalInvoices'
 import { useRouteHistory } from '../../hooks/useRouteHistory'
@@ -216,6 +217,13 @@ export const RoutesPage = ({
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isProcessingAction, setIsProcessingAction] = useState(false)
 
+  // Estado para modal de confirmação de desassociação de nota
+  const [isDisassociateOpen, setIsDisassociateOpen] = useState(false)
+  const [isDisassociating, setIsDisassociating] = useState(false)
+
+  // Loading ao salvar a edição da rota
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+
   // Estado para seleção de linhas
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set())
   const [isExportSelectionMode, setIsExportSelectionMode] = useState(false)
@@ -353,6 +361,12 @@ export const RoutesPage = ({
   const canInativar = !formData?.statusEntrega?.toLowerCase().includes('andamento') &&
                      !formData?.statusEntrega?.toLowerCase().includes('finalizada')
 
+  // Regra de montagem: a nota só pode ser desassociada se o status de entrega
+  // atual da rota permite edição (ref_route_delivery_status.allows_route_edition).
+  // Fail-closed: só libera quando o campo é explicitamente true.
+  const currentDeliveryStatus = refDeliveryStatuses.find((s) => s.name === formData?.statusEntrega)
+  const canEditAssembly = currentDeliveryStatus?.allows_route_edition === true
+
   const handleCloseDrawerOnly = () => {
     setIsDrawerOpen(false)
     setSelectedRouteId(null)
@@ -461,6 +475,31 @@ export const RoutesPage = ({
     setIsViewingNoteDetail(false)
   }
 
+  // Abre o modal de confirmação de desassociação (bloqueado se a rota não
+  // permite mais edição da montagem — regra de status de entrega)
+  const handleDesassociar = () => {
+    if (!selectedRouteId || !selectedNote?.id || !canEditAssembly) return
+    setIsDisassociateOpen(true)
+  }
+
+  // Executa a desassociação após confirmação
+  const handleConfirmDisassociate = async () => {
+    if (!selectedRouteId || !selectedNote?.id) return
+    setIsDisassociating(true)
+    try {
+      await routeService.disassociateInvoice(selectedRouteId, String(selectedNote.id))
+      setIsDisassociateOpen(false)
+      showSuccess('Nota desassociada com sucesso')
+      handleBackToNotes()
+      await refreshInvoices()
+    } catch (err) {
+      console.error('Error disassociating note:', err)
+      showError(err instanceof Error ? err.message : 'Erro ao desassociar nota')
+    } finally {
+      setIsDisassociating(false)
+    }
+  }
+
   // Função única para refresh de invoices - atualiza lista e detalhe
   // Definida no nível do componente para garantir que é estável
   const refreshInvoices = async () => {
@@ -511,6 +550,7 @@ export const RoutesPage = ({
   const handleSaveEdit = async () => {
     if (!selectedRouteId || !formData) return
 
+    setIsSavingEdit(true)
     try {
       // Check if NUMBER was changed
       const codeChanged = formData.numeroRota !== formData.originalNumeroRota
@@ -575,10 +615,17 @@ export const RoutesPage = ({
         setFormData(convertRouteToFormData(routeDetails))
       }
       setIsEditing(false)
+      // Recarrega a lista para refletir na tabela TODOS os campos editados
+      // (motorista, responsável, área, data de saída, etc.). A atualização
+      // otimista de updateRoute cobre só alguns campos, então sem este reload
+      // a tabela ficaria desatualizada até um refresh manual da tela.
+      reloadRoutes()
       showSuccess('Rota salva com sucesso!')
     } catch (err) {
       console.error('Error saving route:', err)
       showError('Erro ao salvar a rota. Tente novamente.')
+    } finally {
+      setIsSavingEdit(false)
     }
   }
 
@@ -722,13 +769,21 @@ export const RoutesPage = ({
       return null
     }
 
+    // As ações de edição da rota (Editar/Inativar/Ativar) só valem na aba
+    // "Dados de Rota". Nas abas "Notas Fiscais" e "Histórico" a edição não é
+    // permitida, então o footer não é exibido.
+    if (activeTab !== 'dados-rota') {
+      return null
+    }
+
     if (isEditing) {
       return (
         <>
           <button
             type="button"
             onClick={handleCancelEdit}
-            className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] border border-[#e67c26] text-[#e67c26] w-[150px]"
+            disabled={isSavingEdit}
+            className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] border border-[#e67c26] text-[#e67c26] w-[150px] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif' }}>
               Cancelar
@@ -737,10 +792,14 @@ export const RoutesPage = ({
           <button
             type="button"
             onClick={handleSaveEdit}
-            className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] bg-[#e67c26] w-[150px]"
+            disabled={isSavingEdit}
+            className="flex items-center justify-center gap-2 h-[45px] px-[8px] py-[2px] rounded-[4px] bg-[#e67c26] w-[150px] disabled:opacity-70 disabled:cursor-not-allowed"
           >
+            {isSavingEdit && (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            )}
             <span className="font-bold text-[14px] text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Salvar
+              {isSavingEdit ? 'Salvando...' : 'Salvar'}
             </span>
           </button>
         </>
@@ -893,6 +952,7 @@ export const RoutesPage = ({
         tabs={TABS}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        showFooter={activeTab === 'dados-rota'}
         footerContent={renderFooter()}
         fullWidth
       >
@@ -921,10 +981,18 @@ export const RoutesPage = ({
               </button>
               <button
                 type="button"
-                className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] border border-[#eb5757] bg-white gap-2"
+                onClick={handleDesassociar}
+                disabled={!canEditAssembly}
+                title={canEditAssembly ? undefined : 'Rota em andamento. A montagem não pode mais ser alterada.'}
+                className={`flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] border bg-white gap-2 ${
+                  canEditAssembly ? 'border-[#eb5757]' : 'border-[#cccccc] cursor-not-allowed opacity-60'
+                }`}
               >
-                <AppIcon name="do_not_disturb_on" size={24} color="#eb5757" />
-                <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: '#eb5757' }}>
+                <AppIcon name="do_not_disturb_on" size={24} color={canEditAssembly ? '#eb5757' : '#999999'} />
+                <span
+                  className="font-bold text-[14px]"
+                  style={{ fontFamily: 'Inter, sans-serif', color: canEditAssembly ? '#eb5757' : '#999999' }}
+                >
                   Desassociar Nota
                 </span>
               </button>
@@ -972,6 +1040,16 @@ export const RoutesPage = ({
         companyName={formData?.numeroRota || ''}
         action={confirmAction ?? 'inactivate'}
         entityLabel="Rota"
+      />
+
+      {/* Modal de confirmação de desassociação de nota */}
+      <DisassociateNoteModal
+        isOpen={isDisassociateOpen}
+        onClose={() => setIsDisassociateOpen(false)}
+        onConfirm={handleConfirmDisassociate}
+        isLoading={isDisassociating}
+        invoiceNumber={selectedNote?.invoice_number || ''}
+        routeCode={formData?.numeroRota || ''}
       />
 
       {/* Toast notifications */}

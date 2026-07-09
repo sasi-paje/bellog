@@ -799,4 +799,106 @@ export const fiscalInvoiceService = {
       throw new Error(error.message)
     }
   },
+
+  // Regra de negócio: uma nota só pode ser inativada quando (1) seu status
+  // permite e (2) ela não está atribuída a uma rota ativa. Status permitidos:
+  // DISPONIVEL e os reprogramáveis (PARCIAL_PENDENTE, NEGADA_REPROGRAMAR,
+  // ABORTADA_REPROGRAMAR). Bloqueados: EM_ROTA, ENTREGUE, CANCELADA.
+  // Status é resolvido por `code` (nunca por ID fixo). Fail-closed: qualquer
+  // falha de verificação bloqueia a inativação.
+  async canInactivateInvoice(id: string): Promise<{ canInactivate: boolean; reason?: string }> {
+    const isTest = IS_TEST
+
+    const INACTIVATABLE_STATUS_CODES = ['DISPONIVEL', 'PARCIAL_PENDENTE', 'NEGADA_REPROGRAMAR', 'ABORTADA_REPROGRAMAR']
+
+    const { data: invoice, error: invoiceError } = await supabase
+      .from('trx_fiscal_invoice')
+      .select('id, is_active, id_fiscal_invoice_status')
+      .eq('id', id)
+      .single()
+
+    if (invoiceError || !invoice) throw new Error('Nota não encontrada.')
+    if (!invoice.is_active) return { canInactivate: false, reason: 'Esta nota já está inativa.' }
+
+    // Regra de status. Nota sem status (ex.: criada manualmente) é tratada como
+    // livre — o gate efetivo passa a ser a verificação de rota ativa abaixo.
+    if (invoice.id_fiscal_invoice_status) {
+      const { data: statusRow } = await supabase
+        .from('ref_fiscal_invoice_status')
+        .select('code, name')
+        .eq('id', invoice.id_fiscal_invoice_status)
+        .maybeSingle()
+
+      const code = statusRow?.code
+      if (!code || !INACTIVATABLE_STATUS_CODES.includes(code)) {
+        return {
+          canInactivate: false,
+          reason: statusRow?.name
+            ? `Nota com status "${statusRow.name}" não pode ser inativada.`
+            : 'Não foi possível validar o status da nota. Tente novamente.',
+        }
+      }
+    }
+
+    // Vínculos ativos da nota com rotas
+    const { data: assignments, error: relError } = await supabase
+      .from('rel_route_invoice')
+      .select('id_route')
+      .eq('id_fiscal_invoice', id)
+      .eq('is_active', true)
+      .eq('is_test', isTest)
+
+    if (relError || assignments === null) {
+      return { canInactivate: false, reason: 'Não foi possível verificar as rotas vinculadas. Tente novamente.' }
+    }
+
+    if (assignments.length > 0) {
+      const routeIds = [...new Set(assignments.map((a) => a.id_route).filter(Boolean))]
+      const { data: activeRoutes, error: routeError } = await supabase
+        .from('trx_route')
+        .select('id')
+        .in('id', routeIds)
+        .eq('is_active', true)
+        .eq('is_test', isTest)
+        .limit(1)
+
+      if (routeError || activeRoutes === null) {
+        return { canInactivate: false, reason: 'Não foi possível validar as rotas vinculadas. Tente novamente.' }
+      }
+      if (activeRoutes.length > 0) {
+        return {
+          canInactivate: false,
+          reason: 'Esta nota está atribuída a uma rota ativa e não pode ser inativada. Desassocie a nota da rota primeiro.',
+        }
+      }
+    }
+
+    return { canInactivate: true }
+  },
+
+  // Ativa/inativa uma nota (soft). Só altera se a nota estiver no estado oposto
+  // (filtro is_active = !isActive) e usa .select() para verificar as linhas
+  // afetadas — sem isso o Supabase retorna sucesso mesmo com 0 linhas (nota já
+  // nesse estado, ambiente errado ou UPDATE bloqueado por RLS), gerando falso
+  // sucesso. Mesmo padrão de routeService.setActive.
+  async setActive(id: string, isActive: boolean): Promise<void> {
+    const isTest = IS_TEST
+
+    const { data, error } = await supabase
+      .from('trx_fiscal_invoice')
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('is_test', isTest)
+      .eq('is_active', !isActive)
+      .select('id')
+
+    if (error) throw new Error(error.message)
+
+    if (!data || data.length === 0) {
+      const acao = isActive ? 'ativada' : 'inativada'
+      throw new Error(
+        `Nenhuma nota foi ${acao}. A nota pode já estar nesse estado, não existir neste ambiente, ou você não ter permissão.`
+      )
+    }
+  },
 }

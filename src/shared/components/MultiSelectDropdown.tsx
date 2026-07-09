@@ -119,12 +119,17 @@ export const MultiSelectDropdown = ({
               return (
                 <div
                   key={option.value}
-                  className="flex items-center px-[16px] py-[12px] hover:bg-[#f0f0f0] cursor-pointer"
+                  className={`flex items-center gap-[8px] px-[16px] py-[12px] cursor-pointer ${isSelected ? 'bg-[#eef3fc]' : 'hover:bg-[#f0f0f0]'}`}
                   onClick={() => handleToggleOption(option)}
                 >
+                  <AppIcon
+                    name={isSelected ? 'check_box' : 'check_box_outline_blank'}
+                    size={18}
+                    color={isSelected ? SECONDARY : '#919191'}
+                  />
                   <span
-                    className="font-normal text-[14px]"
-                    style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontStyle: 'normal', fontWeight: 400, color: TEXT_COLOR, lineHeight: '24px' }}
+                    className="text-[14px]"
+                    style={{ fontFamily: 'Inter, sans-serif', fontSize: '14px', fontStyle: 'normal', fontWeight: isSelected ? 600 : 400, color: TEXT_COLOR, lineHeight: '24px' }}
                   >
                     {option.label}
                   </span>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppIcon, Toast, MultiSelectDropdown } from '../../../shared/components'
+import { fiscalInvoiceService } from '../../../features/notes'
 
 interface RouteData {
   id: string
@@ -9,11 +10,13 @@ interface RouteData {
   vehicle_plate?: string
   responsible_names?: string[]
   driver_names?: string[]
+  assistant?: string[]
   destinations?: string[]
   vehicle_max_capacity?: number
   current_load?: number
   delivery_status_description?: string
   starts_at?: string
+  ends_at?: string
   status_description?: string
 }
 
@@ -42,12 +45,14 @@ const COLUMN_OPTIONS: Option[] = [
   { value: 'vehicle_plate', label: 'Placa' },
   { value: 'responsible_names', label: 'Responsável' },
   { value: 'driver_names', label: 'Motorista' },
-  { value: 'destinations', label: 'Destinos' },
+  { value: 'assistant', label: 'Ajudantes' },
+  { value: 'destinations', label: 'Destino' },
   { value: 'vehicle_max_capacity', label: 'Carga Máxima' },
   { value: 'current_load', label: 'Carga Real' },
   { value: 'utilizacao', label: 'Utilização' },
   { value: 'delivery_status_description', label: 'Status de Entrega' },
   { value: 'starts_at', label: 'Início da Rota' },
+  { value: 'ends_at', label: 'Fim da Rota' },
   { value: 'status_description', label: 'Status' },
 ]
 
@@ -118,64 +123,80 @@ export const ExportModal = ({ isOpen, onClose, routes, title = 'Selecionar Colun
       const headers = selectedColumns.map(col => col.label)
       const csvRows: string[][] = []
 
-      for (const route of routes) {
-        const row: string[] = []
-
-        for (const key of selectedKeys) {
-          let value = ''
-
-          switch (key) {
-            case 'route_code':
-              value = route.route_code || ''
-              break
-            case 'departure_date':
-              value = formatDate(route.departure_date)
-              break
-            case 'area_description':
-              value = route.area_description || ''
-              break
-            case 'vehicle_plate':
-              value = route.vehicle_plate || ''
-              break
-            case 'responsible_names':
-              value = route.responsible_names?.join(', ') || ''
-              break
-            case 'driver_names':
-              value = route.driver_names?.join(', ') || ''
-              break
-            case 'destinations':
-              value = route.destinations?.length?.toString() || '0'
-              break
-            case 'vehicle_max_capacity':
-              value = route.vehicle_max_capacity ? `${route.vehicle_max_capacity} kg` : ''
-              break
-            case 'current_load':
-              value = route.current_load ? `${route.current_load} kg` : ''
-              break
-            case 'utilizacao':
-              if (route.vehicle_max_capacity && route.current_load) {
-                const pct = Math.round((route.current_load / route.vehicle_max_capacity) * 100)
-                value = `${pct}%`
-              }
-              break
-            case 'delivery_status_description':
-              value = route.delivery_status_description || ''
-              break
-            case 'starts_at':
-              value = route.starts_at ? formatDate(route.starts_at) : ''
-              break
-            case 'status_description':
-              value = route.status_description || ''
-              break
-            default:
-              value = ''
+      // Busca as notas de cada rota para montar uma linha por nota. O
+      // destination_name já vem como nome de exibição (trade_name ?? legal_name).
+      // N+1 query aceitável: exportação é uma ação pontual sobre uma seleção
+      // limitada de rotas.
+      const notesByRoute = await Promise.all(
+        routes.map(async (route) => {
+          try {
+            return await fiscalInvoiceService.getByRouteId(route.id)
+          } catch (err) {
+            console.error('[ExportModal] Erro ao buscar notas da rota', route.id, err)
+            return []
           }
+        })
+      )
 
-          row.push(value)
+      // Monta o valor de uma coluna para o par (rota, nota). Apenas a coluna
+      // "destinations" depende da nota; as demais repetem os dados da rota.
+      // Força o valor a ser interpretado como TEXTO na planilha (Excel, Google
+      // Sheets, LibreOffice) via fórmula ="valor". Sem isso, "001" vira o
+      // número 1 e os zeros à esquerda são perdidos. Aspas internas são
+      // duplicadas conforme a sintaxe de string de fórmula.
+      const asSpreadsheetText = (value: string): string =>
+        value ? `="${value.replace(/"/g, '""')}"` : ''
+
+      const buildValue = (key: string, route: RouteData, note: { destination_name?: string } | null): string => {
+        switch (key) {
+          case 'route_code':
+            // Número da rota exportado exatamente como no sistema (com zeros à esquerda)
+            return asSpreadsheetText(route.route_code || '')
+          case 'departure_date':
+            return formatDate(route.departure_date)
+          case 'area_description':
+            return route.area_description || ''
+          case 'vehicle_plate':
+            return route.vehicle_plate || ''
+          case 'responsible_names':
+            return route.responsible_names?.join(', ') || ''
+          case 'driver_names':
+            return route.driver_names?.join(', ') || ''
+          case 'assistant':
+            return route.assistant?.join(', ') || ''
+          case 'destinations':
+            return note?.destination_name || ''
+          case 'vehicle_max_capacity':
+            return route.vehicle_max_capacity ? `${route.vehicle_max_capacity} kg` : ''
+          case 'current_load':
+            return route.current_load ? `${route.current_load} kg` : ''
+          case 'utilizacao':
+            if (route.vehicle_max_capacity && route.current_load) {
+              const pct = Math.round((route.current_load / route.vehicle_max_capacity) * 100)
+              return `${pct}%`
+            }
+            return ''
+          case 'delivery_status_description':
+            return route.delivery_status_description || ''
+          case 'starts_at':
+            return route.starts_at ? formatDate(route.starts_at) : ''
+          case 'ends_at':
+            return route.ends_at ? formatDate(route.ends_at) : ''
+          case 'status_description':
+            return route.status_description || ''
+          default:
+            return ''
         }
-
-        csvRows.push(row)
       }
+
+      routes.forEach((route, index) => {
+        const notes = notesByRoute[index] || []
+        // Rota sem notas: emite uma linha com o destino vazio para não perder a rota.
+        const rowNotes: ({ destination_name?: string } | null)[] = notes.length > 0 ? notes : [null]
+        for (const note of rowNotes) {
+          csvRows.push(selectedKeys.map((key) => buildValue(key, route, note)))
+        }
+      })
 
       if (csvRows.length === 0) {
         showToastMessage('Nenhuma linha para exportar', 'warning')
@@ -201,9 +222,9 @@ export const ExportModal = ({ isOpen, onClose, routes, title = 'Selecionar Colun
       URL.revokeObjectURL(url)
 
       const routeCount = routes.length
-      const columnCount = selectedColumns.length
+      const lineCount = csvRows.length
       showToastMessage(
-        `Exportação concluída! ${routeCount} rota${routeCount !== 1 ? 's' : ''} e ${columnCount} coluna${columnCount !== 1 ? 's' : ''} exportadas com sucesso`,
+        `Exportação concluída! ${routeCount} rota${routeCount !== 1 ? 's' : ''} em ${lineCount} linha${lineCount !== 1 ? 's' : ''} (uma por nota) exportadas com sucesso`,
         'success'
       )
 

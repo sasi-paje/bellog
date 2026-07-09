@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PageHeader, Pagination, Toggle, useToast, ToastContainer } from '../../shared/components'
+import { PageHeader, Pagination, Toggle, AppIcon, useToast, ToastContainer } from '../../shared/components'
 import { NotesTable } from './components/NotesTable'
 import { NotesToolbar, NotesFilterValues, emptyNotesFilter } from './components/NotesToolbar'
 import { CreateNoteModal, CreateNoteFormData } from './components/CreateNoteModal'
@@ -7,6 +7,7 @@ import { ImportNotesModal } from './components/ImportNotesModal'
 import { ImportNotesMetadataModal, ImportMetadata } from './components/ImportNotesMetadataModal'
 import { ExportNotesModal } from './components/ExportNotesModal'
 import { NoteDetailsDrawer, NoteEditData } from './components/NoteDetailsDrawer'
+import { InactivateConfirmModal } from '../settings/components/InactivateConfirmModal'
 import { useFiscalInvoices } from '../../hooks/useFiscalInvoices'
 import { InvoiceListItem, fiscalInvoiceService } from '../../features/notes'
 import { xmlImportService } from '../../features/xml-import'
@@ -57,13 +58,22 @@ export const NotesPage = ({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [selectedNote, setSelectedNote] = useState<InvoiceListItem | null>(null)
 
+  // Modal de confirmação de ativação/inativação de nota
+  const [confirmAction, setConfirmAction] = useState<'activate' | 'inactivate' | null>(null)
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [isProcessingAction, setIsProcessingAction] = useState(false)
+
   const [deliveryLocations, setDeliveryLocations] = useState<CompanyOption[]>([])
   const [suppliers, setSuppliers] = useState<CompanyOption[]>([])
   const [supplierGroups, setSupplierGroups] = useState<CompanyOption[]>([])
 
   const totalPages = Math.ceil(total / limit) || 1
 
-  useEffect(() => {
+  // Monta os parâmetros de busca a partir do estado atual (busca, toggle de
+  // inativos, filtros e página). Reutilizado no efeito de listagem e no reload
+  // após ativar/inativar uma nota, garantindo que o filtro do toggle seja
+  // respeitado (ex.: nota recém-inativada some quando "Exibir inativos" off).
+  const buildFetchParams = () => {
     const parseWeight = (v: string) => {
       if (!v.trim()) return undefined
       const n = parseFloat(v.replace(',', '.'))
@@ -75,7 +85,7 @@ export const NotesPage = ({
       return isNaN(n) ? undefined : n
     }
 
-    fetchInvoices({
+    return {
       search: searchTerm || undefined,
       showInactive,
       supplierGroupIds: appliedFilters.supplierGroupIds.length > 0 ? appliedFilters.supplierGroupIds : undefined,
@@ -92,7 +102,12 @@ export const NotesPage = ({
       grossWeightMax: parseWeight(appliedFilters.grossWeightMax),
       page,
       limit,
-    })
+    }
+  }
+
+  useEffect(() => {
+    fetchInvoices(buildFetchParams())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, showInactive, appliedFilters, page])
 
   useEffect(() => {
@@ -215,7 +230,52 @@ export const NotesPage = ({
           }
         : null
     )
-    fetchInvoices({ page, limit })
+    fetchInvoices(buildFetchParams())
+  }
+
+  // Abre o modal de confirmação de inativação/ativação da nota selecionada.
+  // Antes de inativar, valida a regra de negócio (nota atribuída a rota ativa
+  // não pode ser inativada) — fail-closed via canInactivateInvoice.
+  const handleInactivateNote = async () => {
+    if (!selectedNote) return
+    try {
+      const { canInactivate, reason } = await fiscalInvoiceService.canInactivateInvoice(selectedNote.id)
+      if (!canInactivate) {
+        showError(reason || 'Esta nota não pode ser inativada.')
+        return
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Não foi possível validar a inativação da nota.')
+      return
+    }
+    setConfirmAction('inactivate')
+    setIsConfirmOpen(true)
+  }
+
+  const handleActivateNote = () => {
+    if (!selectedNote) return
+    setConfirmAction('activate')
+    setIsConfirmOpen(true)
+  }
+
+  // Executa ativação/inativação após confirmação
+  const handleConfirmNoteAction = async () => {
+    if (!selectedNote || !confirmAction) return
+    const activating = confirmAction === 'activate'
+    setIsProcessingAction(true)
+    try {
+      await fiscalInvoiceService.setActive(selectedNote.id, activating)
+      setIsConfirmOpen(false)
+      setConfirmAction(null)
+      handleCloseDrawer()
+      showSuccess(activating ? 'Nota ativada com sucesso' : 'Nota inativada com sucesso')
+      fetchInvoices(buildFetchParams())
+    } catch (err) {
+      console.error('[NotesPage] Error updating note active state:', err)
+      showError(err instanceof Error ? err.message : `Erro ao ${activating ? 'ativar' : 'inativar'} nota`)
+    } finally {
+      setIsProcessingAction(false)
+    }
   }
 
   return (
@@ -271,14 +331,28 @@ export const NotesPage = ({
         />
 
         <div className="flex items-center justify-between shrink-0 w-full">
-          <Toggle
-            label="Exibir inativos"
-            checked={showInactive}
-            onChange={(checked) => {
-              setShowInactive(checked)
-              setPage(1)
-            }}
-          />
+          <div className="flex items-center gap-4">
+            <Toggle
+              label="Exibir inativos"
+              checked={showInactive}
+              onChange={(checked) => {
+                setShowInactive(checked)
+                setPage(1)
+              }}
+            />
+            {isExportSelectionMode && (
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="flex items-center justify-center h-[40px] px-[16px] rounded-[4px] border border-[#C7392C] bg-white gap-2"
+              >
+                <AppIcon name="delete_forever" size={20} color="#C7392C" />
+                <span className="font-bold text-[13px]" style={{ fontFamily: 'Inter, sans-serif', color: '#C7392C' }}>
+                  Cancelar Seleção
+                </span>
+              </button>
+            )}
+          </div>
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
 
@@ -301,10 +375,24 @@ export const NotesPage = ({
         note={selectedNote}
         mode="editable"
         onSave={handleSaveNote}
-        onInactivate={() => {}}
-        onActivate={() => {}}
+        onInactivate={handleInactivateNote}
+        onActivate={handleActivateNote}
         deliveryLocations={deliveryLocations}
         suppliers={suppliers}
+      />
+
+      {/* Modal de confirmação de ativação/inativação de nota */}
+      <InactivateConfirmModal
+        isOpen={isConfirmOpen}
+        onClose={() => {
+          setIsConfirmOpen(false)
+          setConfirmAction(null)
+        }}
+        onConfirm={handleConfirmNoteAction}
+        isLoading={isProcessingAction}
+        companyName={selectedNote?.invoice_number || ''}
+        action={confirmAction ?? 'inactivate'}
+        entityLabel="Nota"
       />
 
       <CreateNoteModal
@@ -363,31 +451,17 @@ export const NotesPage = ({
 
       <ExportNotesModal
         isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
+        onClose={() => {
+          setIsExportModalOpen(false)
+          setIsExportSelectionMode(false)
+          setSelectedNoteIds(new Set())
+        }}
         notes={
           isExportSelectionMode
             ? invoices.filter((n) => selectedNoteIds.has(String(n.id)))
             : invoices
         }
       />
-
-      {isExportSelectionMode && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
-          <button
-            type="button"
-            onClick={handleClearSelection}
-            className="flex items-center justify-center px-6 py-3 bg-white border border-[#e67c26] rounded-[5px] shadow-lg"
-            style={{ minWidth: '200px' }}
-          >
-            <span
-              className="font-bold text-[14px]"
-              style={{ fontFamily: 'Inter, sans-serif', color: '#e67c26' }}
-            >
-              Cancelar Seleção ({selectedNoteIds.size})
-            </span>
-          </button>
-        </div>
-      )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>

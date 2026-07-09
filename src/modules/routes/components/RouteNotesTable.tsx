@@ -187,8 +187,9 @@ export const RouteNotesTable = ({ data, onRowClick }: RouteNotesTableProps) => {
             {COLUMNS.map(col => (
               <th
                 key={col.key}
-                className={`px-3 ${getAlignClass(col.align)}`}
+                className={`px-3 ${getAlignClass(col.align)} truncate`}
                 style={{ ...headerStyle, color: TEXT_LIGHT75 }}
+                title={col.label}
               >
                 {col.label}
               </th>
@@ -231,9 +232,9 @@ export const RouteNotesTable = ({ data, onRowClick }: RouteNotesTableProps) => {
                   return (
                     <td
                       key={col.key}
-                      className={`px-3 ${getAlignClass(col.align)} ${col.align === 'left' ? 'truncate' : ''}`}
+                      className={`px-3 ${getAlignClass(col.align)} truncate`}
                       style={cellStyle}
-                      title={col.align === 'left' ? value : undefined}
+                      title={value}
                     >
                       {value}
                     </td>

@@ -36,6 +36,7 @@ export interface RouteListItem {
   current_load?: number
   driver_names: string[]
   responsible_names: string[]
+  assistant: string[]
   destinations: string[]
   is_active: boolean
 }
@@ -266,7 +267,7 @@ export const routeService = {
     const companyIds = [...new Set(invoices?.map(i => i.id_customer_company).filter(Boolean) || [])]
 
     const companiesResult = companyIds.length > 0
-      ? await supabase.from('master_person_company').select('id, trade_name').in('id', companyIds).eq('is_test', isTestFilter)
+      ? await supabase.from('master_person_company').select('id, trade_name, legal_name').in('id', companyIds).eq('is_test', isTestFilter)
       : { data: [], error: null }
 
     const companies = companiesResult.data
@@ -283,7 +284,10 @@ export const routeService = {
     })
 
     const driverMap = new Map(drivers?.map(d => [d.id, d.name]) || [])
-    const companyMap = new Map(companies?.map(c => [c.id, c.trade_name]) || [])
+    // Nome de exibição do destino: trade_name (fantasia) com fallback para
+    // legal_name — mesma regra do AssignNotes e do detalhe da nota, para a
+    // coluna "Destino" da tabela ficar consistente entre as telas.
+    const companyMap = new Map(companies?.map(c => [c.id, c.trade_name ?? c.legal_name ?? '']) || [])
     const routeInvoiceMap = new Map<string, string[]>()
 
     routeInvoices?.forEach(ri => {
@@ -334,6 +338,7 @@ export const routeService = {
         current_load: route.current_load || calculatedLoad,
         driver_names: driverNames,
         responsible_names: responsibleNames,
+        assistant: route.assistant || [],
         destinations: destinationNames,
         is_active: route.is_active,
       }
@@ -684,6 +689,38 @@ export const routeService = {
   // Soft-delete (inativação) — mantém compatibilidade com useRoutes.deleteRoute
   async delete(id: string): Promise<void> {
     return this.setActive(id, false)
+  },
+
+  // Desassocia (soft) uma nota fiscal de uma rota — espelha a remoção do
+  // sync_route_invoices (is_active=false + unassigned_at). O trigger de banco
+  // trg_lock_rel_route_invoice bloqueia esta operação quando o status de
+  // entrega da rota tem allows_route_edition=false ("Rota em andamento..."),
+  // então o erro do trigger é propagado para o usuário. O .select() detecta 0
+  // linhas (associação já removida / ambiente errado / RLS), evitando falso
+  // sucesso.
+  async disassociateInvoice(routeId: string, invoiceId: string): Promise<void> {
+    const isTest = IS_TEST
+
+    const { data, error } = await supabase
+      .from('rel_route_invoice')
+      .update({
+        is_active: false,
+        unassigned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id_route', routeId)
+      .eq('id_fiscal_invoice', invoiceId)
+      .eq('is_test', isTest)
+      .eq('is_active', true)
+      .select('id')
+
+    if (error) throw new Error(error.message)
+
+    if (!data || data.length === 0) {
+      throw new Error(
+        'Nenhuma associação foi removida. A nota pode já estar desassociada, não existir neste ambiente, ou você não ter permissão.'
+      )
+    }
   },
 
   // Get reference data for dropdowns

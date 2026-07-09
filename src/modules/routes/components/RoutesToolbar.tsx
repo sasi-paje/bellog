@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PageToolbar, FormInput, FormDropdown, MultiSelectDropdown } from '../../../shared/components'
 import { routeService } from '../../../features/routes/api/route.service'
 
@@ -61,6 +61,7 @@ export const RoutesToolbar = ({
 }: RoutesToolbarProps) => {
   const [searchValue, setSearchValue] = useState(initialSearch)
   const [showFilters, setShowFilters] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
   const today = getToday()
   const [filters, setFilters] = useState<FilterData>(initialFilters || {
     dataInicio: today,
@@ -102,6 +103,27 @@ export const RoutesToolbar = ({
     }
     loadRefData()
   }, [])
+
+  // Fecha o painel de filtros ao clicar fora dele ou pressionar Esc,
+  // preservando os dados preenchidos (apenas oculta o painel; o estado
+  // `filters` não é resetado).
+  useEffect(() => {
+    if (!showFilters) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowFilters(false)
+      }
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowFilters(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [showFilters])
 
   const handleSearch = (value: string) => {
     setSearchValue(value)
@@ -147,7 +169,7 @@ export const RoutesToolbar = ({
   const vehicleOptions = refData.vehicles.map((v: any) => ({ value: v.plate, label: v.plate }))
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <PageToolbar
         search={{
           placeholder: 'Buscar pelo número da Rota',

@@ -14,14 +14,16 @@ const renderText = (value: string | number | undefined | null, suffix = '') => (
 )
 
 const getStatusText = (row: InvoiceListItem): string => {
-  if (!row.is_active) return 'Cancelada'
+  // Nota inativa: exibe "Inativa" sobrepondo o status real (igual às Rotas)
+  if (!row.is_active) return 'Inativa'
   if (row.delivery_status_description) return row.delivery_status_description
   if (row.route_number || row.route_code) return 'Em andamento'
   return 'Aguardando'
 }
 
 const getStatusColor = (row: InvoiceListItem): string => {
-  if (!row.is_active) return '#EB5757'
+  // Mesma cor de inativo usada na tabela de Rotas (INACTIVE_COLOR)
+  if (!row.is_active) return '#2A2A2A'
   if (row.delivery_status_description || row.route_number || row.route_code) return '#4C4C4C'
   return '#919191'
 }

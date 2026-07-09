@@ -21,8 +21,8 @@ const TEXT_COLOR = '#2a2a2a'
 
 export const MultiSelectDropdown = ({
   label,
-  options,
-  selectedOptions,
+  options = [],
+  selectedOptions = [],
   onChange,
   optional = false,
 }: MultiSelectDropdownProps) => {

@@ -1,4 +1,4 @@
-import { FormInput, FormDropdown, MultiSelectDropdown } from '../../../shared/components'
+import { FormInput, FormDropdown } from '../../../shared/components'
 
 interface RouteFormProps {
   data: {
@@ -17,6 +17,7 @@ interface RouteFormProps {
     cargaMaxima: string
   }
   isEditing?: boolean
+  isInactive?: boolean
   onChange?: (field: string, value: any) => void
   statusOptions: { value: string; label: string }[]
   deliveryStatusOptions: { value: string; label: string }[]
@@ -57,6 +58,7 @@ const READONLY_FIELDS = ['destinos', 'fimRota', 'cargaMaxima']
 export const RouteForm = ({
   data,
   isEditing = false,
+  isInactive = false,
   onChange,
   statusOptions,
   deliveryStatusOptions,
@@ -119,7 +121,7 @@ export const RouteForm = ({
           ) : (
             <FormInput
               label="Status"
-              value={data.status}
+              value={isInactive ? 'Inativa' : data.status}
               readOnly
             />
           )}
@@ -135,7 +137,7 @@ export const RouteForm = ({
           ) : (
             <FormInput
               label="Status da Entrega"
-              value={data.statusEntrega}
+              value={isInactive ? 'Inativa' : data.statusEntrega}
               readOnly
             />
           )}
@@ -156,13 +158,16 @@ export const RouteForm = ({
             onChange={(value) => handleChange('areaRota', value)}
           />
 
-          {/* Responsável - Multi Select */}
+          {/* Responsável - Seleção única (rota tem um único id_route_responsible) */}
           {isEditing ? (
-            <MultiSelectDropdown
+            <FormDropdown
               label="Responsável"
-              options={responsibleOptions}
-              selectedOptions={data.responsaveis}
-              onChange={(options) => handleChange('responsaveis', options)}
+              value={data.responsaveis?.[0]?.label || ''}
+              options={responsibleOptions.map(r => ({ value: r.label, label: r.label }))}
+              onChange={(value) => {
+                const selected = responsibleOptions.find(r => r.label === value)
+                handleChange('responsaveis', selected ? [selected] : [])
+              }}
             />
           ) : (
             <div className="flex flex-col gap-[8px]">

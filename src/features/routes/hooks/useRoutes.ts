@@ -96,6 +96,7 @@ export const useRoutes = (initialParams?: {
     // 3. Update local state - replace the old item with updated one
     setRoutes(prev => prev.map(r => r.id === id ? {
       ...r,
+      route_code: updatedRoute.route_code ?? r.route_code,
       status_description: updatedRoute.status?.name || r.status_description,
       delivery_status_description: updatedRoute.delivery_status?.name || r.delivery_status_description,
       vehicle_plate: updatedRoute.vehicle_plate || r.vehicle_plate,
@@ -163,8 +164,16 @@ export const useRoutes = (initialParams?: {
     }
   }, [])
 
+  // Só faz o fetch automático de montagem quando initialParams foi informado.
+  // Consumidores que gerenciam a própria busca (ex: RoutesPage, que respeita
+  // o toggle "Exibir inativos") chamam useRoutes() sem params e disparam o
+  // fetch por conta própria — um fetch automático aqui rodaria sem isActive
+  // (list(undefined)), trazendo rotas inativas e correndo com o fetch correto.
   useEffect(() => {
-    fetchRoutes(initialParams)
+    if (initialParams) {
+      fetchRoutes(initialParams)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { PageHeader, Pagination, Drawer, TabId, AppIcon, Toggle, useToast, ToastContainer } from '../../shared/components'
 import { RoutesTable } from './components/RoutesTable'
-import { RoutesToolbar } from './components/RoutesToolbar'
+import { RoutesToolbar, FilterData } from './components/RoutesToolbar'
 import { RouteForm } from './components/RouteForm'
 import { RouteNotesTable } from './components/RouteNotesTable'
 import { RouteNoteDetail, setGlobalRefreshCallback, triggerGlobalRefresh } from './components/RouteNoteDetail'
@@ -45,6 +45,7 @@ interface RouteFormData {
   ajudante: { value: string; label: string; color?: string }[]
   placaVeiculo: string
   cargaMaxima: string
+  isActive: boolean
 }
 
 interface HistoricoItem {
@@ -155,6 +156,7 @@ const convertRouteToFormData = (route: any): RouteFormData => {
     })),
     placaVeiculo: route.vehicle?.plate || '',
     cargaMaxima: route.vehicle?.nominal_capacity?.toString() || '',
+    isActive: route.is_active !== false,
   }
 }
 
@@ -203,14 +205,16 @@ export const RoutesPage = ({
   const [refVehicles, setRefVehicles] = useState<any[]>([])
   const [refHelpers, setRefHelpers] = useState<any[]>([])
   const [refDrivers, setRefDrivers] = useState<any[]>([])
+  const [refResponsibles, setRefResponsibles] = useState<any[]>([])
   const [refDataLoading, setRefDataLoading] = useState(false)
 
   // Estado para modal de exportação
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
-  // Estado para modal de confirmação de inativação
-  const [isInactivateModalOpen, setIsInactivateModalOpen] = useState(false)
-  const [isInactivating, setIsInactivating] = useState(false)
+  // Estado para modal de confirmação de ativação/inativação
+  const [confirmAction, setConfirmAction] = useState<'activate' | 'inactivate' | null>(null)
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [isProcessingAction, setIsProcessingAction] = useState(false)
 
   // Estado para seleção de linhas
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set())
@@ -237,6 +241,7 @@ export const RoutesPage = ({
   const [showInactive, setShowInactive] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [appliedFilters, setAppliedFilters] = useState<FilterData | null>(null)
 
   // Set global refresh callback on mount - busca dados diretamente
   useEffect(() => {
@@ -260,7 +265,9 @@ export const RoutesPage = ({
   const LIMIT = 50
   const totalPages = Math.ceil(total / LIMIT) || 1
 
-  // Recarrega a lista de rotas com os filtros atuais
+  // Recarrega a lista respeitando busca, toggle de inativos, página e
+  // os filtros aplicados no toolbar. Sem filtro aplicado, usa o dia atual
+  // como padrão; com filtro, usa as datas/critérios informados.
   const reloadRoutes = () => {
     const today = new Date()
     const day = String(today.getDate()).padStart(2, '0')
@@ -268,37 +275,50 @@ export const RoutesPage = ({
     const year = today.getFullYear()
     const todayStr = `${year}-${month}-${day}`
 
+    const f = appliedFilters
+
     fetchRoutes({
       search: searchTerm || undefined,
       isActive: showInactive ? undefined : true,
       page: currentPage,
       limit: LIMIT,
-      dataInicio: todayStr,
-      dataFim: todayStr,
+      dataInicio: f ? (f.dataInicio || undefined) : todayStr,
+      dataFim: f ? (f.dataFim || undefined) : todayStr,
+      status: f?.status?.map((s) => s.value),
+      statusEntrega: f?.statusEntrega?.map((s) => s.value),
+      motorist: f?.motorista?.map((m) => m.value),
+      area: f?.area?.map((a) => a.value),
+      veiculo: f?.veiculo?.map((v) => v.value),
+      ordenar: f?.ordenar,
+      rotaInicio: f?.rotaInicio || undefined,
+      rotaFim: f?.rotaFim || undefined,
+      responsavel: f?.responsavel || undefined,
     })
   }
 
-  // Fetch routes on mount and when filters change
+  // Fetch routes on mount and when filtros/busca/página mudam
   useEffect(() => {
     reloadRoutes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, showInactive, currentPage, fetchRoutes])
+  }, [searchTerm, showInactive, currentPage, appliedFilters, fetchRoutes])
 
   // Fetch reference data
   useEffect(() => {
     const loadRefData = async () => {
       setRefDataLoading(true)
       try {
-        const [refData, helpers, drivers] = await Promise.all([
+        const [refData, helpers, drivers, responsibles] = await Promise.all([
           routeService.getReferenceData(),
           routeService.getHelpers(),
           routeService.getDrivers(),
+          routeService.getRouteResponsibles(),
         ])
         setRefStatuses(refData.statuses || [])
         setRefDeliveryStatuses(refData.deliveryStatuses || [])
         setRefVehicles(refData.vehicles || [])
         setRefHelpers(helpers || [])
         setRefDrivers(drivers || [])
+        setRefResponsibles(responsibles || [])
       } catch (err) {
         console.error('[RoutesPage] Error loading ref data:', err)
       } finally {
@@ -349,24 +369,34 @@ export const RoutesPage = ({
   // Abre o modal de confirmação de inativação
   const handleInativar = () => {
     if (!selectedRouteId || !canInativar) return
-    setIsInactivateModalOpen(true)
+    setConfirmAction('inactivate')
+    setIsConfirmOpen(true)
   }
 
-  // Executa a inativação após confirmação no modal
-  const confirmInativar = async () => {
+  // Abre o modal de confirmação de ativação
+  const handleAtivar = () => {
     if (!selectedRouteId) return
-    setIsInactivating(true)
+    setConfirmAction('activate')
+    setIsConfirmOpen(true)
+  }
+
+  // Executa ativação/inativação após confirmação no modal
+  const handleConfirmAction = async () => {
+    if (!selectedRouteId || !confirmAction) return
+    const activating = confirmAction === 'activate'
+    setIsProcessingAction(true)
     try {
-      await routeService.delete(selectedRouteId)
-      setIsInactivateModalOpen(false)
+      await routeService.setActive(selectedRouteId, activating)
+      setIsConfirmOpen(false)
+      setConfirmAction(null)
       handleCloseDrawerOnly()
-      showSuccess('Rota inativada com sucesso')
+      showSuccess(activating ? 'Rota ativada com sucesso' : 'Rota inativada com sucesso')
       reloadRoutes()
     } catch (err) {
-      console.error('Error deleting route:', err)
-      showError(err instanceof Error ? err.message : 'Erro ao inativar rota')
+      console.error('Error updating route active state:', err)
+      showError(err instanceof Error ? err.message : `Erro ao ${activating ? 'ativar' : 'inativar'} rota`)
     } finally {
-      setIsInactivating(false)
+      setIsProcessingAction(false)
     }
   }
 
@@ -517,11 +547,16 @@ export const RoutesPage = ({
       // Get helper names from form - database expects text[] array, not comma-separated string
       const helperNames = (formData.ajudante || []).map((h: any) => h.label)
 
+      // Responsável (único): id vem de ref_route_responsible via responsibleOptions
+      const responsavelId = formData.responsaveis?.[0]?.value
+
       const updateDTO: UpdateRouteDTO = {
+        route_code: formData.numeroRota,
         id_route_status: statusItem?.id,
         id_route_delivery_status: deliveryStatusItem?.id,
         id_vehicle: vehicleItem?.id,
         id_driver: formData.motorista?.[0]?.value || undefined,
+        id_route_responsible: responsavelId ? Number(responsavelId) : undefined,
         assistant: helperNames,
         departure_date: convertToDbDate(formData.dataSaida),
         area: formData.areaRota,
@@ -603,6 +638,7 @@ export const RoutesPage = ({
     const vehicleOptions = refVehicles.map((v: any) => ({ value: v.plate, label: v.plate, carga: v.nominal_capacity?.toString() || '' }))
     const helperOptions = refHelpers.map((h: any) => ({ value: h.id, label: h.name, color: '#e67c26' }))
     const driverOptions = refDrivers.map((d: any) => ({ value: d.id, label: d.name, color: '#e67c26' }))
+    const responsibleOptions = refResponsibles.map((r: any) => ({ value: String(r.id), label: r.name, color: '#e67c26' }))
 
     switch (activeTab) {
       case 'dados-rota':
@@ -610,12 +646,15 @@ export const RoutesPage = ({
           <RouteForm
             data={formData}
             isEditing={isEditing}
+            isInactive={formData.isActive === false}
             onChange={handleFormChange}
             statusOptions={statusOptions}
             deliveryStatusOptions={deliveryStatusOptions}
             vehicleOptions={vehicleOptions}
             helperOptions={helperOptions}
             driverOptions={driverOptions}
+            responsibleOptions={responsibleOptions}
+            routeTypeOptions={[]}
           />
         )
       case 'notas-fiscais':
@@ -708,6 +747,23 @@ export const RoutesPage = ({
       )
     }
 
+    // Rota inativa: oferece Ativar no lugar de Inativar
+    if (formData?.isActive === false) {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={handleAtivar}
+            className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] bg-[#2E7D32]"
+          >
+            <span className="font-bold text-[14px] text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Ativar
+            </span>
+          </button>
+        </>
+      )
+    }
+
     return (
       <>
         <button
@@ -759,29 +815,11 @@ export const RoutesPage = ({
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedRouteIds.size}
           onFilter={(filters) => {
-            console.log('[RoutesPage] Filters applied:', filters)
-            // Convert FilterOption[] to string[]
-            const statusValues = filters.status.map((s: any) => s.value)
-            const statusEntregaValues = filters.statusEntrega.map((s: any) => s.value)
-            const motoristaValues = filters.motorista.map((m: any) => m.value)
-            const areaValues = filters.area.map((a: any) => a.value)
-            const veiculoValues = filters.veiculo.map((v: any) => v.value)
-            // Apply filters to the route list
-            fetchRoutes({
-              search: searchTerm,
-              isActive: undefined, // Show all routes when filtering
-              dataInicio: filters.dataInicio,
-              dataFim: filters.dataFim,
-              status: statusValues,
-              statusEntrega: statusEntregaValues,
-              motorist: motoristaValues,
-              area: areaValues,
-              veiculo: veiculoValues,
-              ordenar: filters.ordenar,
-              rotaInicio: filters.rotaInicio,
-              rotaFim: filters.rotaFim,
-              responsavel: filters.responsavel,
-            })
+            // Persiste os filtros e volta à página 1. O fetch é feito
+            // pelo useEffect (reloadRoutes), evitando que buscas paralelas
+            // sobrescrevam os filtros aplicados.
+            setAppliedFilters(filters)
+            setCurrentPage(1)
           }}
         />
 
@@ -922,14 +960,17 @@ export const RoutesPage = ({
         routes={selectedRouteIds.size > 0 ? routes.filter(r => selectedRouteIds.has(String(r.id))) : routes}
       />
 
-      {/* Modal de confirmação de inativação de rota */}
+      {/* Modal de confirmação de ativação/inativação de rota */}
       <InactivateConfirmModal
-        isOpen={isInactivateModalOpen}
-        onClose={() => setIsInactivateModalOpen(false)}
-        onConfirm={confirmInativar}
-        isLoading={isInactivating}
+        isOpen={isConfirmOpen}
+        onClose={() => {
+          setIsConfirmOpen(false)
+          setConfirmAction(null)
+        }}
+        onConfirm={handleConfirmAction}
+        isLoading={isProcessingAction}
         companyName={formData?.numeroRota || ''}
-        action="inactivate"
+        action={confirmAction ?? 'inactivate'}
         entityLabel="Rota"
       />
 

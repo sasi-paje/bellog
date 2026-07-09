@@ -2,7 +2,7 @@
 // Este arquivo contém a lógica de acesso a dados de rotas
 // Usado por admin e mobile
 
-import { supabase, IS_TEST, TrxRoute, RefRouteStatus, RefRouteDeliveryStatus, RefRouteType, MasterRouteArea, MasterFleetVehicle, MasterPersonDriver, MasterPersonHelper, MasterPersonResponsible } from '../../../lib/supabase'
+import { supabase, IS_TEST, applyRefFilter, TrxRoute, RefRouteStatus, RefRouteDeliveryStatus, RefRouteType, MasterRouteArea, MasterFleetVehicle, MasterPersonDriver, MasterPersonHelper, MasterPersonResponsible } from '../../../lib/supabase'
 
 // Extended route types with relations
 export interface RouteWithDetails extends TrxRoute {
@@ -59,13 +59,16 @@ export interface UpdateRouteDTO extends Partial<CreateRouteDTO> {
   id_route_status?: string
   id_route_delivery_status?: string
   id_vehicle?: string
+  id_route_responsible?: number
   current_load?: number
   arrival_date?: string
   arrival_time?: string
 }
 
-// Fields that cannot be edited according to business rules
-export const READONLY_ROUTE_FIELDS = ['id_route_area', 'route_code']
+// Fields that cannot be edited according to business rules.
+// route_code (número da rota) É editável — a validação de duplicidade é feita
+// em handleSaveEdit via checkRouteCodeExists antes de salvar.
+export const READONLY_ROUTE_FIELDS = ['id_route_area']
 
 // Route Service
 export const routeService = {
@@ -652,28 +655,35 @@ export const routeService = {
   },
 
   // Delete (soft) route
-  async delete(id: string): Promise<void> {
+  // Ativa/inativa rota (soft). Só altera se a rota estiver no estado oposto
+  // (filtro is_active = !isActive) e usa .select() para verificar as linhas
+  // afetadas — sem isso o Supabase retorna sucesso mesmo com 0 linhas
+  // (rota já nesse estado, ambiente errado ou UPDATE bloqueado por RLS),
+  // gerando falso sucesso.
+  async setActive(id: string, isActive: boolean): Promise<void> {
     const isTest = IS_TEST
 
     const { data, error } = await supabase
       .from('trx_route')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('is_test', isTest)
-      .eq('is_active', true)
+      .eq('is_active', !isActive)
       .select('id')
 
     if (error) throw new Error(error.message)
 
-    // Sem .select() o Supabase não acusa erro quando 0 linhas são afetadas,
-    // gerando falso sucesso. Com o filtro is_active=true, 0 linhas significa
-    // que a rota não existe neste ambiente, já está inativa, ou o UPDATE foi
-    // bloqueado (RLS). Em qualquer caso, não houve inativação de verdade.
     if (!data || data.length === 0) {
+      const acao = isActive ? 'ativada' : 'inativada'
       throw new Error(
-        'Nenhuma rota foi inativada. A rota pode já estar inativa, não existir neste ambiente, ou você não ter permissão para inativá-la.'
+        `Nenhuma rota foi ${acao}. A rota pode já estar nesse estado, não existir neste ambiente, ou você não ter permissão.`
       )
     }
+  },
+
+  // Soft-delete (inativação) — mantém compatibilidade com useRoutes.deleteRoute
+  async delete(id: string): Promise<void> {
+    return this.setActive(id, false)
   },
 
   // Get reference data for dropdowns
@@ -726,6 +736,22 @@ export const routeService = {
 
     if (error) throw new Error(error.message)
     return data || []
+  },
+
+  // Responsáveis de rota (fonte canônica: ref_route_responsible, casa com
+  // id_route_responsible da trx_route). Espelha getRouteResponsibles do
+  // módulo de Atribuir Notas.
+  async getRouteResponsibles(): Promise<{ id: string; name: string }[]> {
+    const { data, error } = await applyRefFilter(
+      supabase
+        .from('ref_route_responsible')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+    )
+
+    if (error) throw new Error(error.message)
+    return (data || []).map((r: any) => ({ id: String(r.id), name: r.name || '' }))
   },
 
   async getResponsibles(): Promise<MasterPersonResponsible[]> {

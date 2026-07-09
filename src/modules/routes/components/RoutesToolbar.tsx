@@ -10,13 +10,13 @@ const getToday = () => {
   return `${year}-${month}-${day}`
 }
 
-interface FilterOption {
+export interface FilterOption {
   value: string
   label: string
   color?: string
 }
 
-interface FilterData {
+export interface FilterData {
   dataInicio: string
   dataFim: string
   status: FilterOption[]

@@ -67,6 +67,7 @@ const columns: TableColumn<NoteByRouteData>[] = [
   { key: 'supplier_name', label: 'Fornecedor', render: (row) => renderText(row.supplier_name) },
   { key: 'destination_name', label: 'Destino', render: (row) => renderText(row.destination_name) },
   { key: 'vehicle_plate', label: 'Veículo', render: (row) => renderText(row.vehicle_plate) },
+  { key: 'attempt_number', label: 'Nº Tentativa', render: (row) => renderText(row.attempt_number != null ? String(row.attempt_number) : undefined) },
   { key: 'driver_name', label: 'Motorista', render: (row) => renderText(row.driver_name) },
   { key: 'gross_weight', label: 'Peso Bruto', render: (row) => renderWeight(row.gross_weight) },
   { key: 'invoice_value', label: 'Valor da Nota', render: (row) => renderValue(row.invoice_value) },
@@ -102,6 +103,7 @@ export const RoutesByNotesPage = ({
     route_code: inv.route_code || '',
     route_number: inv.route_number || '',
     invoice_number: inv.invoice_number || '',
+    attempt_number: inv.attempt_number ?? 0,
     supplier_name: inv.supplier_name || '',
     destination_name: inv.destination_name || '',
     vehicle_plate: inv.vehicle_plate || '',
@@ -156,7 +158,7 @@ export const RoutesByNotesPage = ({
   return (
     <>
       <PageHeader
-        title="Rotas por Notas"
+        title="Notas por Rota"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}

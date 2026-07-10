@@ -77,7 +77,7 @@ export const MainLayout = ({
     },
     {
       id: 'rotas-notas',
-      label: 'Rotas por Notas',
+      label: 'Notas por Rota',
       icon: <AppIcon name="event_list" size={24} />,
       isActive: currentPage === 'routes-by-notes',
     },

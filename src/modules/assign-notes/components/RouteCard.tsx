@@ -31,7 +31,7 @@ const AssignedNoteItem = ({
   canRemove = true,
 }: AssignedNoteItemProps) => {
   const normalizedNoteId = String(note.id)
-  const fornecedor = note.supplier_name || note.fornecedor
+  const fornecedor = note.fornecedor || note.supplier_name
   const cliente = note.customer_name
   const destino = note.destination_name
 
@@ -134,6 +134,19 @@ export const RouteCard = ({
   const capacidadePercent =
     route.capacidade > 0 ? (route.cargaAtual / route.capacidade) * 100 : 0
 
+  // Cor da barra de peso por faixa de ocupação:
+  // 0–50% cinza · 50–70% amarelo · 70–85% azul (água) · >85% verde ·
+  // acima da capacidade (>100%) vermelho.
+  const barColor = isOverCapacity
+    ? '#c7392c'
+    : capacidadePercent >= 85
+      ? '#27ae60'
+      : capacidadePercent >= 70
+        ? '#22b8cf'
+        : capacidadePercent >= 50
+          ? '#f2c94c'
+          : '#919191'
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -158,12 +171,14 @@ export const RouteCard = ({
 
   const buttonText = isTemporary ? 'Criar Rota' : 'Alterar Rota'
   const isLockedRoute = !isTemporary && !canEdit
-  const isDisabled = (isTemporary && isEmpty) || isLockedRoute || isOverCapacity
+  // Carga excedida NÃO desabilita mais o botão: a confirmação é pedida no
+  // fluxo de salvar (popup "Carga máxima excedida"). Apenas o card vazio
+  // (rota temporária) e a rota bloqueada continuam desabilitando.
+  const isDisabled = (isTemporary && isEmpty) || isLockedRoute
   const isButtonClickable = !isDisabled && !loading
 
   const handleButtonClick = () => {
     if (!isButtonClickable) return
-    if (isOverCapacity) return
     if (isTemporary) {
       onCreateRoute?.()
       return
@@ -215,17 +230,15 @@ export const RouteCard = ({
         <div className="flex gap-2 items-center text-[12px] mb-1">
           <span className="flex-1 font-medium text-[#2b303b]">Carga</span>
           <span className={`font-bold ${isOverCapacity ? 'text-[#c7392c]' : 'text-[#2b303b]'}`}>
-            {route.cargaAtual} kg / {route.capacidade} kg
+            {Math.round(route.cargaAtual * 10) / 10} kg / {Math.round(route.capacidade * 10) / 10} kg{route.capacidade > 0 ? ` - ${Math.round(capacidadePercent)}%` : ''}
           </span>
         </div>
 
         {/* Barra */}
         <div className="bg-[#eaecf0] flex flex-[1_0_0] items-center overflow-clip relative rounded-[64px] w-full h-2">
           <div
-            className={`h-full min-w-px rounded-[64px] transition-all duration-300 ${
-              isOverCapacity ? 'bg-[#c7392c]' : 'bg-[#e67c26]'
-            }`}
-            style={{ width: `${Math.min(capacidadePercent, 100)}%` }}
+            className="h-full min-w-px rounded-[64px] transition-all duration-300"
+            style={{ width: `${Math.min(capacidadePercent, 100)}%`, backgroundColor: barColor }}
           />
         </div>
 

@@ -156,7 +156,7 @@ export const fiscalInvoiceService = {
       const { data: matchingImports } = await supabase
         .from('trx_fiscal_invoice_import')
         .select('id')
-        .ilike('trip_number', `%${params.search}%`)
+        .ilike('trip_number', `${params.search}%`)
         .eq('is_test', isTest)
 
       matchingImportIds = (matchingImports || []).map((item) => item.id)
@@ -265,7 +265,7 @@ export const fiscalInvoiceService = {
         const importFilter = matchingImportIds.length > 0
           ? `,id_fiscal_invoice_import.in.(${matchingImportIds.join(',')})`
           : ''
-        query = query.or(`invoice_number.ilike.%${params.search}%,invoice_series.ilike.%${params.search}%${importFilter}`)
+        query = query.or(`invoice_number.ilike.${params.search}%,invoice_series.ilike.${params.search}%${importFilter}`)
       }
 
       if (params?.startDate) {

@@ -14,6 +14,7 @@ export interface NoteByRouteData {
   invoice_value: number
   delivery_status: string
   motivo?: string
+  attempt_number?: number
 }
 
 interface RoutesByNotesToolbarProps {

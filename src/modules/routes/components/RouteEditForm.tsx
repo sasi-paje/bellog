@@ -1,4 +1,4 @@
-import { FormInput, FormDropdown } from '../../../shared/components'
+import { FormInput, FormDropdown, AppIcon } from '../../../shared/components'
 
 interface RouteEditFormProps {
   data: {
@@ -19,6 +19,7 @@ interface RouteEditFormProps {
     cargaMaxima: string
   }
   isEditing?: boolean
+  overCapacity?: boolean
   onChange?: (field: string, value: any) => void
   driverOptions?: { value: string; label: string }[]
   vehicleOptions?: { value: string; label: string }[]
@@ -38,6 +39,7 @@ const PRIMARY_DEFAULT = '#e67c26'
 export const RouteEditForm = ({
   data,
   isEditing = false,
+  overCapacity = false,
   onChange,
   driverOptions = [],
   vehicleOptions = [],
@@ -77,6 +79,16 @@ export const RouteEditForm = ({
         </h3>
 
         <div className="flex flex-col gap-[16px]">
+          {/* Alerta de carga máxima excedida — acima do status */}
+          {overCapacity && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] border border-[#eb5757] bg-[#fdecec]">
+              <AppIcon name="warning" size={18} color="#c7392c" />
+              <span className="font-semibold text-[13px]" style={{ fontFamily: 'Inter, sans-serif', color: '#c7392c' }}>
+                Carga máxima excedida
+              </span>
+            </div>
+          )}
+
           {/* Status Row - somente leitura */}
           <div className="flex gap-[16px] w-full">
             <div className="flex-1">

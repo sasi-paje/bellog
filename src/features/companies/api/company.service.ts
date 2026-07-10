@@ -874,7 +874,7 @@ export const companyService = {
         .eq('id_company_role_type', roleType.id)
         .eq('is_test', isTest)
 
-      const companyIds = roleRelations?.map(r => r.id_company) || []
+      const companyIds = [...new Set(roleRelations?.map(r => r.id_company) || [])]
       if (companyIds.length === 0) return []
 
       const { data: companies } = await supabase
@@ -885,10 +885,48 @@ export const companyService = {
         .eq('is_active', isActive)
         .order('trade_name', { ascending: true })
 
-      return (companies || []).map(company => ({
-        value: String(company.id),
-        label: company.trade_name || company.legal_name || '-',
-      }))
+      if (!companies || companies.length === 0) return []
+
+      // Empresas com o mesmo nome são filiais distintas (CNPJs diferentes).
+      // Para diferenciá-las no dropdown, acrescentamos cidade/bairro ao rótulo
+      // quando o nome-base se repete. Nomes únicos ficam limpos.
+      const baseLabelOf = (c: { trade_name?: string | null; legal_name?: string | null }) =>
+        c.trade_name || c.legal_name || '-'
+
+      const labelCount = new Map<string, number>()
+      for (const c of companies) {
+        const b = baseLabelOf(c)
+        labelCount.set(b, (labelCount.get(b) || 0) + 1)
+      }
+
+      const hasDuplicateNames = [...labelCount.values()].some(n => n > 1)
+
+      // Busca endereços só quando há nomes repetidos a desambiguar
+      const addressMap = new Map<string, { city?: string; district?: string }>()
+      if (hasDuplicateNames) {
+        const { data: addresses } = await supabase
+          .from('master_person_company_address')
+          .select('id_company, city, district')
+          .in('id_company', companies.map(c => String(c.id)))
+          .eq('is_test', isTest)
+          .eq('is_active', true)
+
+        for (const a of addresses || []) {
+          const key = String(a.id_company)
+          if (!addressMap.has(key)) addressMap.set(key, { city: a.city, district: a.district })
+        }
+      }
+
+      return companies.map(company => {
+        const base = baseLabelOf(company)
+        let label = base
+        if ((labelCount.get(base) || 0) > 1) {
+          const addr = addressMap.get(String(company.id))
+          const parts = [addr?.city, addr?.district].filter(Boolean)
+          if (parts.length > 0) label = `${base} — ${parts.join('/')}`
+        }
+        return { value: String(company.id), label }
+      })
     } catch (err) {
       console.error('[companyService.listByRoleType] Error:', err)
       return []

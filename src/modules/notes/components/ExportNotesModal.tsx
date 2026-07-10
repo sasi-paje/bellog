@@ -35,10 +35,6 @@ const COLUMN_OPTIONS: Option[] = [
   { value: 'cnpj', label: 'CNPJ' },
 ]
 
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0)
-}
-
 const formatDate = (dateStr: string | undefined): string => {
   if (!dateStr) return ''
   try {
@@ -131,13 +127,17 @@ export const ExportNotesModal = ({ isOpen, onClose, notes, title = 'Selecionar C
               value = note.volume?.toString() || ''
               break
             case 'weight':
-              value = note.weight ? `${note.weight.toFixed(1)} kg` : ''
+              // Número puro (1 casa). O ';' + conversão de '.'→',' abaixo faz a
+              // planilha (pt-BR) tratar como número, sem a unidade "kg".
+              value = note.weight ? note.weight.toFixed(1) : ''
               break
             case 'gross_weight':
-              value = note.gross_weight ? `${note.gross_weight.toFixed(1)} kg` : ''
+              value = note.gross_weight ? note.gross_weight.toFixed(1) : ''
               break
             case 'value':
-              value = formatCurrency(note.value)
+              // Número puro (2 casas), sem "R$" e sem separador de milhar,
+              // para ser interpretado como número na planilha.
+              value = note.value ? note.value.toFixed(2) : ''
               break
             case 'status':
               value = getStatusText(note)

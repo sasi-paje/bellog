@@ -208,10 +208,12 @@ export const assignNotesService = {
     )]
 
     let companyMap = new Map<string, string>()
+    // Rótulo do fornecedor: grupo → nome de exibição (trade_name) → nome (legal_name)
+    let supplierDisplayMap = new Map<string, string>()
     if (companyIds.length > 0) {
       const { data: companies } = await supabase
         .from('master_person_company')
-        .select('id, trade_name, legal_name')
+        .select('id, trade_name, legal_name, id_company_group')
         .in('id', companyIds)
 
       companyMap = new Map(
@@ -219,6 +221,23 @@ export const assignNotesService = {
           String(c.id),
           (c.trade_name || c.legal_name || '').trim(),
         ])
+      )
+
+      const grpIds = [...new Set((companies || []).map((c: any) => c.id_company_group).filter(Boolean))]
+      let grpMap = new Map<number, string>()
+      if (grpIds.length > 0) {
+        const { data: groups } = await supabase
+          .from('master_person_company_group')
+          .select('id, name')
+          .in('id', grpIds)
+        grpMap = new Map((groups || []).map((g: any) => [g.id as number, (g.name || '') as string]))
+      }
+
+      supplierDisplayMap = new Map(
+        (companies || []).map((c: any) => {
+          const group = c.id_company_group ? (grpMap.get(c.id_company_group) || '') : ''
+          return [String(c.id), (group || c.trade_name || c.legal_name || '').trim()]
+        })
       )
     }
 
@@ -238,6 +257,9 @@ export const assignNotesService = {
         const supplierName = invoice.id_supplier_company
           ? companyMap.get(String(invoice.id_supplier_company)) || ''
           : ''
+        const supplierDisplay = invoice.id_supplier_company
+          ? supplierDisplayMap.get(String(invoice.id_supplier_company)) || ''
+          : ''
         const customerName = invoice.id_customer_company
           ? companyMap.get(String(invoice.id_customer_company)) || ''
           : ''
@@ -247,7 +269,7 @@ export const assignNotesService = {
           invoice_number: invoice.invoice_number || '',
           peso: weight,
           supplier_name: supplierName || undefined,
-          fornecedor: supplierName || undefined,
+          fornecedor: (supplierDisplay || supplierName) || undefined,
           customer_name: customerName || undefined,
           destination_name: customerName || undefined,
           volume: invoice.box_quantity || 0,
@@ -799,7 +821,7 @@ export const assignNotesService = {
 
     const [suppliersResult, customersResult] = await Promise.all([
       supplierIds.length > 0
-        ? supabase.from('master_person_company').select('id, trade_name, id_company_group').in('id', supplierIds)
+        ? supabase.from('master_person_company').select('id, trade_name, legal_name, id_company_group').in('id', supplierIds)
         : { data: [] },
       customerIds.length > 0
         ? supabase.from('master_person_company').select('id, trade_name').in('id', customerIds)
@@ -823,13 +845,21 @@ export const assignNotesService = {
     }
 
     const supplierMap = new Map(
-      (suppliersResult.data || []).map((s: any) => [String(s.id), s.trade_name || ''])
+      (suppliersResult.data || []).map((s: any) => [String(s.id), s.trade_name || s.legal_name || ''])
     )
     const supplierGroupMap = new Map(
       (suppliersResult.data || []).map((s: any) => [
         String(s.id),
         s.id_company_group ? (groupMap.get(s.id_company_group) || '') : '',
       ])
+    )
+    // Rótulo do fornecedor no card: grupo do fornecedor → nome de exibição
+    // (trade_name) → nome (legal_name).
+    const supplierDisplayMap = new Map(
+      (suppliersResult.data || []).map((s: any) => {
+        const group = s.id_company_group ? (groupMap.get(s.id_company_group) || '') : ''
+        return [String(s.id), group || s.trade_name || s.legal_name || '']
+      })
     )
     const customerMap = new Map(
       (customersResult.data || []).map((c: any) => [String(c.id), c.trade_name || ''])
@@ -843,7 +873,7 @@ export const assignNotesService = {
       value: Number(inv.invoice_amount) || 0,
       destination_name: customerMap.get(String(inv.id_customer_company)) || '',
       supplier_name: supplierMap.get(String(inv.id_supplier_company)) || '',
-      fornecedor: supplierMap.get(String(inv.id_supplier_company)) || '',
+      fornecedor: supplierDisplayMap.get(String(inv.id_supplier_company)) || '',
       supplier_group_name: supplierGroupMap.get(String(inv.id_supplier_company)) || '',
       customer_name: customerMap.get(String(inv.id_customer_company)) || '',
       issue_date: inv.invoice_issue_date || '',

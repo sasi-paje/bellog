@@ -275,38 +275,45 @@ export const CompanyDrawer = ({
                 </>
               ) : (
                 <>
-                  {/* CEP | Município */}
+                  {/* CEP | Estado */}
                   <div className="flex gap-[16px]">
                     <div className="flex-1">
                       <ViewField label="CEP" value={maskCEP(address?.zip_code || '')} />
                     </div>
                     <div className="flex-1">
-                      <ViewField label="Município" value={address?.city || '-'} />
+                      <ViewField label="Estado" value={address?.state || '-'} />
                     </div>
                   </div>
 
-                  {/* Rua | Bairro */}
+                  {/* Município | Rua */}
                   <div className="flex gap-[16px]">
+                    <div className="flex-1">
+                      <ViewField label="Município" value={address?.city || '-'} />
+                    </div>
                     <div className="flex-1">
                       <ViewField label="Rua" value={address?.street || '-'} />
                     </div>
+                  </div>
+
+                  {/* Bairro | Número */}
+                  <div className="flex gap-[16px]">
                     <div className="flex-1">
                       <ViewField label="Bairro" value={address?.district || '-'} />
                     </div>
-                  </div>
-
-                  {/* Número | Complemento */}
-                  <div className="flex gap-[16px]">
                     <div className="flex-1">
                       <ViewField label="Número" value={address?.street_number || '-'} />
                     </div>
+                  </div>
+
+                  {/* Complemento | Grupo */}
+                  <div className="flex gap-[16px]">
                     <div className="flex-1">
                       <ViewField label="Complemento" value={address?.complement || 'Sem Complemento'} />
                     </div>
+                    <div className="flex-1">
+                      <ViewField label="Grupo" value={company.company_group?.name || '-'} />
+                    </div>
                   </div>
-
-                  {/* Grupo — full width */}
-                  <ViewField label="Grupo" value={company.company_group?.name || '-'} />
                 </>
               )}
             </div>
@@ -697,38 +704,45 @@ export const CompanyDrawer = ({
               </>
             ) : (
               <>
-                {/* Row 3 — CEP | Município */}
+                {/* Row 3 — CEP | Estado */}
                 <div className="flex gap-[16px]">
                   <div className="flex-1">
                     {renderInput('CEP', 'address.zipCode', 'Insira o CEP', formData.address.zipCode, true, 'text', true)}
                   </div>
                   <div className="flex-1">
-                    {renderInput('Município', 'address.city', 'Insira o Município', formData.address.city, true)}
+                    {renderInput('Estado', 'address.state', 'Insira Estado', formData.address.state || '')}
                   </div>
                 </div>
 
-                {/* Row 4 — Rua | Bairro */}
+                {/* Row 4 — Município | Rua */}
                 <div className="flex gap-[16px]">
+                  <div className="flex-1">
+                    {renderInput('Município', 'address.city', 'Insira o Município', formData.address.city, true)}
+                  </div>
                   <div className="flex-1">
                     {renderInput('Rua', 'address.street', 'Insira a Rua', formData.address.street, true)}
                   </div>
+                </div>
+
+                {/* Row 5 — Bairro | Número */}
+                <div className="flex gap-[16px]">
                   <div className="flex-1">
                     {renderInput('Bairro', 'address.district', 'Insira o Bairro', formData.address.district, true)}
                   </div>
-                </div>
-
-                {/* Row 5 — Número | Complemento */}
-                <div className="flex gap-[16px]">
                   <div className="flex-1">
                     {renderInput('Número', 'address.number', 'Insira o Número', formData.address.number, true)}
                   </div>
+                </div>
+
+                {/* Row 6 — Complemento | Grupo */}
+                <div className="flex gap-[16px]">
                   <div className="flex-1">
                     {renderInput('Complemento', 'address.complement', 'Insira o Complemento', formData.address.complement)}
                   </div>
+                  <div className="flex-1">
+                    {renderGroupField()}
+                  </div>
                 </div>
-
-                {/* Row 6 — Grupo (full width) */}
-                {renderGroupField()}
               </>
             )}
           </div>

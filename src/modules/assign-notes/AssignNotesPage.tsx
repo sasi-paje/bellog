@@ -8,6 +8,8 @@ import { AppIcon, Drawer, UserMenu } from '../../shared/components'
 import { NotesList } from './components/NotesList'
 import { RoutesGrid } from './components/RoutesGrid'
 import { ConfirmRemoveModal } from './components/ConfirmRemoveModal'
+import { CapacityExceededModal } from './components/CapacityExceededModal'
+import { PlateFilterDropdown } from './components/PlateFilterDropdown'
 import { FilterPopover, FilterValues } from './components/FilterPopover'
 import { NoteDetailsDrawer } from '../notes/components/NoteDetailsDrawer'
 import { RouteEditForm } from '../routes/components/RouteEditForm'
@@ -119,6 +121,7 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false)
   const [isNoteDetailOpen, setIsNoteDetailOpen] = useState(false)
   const [currentFilterDate, setCurrentFilterDate] = useState<string>(() => getTodayDateOnly())
+  const [selectedPlates, setSelectedPlates] = useState<{ value: string; label: string }[]>([])
 
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
@@ -131,6 +134,12 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
 
   const [notesPage, setNotesPage] = useState(1)
   const [notesHasMore, setNotesHasMore] = useState(false)
+
+  // Confirmação quando a carga excede a capacidade do veículo (permite salvar
+  // mesmo assim, mediante confirmação do usuário).
+  const [capacityConfirm, setCapacityConfirm] = useState<
+    { action: 'create' | 'edit'; carga: number; capacidade: number } | null
+  >(null)
   const [notesLoading, setNotesLoading] = useState(false)
 
   // Opções dos filtros avançados (carregadas do banco)
@@ -372,6 +381,39 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
     })
   }, [routes, routeNotes, localRouteNotes, vehicles, dirtyRoutes, deliveryStatuses])
 
+  // Opções de placa (multi-filtro) a partir dos veículos ativos
+  const plateOptions = useMemo(
+    () =>
+      [...new Set(vehicles.map(v => v.plate).filter(Boolean))]
+        .sort((a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }))
+        .map(plate => ({ value: String(plate), label: String(plate) })),
+    [vehicles]
+  )
+
+  // Cards visíveis conforme o filtro de placas (vazio = todos)
+  const visibleRouteCards = useMemo(() => {
+    if (selectedPlates.length === 0) return routeCards
+    const set = new Set(selectedPlates.map(p => p.value))
+    return routeCards.filter(card => set.has(String(card.veiculo)))
+  }, [routeCards, selectedPlates])
+
+  // Carga excedida nos drawers de criar/editar (para exibir o alerta no modal)
+  const createOverCapacity = useMemo(() => {
+    if (!createRouteData || !selectedVehicleId) return false
+    const notes = localRouteNotes[`vehicle-${selectedVehicleId}`] ?? []
+    const carga = notes.reduce((s, n) => s + n.peso, 0)
+    const cap = Number(createRouteData.cargaMaxima) || 0
+    return cap > 0 && carga > cap
+  }, [createRouteData, selectedVehicleId, localRouteNotes])
+
+  const editOverCapacity = useMemo(() => {
+    if (!editRouteData || !selectedRouteId) return false
+    const notes = localRouteNotes[selectedRouteId] ?? routeNotes[selectedRouteId] ?? []
+    const carga = notes.reduce((s, n) => s + n.peso, 0)
+    const cap = Number(editRouteData.cargaMaxima) || 0
+    return cap > 0 && carga > cap
+  }, [editRouteData, selectedRouteId, localRouteNotes, routeNotes])
+
   // ---------- AÇÕES ----------
 
   const clearChanges = useCallback((routeId: string) => {
@@ -590,7 +632,7 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
     setIsCreateDrawerOpen(true)
   }, [vehicles, routes, localRouteNotes, currentFilterDate, deliveryStatuses])
 
-const handleSaveNewRoute = useCallback(async () => {
+const handleSaveNewRoute = useCallback(async (force = false) => {
     if (!createRouteData || !selectedVehicleId) return
 
     const vehicle = vehicles.find(v => String(v.id) === String(selectedVehicleId))
@@ -611,8 +653,9 @@ const handleSaveNewRoute = useCallback(async () => {
 
     const cargaAtual = notes.reduce((sum, n) => sum + n.peso, 0)
     const capacidade = vehicle.nominal_capacity || 0
-    if (capacidade > 0 && cargaAtual > capacidade) {
-      setError('Carga máxima excedida. Remova notas para criar a rota.')
+    // Carga excedida não bloqueia mais: pede confirmação antes de criar.
+    if (!force && capacidade > 0 && cargaAtual > capacidade) {
+      setCapacityConfirm({ action: 'create', carga: cargaAtual, capacidade })
       return
     }
 
@@ -708,7 +751,7 @@ const handleSaveNewRoute = useCallback(async () => {
     }
   }, [routes, routeNotes, localRouteNotes, vehicles, deliveryStatuses])
 
-  const handleSaveEditRoute = useCallback(async () => {
+  const handleSaveEditRoute = useCallback(async (force = false) => {
     if (!selectedRouteId || !editRouteData) return
 
     const routeForSave = routes.find(r => String(r.id) === selectedRouteId)
@@ -735,9 +778,10 @@ const handleSaveNewRoute = useCallback(async () => {
 
       const cargaAtualEdit = finalNotes.reduce((sum, n) => sum + n.peso, 0)
       const capacidadeEdit = Number(editRouteData.cargaMaxima) || 0
-      if (capacidadeEdit > 0 && cargaAtualEdit > capacidadeEdit) {
-        setError('Carga máxima excedida. Remova notas para salvar a rota.')
+      // Carga excedida não bloqueia mais: pede confirmação antes de salvar.
+      if (!force && capacidadeEdit > 0 && cargaAtualEdit > capacidadeEdit) {
         setLoading(false)
+        setCapacityConfirm({ action: 'edit', carga: cargaAtualEdit, capacidade: capacidadeEdit })
         return
       }
 
@@ -812,17 +856,29 @@ const handleSaveNewRoute = useCallback(async () => {
 
       {/* Toolbar: data (esq) + filtros avançados (dir) */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#828282]">
-        {/* Esquerda — campo de data */}
-        <div className="flex items-center gap-2">
-          <label className="font-semibold text-[13px] text-[#2a2a2a] whitespace-nowrap">
-            Data
-          </label>
-          <input
-            type="date"
-            value={currentFilterDate}
-            onChange={(e) => { if (e.target.value) setCurrentFilterDate(e.target.value) }}
-            className="h-[40px] px-3 rounded-[5px] border border-[#bdbdbd] text-[14px] text-[#2a2a2a] focus:outline-none focus:border-[#4077d9] bg-white"
-          />
+        {/* Esquerda — campo de data + filtro de placas */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="font-semibold text-[13px] text-[#2a2a2a] whitespace-nowrap">
+              Data
+            </label>
+            <input
+              type="date"
+              value={currentFilterDate}
+              onChange={(e) => { if (e.target.value) setCurrentFilterDate(e.target.value) }}
+              className="h-[40px] px-3 rounded-[5px] border border-[#bdbdbd] text-[14px] text-[#2a2a2a] focus:outline-none focus:border-[#4077d9] bg-white"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="font-semibold text-[13px] text-[#2a2a2a] whitespace-nowrap">
+              Placa
+            </label>
+            <PlateFilterDropdown
+              options={plateOptions}
+              selected={selectedPlates}
+              onChange={setSelectedPlates}
+            />
+          </div>
         </div>
 
         {/* Direita — erro + botão filtros avançados + popover */}
@@ -894,7 +950,7 @@ const handleSaveNewRoute = useCallback(async () => {
         {/* Grid de veículos */}
         <div className="flex-1 bg-[#f9f9f9] p-4 overflow-y-auto">
           <RoutesGrid
-            routes={routeCards}
+            routes={visibleRouteCards}
             divergences={divergences}
             onDropNote={handleDropNote}
             onRemoveNote={handleRemoveNoteClick}
@@ -921,7 +977,7 @@ const handleSaveNewRoute = useCallback(async () => {
               Cancelar
             </button>
             <button
-              onClick={handleSaveNewRoute}
+              onClick={() => handleSaveNewRoute()}
               disabled={loading}
               className="px-4 py-2 rounded-[4px] bg-[#e67c26] text-white font-bold disabled:opacity-50"
             >
@@ -940,6 +996,7 @@ const handleSaveNewRoute = useCallback(async () => {
           <RouteEditForm
             data={createRouteData}
             isEditing
+            overCapacity={createOverCapacity}
             onChange={(field, value) => setCreateRouteData(prev => prev ? { ...prev, [field]: value } : null)}
             driverOptions={drivers.map(d => ({ value: d.id, label: d.name }))}
             vehicleOptions={vehicles.map(v => ({ value: String(v.id), label: v.plate }))}
@@ -980,7 +1037,7 @@ const handleSaveNewRoute = useCallback(async () => {
             </button>
             {editRouteAllowsEdition && (
               <button
-                onClick={handleSaveEditRoute}
+                onClick={() => handleSaveEditRoute()}
                 disabled={loading}
                 className="px-4 py-2 rounded-[4px] bg-[#e67c26] text-white font-bold disabled:opacity-50"
               >
@@ -1000,6 +1057,7 @@ const handleSaveNewRoute = useCallback(async () => {
           <RouteEditForm
             data={editRouteData}
             isEditing={editRouteAllowsEdition}
+            overCapacity={editOverCapacity}
             onChange={editRouteAllowsEdition ? (field, value) => setEditRouteData(prev => prev ? { ...prev, [field]: value } : null) : undefined}
             driverOptions={drivers.map(d => ({ value: d.id, label: d.name }))}
             vehicleOptions={vehicles.map(v => ({ value: String(v.id), label: v.plate }))}
@@ -1023,6 +1081,21 @@ const handleSaveNewRoute = useCallback(async () => {
         }}
         onConfirm={handleConfirmRemove}
         invoiceNumber={pendingRemove?.invoiceNumber || ''}
+        loading={loading}
+      />
+
+      {/* Confirmação de carga máxima excedida — permite salvar mesmo assim */}
+      <CapacityExceededModal
+        isOpen={capacityConfirm !== null}
+        onClose={() => setCapacityConfirm(null)}
+        onConfirm={() => {
+          const action = capacityConfirm?.action
+          setCapacityConfirm(null)
+          if (action === 'create') handleSaveNewRoute(true)
+          else if (action === 'edit') handleSaveEditRoute(true)
+        }}
+        carga={capacityConfirm?.carga || 0}
+        capacidade={capacityConfirm?.capacidade || 0}
         loading={loading}
       />
 

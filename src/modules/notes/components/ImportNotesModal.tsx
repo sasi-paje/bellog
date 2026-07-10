@@ -81,7 +81,7 @@ export const ImportNotesModal = ({ isOpen, onClose, onBack, loading = false, onI
       {/* Modal */}
       <div
         className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-[6px] p-6 flex flex-col gap-4 z-50 shadow-lg"
-        style={{ border: `1px solid ${GRAY_LIGHTER}`, minWidth: '50vw' }}
+        style={{ border: `1px solid ${GRAY_LIGHTER}`, width: '50vw', maxWidth: '90vw' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between w-full">
@@ -116,7 +116,7 @@ export const ImportNotesModal = ({ isOpen, onClose, onBack, loading = false, onI
           />
 
           {selectedFiles.length > 0 ? (
-            <div className="flex gap-8 items-center" style={{ gap: '32px' }}>
+            <div className="flex items-center flex-1 min-w-0 overflow-x-auto" style={{ gap: '32px' }}>
               {selectedFiles.map((file, index) => (
                 <FileItem
                   key={index}
@@ -183,7 +183,7 @@ const FileItem = ({ file, onRemove }: { file: File; onRemove: () => void }) => {
   const isXml = file.type === 'application/xml' || file.type === 'text/xml' || file.name.endsWith('.xml')
 
   return (
-    <div className="flex flex-col items-center justify-center relative">
+    <div className="flex flex-col items-center justify-center relative shrink-0">
       <div className="absolute top-0 right-0 -mt-1 -mr-1 z-10">
         <button
           type="button"

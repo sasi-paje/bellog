@@ -1,22 +1,27 @@
-interface ConfirmRemoveModalProps {
+import { AppIcon } from '../../../shared/components'
+
+interface CapacityExceededModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: () => void
-  invoiceNumber: string
+  carga: number
+  capacidade: number
   loading?: boolean
 }
 
 const PRIMARY_DARK = '#0f3255'
 const ORANGE_PRIMARY = '#e67c26'
-const REMOVE_COLOR = '#eb5757'
 
-export const ConfirmRemoveModal = ({
+const fmt = (n: number) => `${Math.round(n * 10) / 10} kg`
+
+export const CapacityExceededModal = ({
   isOpen,
   onClose,
   onConfirm,
-  invoiceNumber,
+  carga,
+  capacidade,
   loading = false,
-}: ConfirmRemoveModalProps) => {
+}: CapacityExceededModalProps) => {
   if (!isOpen) return null
 
   return (
@@ -29,12 +34,13 @@ export const ConfirmRemoveModal = ({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="px-[32px] py-[20px]">
+          <div className="px-[32px] py-[20px] flex items-center justify-center gap-2">
+            <AppIcon name="warning" size={22} color={ORANGE_PRIMARY} />
             <h2
               className="text-center font-bold text-[18px]"
               style={{ fontFamily: 'Inter, sans-serif', color: PRIMARY_DARK }}
             >
-              Atenção
+              Carga máxima excedida
             </h2>
           </div>
 
@@ -46,13 +52,14 @@ export const ConfirmRemoveModal = ({
               className="text-center text-[14px] font-medium"
               style={{ fontFamily: 'Inter, sans-serif', color: '#2a2a2a' }}
             >
-              Tem certeza que deseja remover a nota <strong>NF {invoiceNumber}</strong> desta rota?
+              A carga atual <strong>{fmt(carga)}</strong> ultrapassa a capacidade máxima do veículo{' '}
+              <strong>{fmt(capacidade)}</strong>.
             </p>
             <p
-              className="text-center text-[13px]"
-              style={{ fontFamily: 'Inter, sans-serif', color: '#6b7280' }}
+              className="text-center text-[13px] font-semibold"
+              style={{ fontFamily: 'Inter, sans-serif', color: '#c7392c' }}
             >
-              Após a remoção, a nota voltará à lista de notas disponíveis.
+              Deseja confirmar mesmo assim?
             </p>
           </div>
 
@@ -77,10 +84,10 @@ export const ConfirmRemoveModal = ({
               onClick={onConfirm}
               disabled={loading}
               className="flex items-center justify-center h-[45px] w-[150px] rounded-[4px] disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-              style={{ backgroundColor: REMOVE_COLOR }}
+              style={{ backgroundColor: ORANGE_PRIMARY }}
             >
               <span className="font-bold text-[14px] text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
-                {loading ? 'Removendo...' : 'Remover'}
+                {loading ? 'Salvando...' : 'Confirmar'}
               </span>
             </button>
           </div>

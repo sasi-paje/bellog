@@ -47,8 +47,14 @@ const parseNFeXml = (xmlContent: string): XmlInvoiceData | null => {
     const destCPF = xml.getElementsByTagName('dest')[0]?.getElementsByTagName('CPF')[0]?.textContent
     const destDoc = destCNPJ || destCPF
 
-    const qComElements = xml.getElementsByTagName('qCom')
-    const boxQuantity = qComElements.length > 0 ? parseInt(qComElements[0].textContent || '0', 10) : 0
+    // Quantidade de caixas = total de volumes transportados (qVol em
+    // <transp><vol>). Pode haver múltiplos <vol>; somamos todos. NÃO usar qCom
+    // (quantidade comercial do item, não o total de volumes da nota).
+    const qVolElements = xml.getElementsByTagName('qVol')
+    let boxQuantity = 0
+    for (let i = 0; i < qVolElements.length; i++) {
+      boxQuantity += parseInt(qVolElements[i].textContent || '0', 10) || 0
+    }
 
     const pesoB = xml.getElementsByTagName('pesoB')[0]?.textContent
     const pesoL = xml.getElementsByTagName('pesoL')[0]?.textContent

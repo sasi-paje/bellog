@@ -54,7 +54,6 @@ const NoteCard = ({ note, onDragStart, onSelectNote, onViewNote }: NoteCardProps
   const handleDragEnd = () => setIsDragging(false)
 
   const fornecedor = note.fornecedor || note.supplier_name || ''
-  const grupoFornecedor = note.supplier_group_name || ''
   const cliente = note.customer_name || ''
   const destino = note.destination_name || ''
   const caixas = note.volume || 0
@@ -81,9 +80,6 @@ const NoteCard = ({ note, onDragStart, onSelectNote, onViewNote }: NoteCardProps
             {fornecedor}
           </span>
         ) : null}
-        <span className="font-medium text-[10px] text-[#919191] truncate">
-          {grupoFornecedor || 'Grupo não informado'}
-        </span>
         {cliente ? (
           <span className="font-medium text-[10px] text-[#919191] truncate">
             {cliente}

@@ -369,7 +369,6 @@ serve(async (req) => {
     })
   } catch (error) {
     console.error('[register-route-arrival] unhandled error:', error)
-    const detail = error instanceof Error ? error.message : String(error)
-    return fail(`Nao foi possivel registrar a chegada: ${detail}`, 500)
+    return fail('Nao foi possivel registrar a chegada. Tente novamente.', 500)
   }
 })

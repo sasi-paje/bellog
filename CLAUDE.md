@@ -200,6 +200,29 @@ Envio de email é feito por SMTP direto no AWS SES, via edge functions Deno.
 Todas com `verify_jwt = false` no `config.toml` — a validação é feita no código de cada função.
 Deploy das functions é **separado** do Vercel (que só publica o frontend): `supabase functions deploy <nome>`.
 
+### Chegada ao Cliente (mobile) — edge functions e deploy
+
+Fluxo mobile `/chegada?sasi-token=<TOKEN>&routeId=<ID>` (alias `/arrival-client`). O frontend (`modules/arrival-client`) chama **apenas** edge functions; nunca fala direto com as tabelas.
+
+| Função | Papel |
+|---|---|
+| `get-route-arrival` | Lê a chegada já registrada (rota+cliente) e retorna a URL da foto. Chamada ao **selecionar a empresa**. |
+| `register-route-arrival` | Registra a chegada: valida token SASI → motorista → acesso à rota → sobe a foto no bucket `route-arrivals` → RPC `register_route_stop_arrival`. |
+
+Ambas: validam **token SASI** (`SASI_API_URL/api/v2/providers/external/me`), resolvem o motorista por e-mail em `master_person_driver` filtrando **`is_test`** (via `APP_ENV`), e checam acesso à rota (`trx_route.id_driver` ou `rel_route_driver`).
+
+**Deploy obrigatório após alterar estas funções (fácil de esquecer — o deploy é manual e separado do git/Vercel):**
+```bash
+supabase functions deploy get-route-arrival
+supabase functions deploy register-route-arrival
+```
+**Secrets:** `SASI_API_URL`, `APP_ENV` (**`production`** em produção → `is_test=false`; qualquer outro valor → teste), `ARRIVAL_PHOTO_BUCKET` (opcional, default `route-arrivals`).
+
+**Sintomas comuns:**
+- *"Failed to fetch" / CORS "preflight does not have HTTP ok status"* ao selecionar a empresa → `get-route-arrival` **não deployada** (OPTIONS retorna 404).
+- *"Mais de um motorista encontrado pelo e-mail"* → função deployada **antiga sem o filtro `is_test`** (o mesmo e-mail existe em `is_test=true` e `false`) → **redeploy** + `APP_ENV` correto.
+- O `VITE_SUPABASE_URL` não deve terminar com `/` (gera `//functions/...`). O serviço já remove a barra final, mas mantenha a env limpa.
+
 ### Secrets necessárias (Supabase → Edge Functions → Secrets)
 
 `SMTP_SERVER`, `SMTP_PORT` (587/STARTTLS), `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SENDER_EMAIL` (verificado no SES), `FRONTEND_URL`.

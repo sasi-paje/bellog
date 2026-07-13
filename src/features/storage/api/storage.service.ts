@@ -39,10 +39,13 @@ export const storageService = {
       // Sanitizar nome do arquivo - remover caracteres especiais
       const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
       const extension = sanitizedName.split('.').pop()?.toLowerCase() || 'jpg'
-      // Separa arquivos novos por ambiente: test/ ou prod/.
-      // Leitura/exclusão usam o path completo, mantendo compatibilidade
-      // com arquivos antigos gravados sem esse prefixo.
-      const fileName = `${STORAGE_ENV_FOLDER}/${folder}/${timestamp}-${randomId}.${extension}`
+      // A estrutura nova de rota fica direto na raiz do bucket:
+      // bellog-files/rota/{rota}/destino/{destino}/{canhotos|nfd|chegada}
+      const normalizedFolder = folder.replace(/^\/+|\/+$/g, '')
+      const folderPath = normalizedFolder.startsWith('rota/')
+        ? normalizedFolder
+        : `${STORAGE_ENV_FOLDER}/${normalizedFolder}`
+      const fileName = `${folderPath}/${timestamp}-${randomId}.${extension}`
 
       console.log('[storageService] Final filename:', fileName)
       console.log('[storageService] Content-Type:', file.type || 'image/jpeg')

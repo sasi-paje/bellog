@@ -21,6 +21,7 @@ interface InvoiceData {
   volume?: number
   supplier_name?: string
   destination_name?: string
+  id_customer_company?: number | string
   is_active?: boolean
   canhoto?: string
   nfd_status?: string
@@ -571,7 +572,13 @@ export const RouteNoteDetail = ({ nota, routeCode, routeId, onBack, onDesassocia
 
     try {
       const isTest = IS_TEST
-      const folder = `routes/${routeId}/invoices`
+      // Novo padrão de storage: bellog-files/rota/{rota}/destino/{destino}/{canhotos|nfd}.
+      // Requer o id do destino (id_customer_company); sem ele, usa o path antigo.
+      const destinoId = nota.id_customer_company
+      const subfolder = type === 'canhoto' ? 'canhotos' : 'nfd'
+      const folder = destinoId
+        ? `rota/${routeId}/destino/${destinoId}/${subfolder}`
+        : `routes/${routeId}/invoices`
 
       // Upload de todos os arquivos
       const uploadedUrls: string[] = []

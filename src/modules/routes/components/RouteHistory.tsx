@@ -1,4 +1,4 @@
-import { AppIcon } from '../../../shared/components'
+import { ExternalLink } from 'lucide-react'
 
 interface OccurrenceDetail {
   id: string
@@ -125,7 +125,7 @@ const TimelineItem = ({ item, isFirst, isLast, onClick }: TimelineItemProps) => 
 
             {item.hasDetail && (
               <div className="shrink-0">
-                <AppIcon name="open_in_new" size={20} color={ACCENT_ORANGE} />
+                <ExternalLink size={20} color={ACCENT_ORANGE} aria-hidden="true" />
               </div>
             )}
           </div>

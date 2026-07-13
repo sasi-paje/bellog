@@ -64,7 +64,7 @@ interface HistoricoItem {
     local: string
     notas: string[]
     observacao: string
-    anexos: { id: string; nome: string; tipo: 'imagem' | 'documento' }[]
+    anexos: { id: string; nome: string; tipo: 'imagem' | 'documento'; url?: string; file_path?: string; file_url?: string }[]
   }
 }
 
@@ -162,6 +162,7 @@ const convertRouteToFormData = (route: any): RouteFormData => {
 }
 
 const DELIVERY_EVENT_TYPES = new Set(['DELIVERY_TOTAL', 'DELIVERY_PARTIAL', 'DELIVERY_DENIED', 'DELIVERY_ABORTED'])
+const DETAIL_EVENT_TYPES = new Set([...DELIVERY_EVENT_TYPES, 'CLIENT_ARRIVAL'])
 
 function mapEventTypeToTipo(code: string | null | undefined): HistoricoItem['tipo'] {
   switch (code) {
@@ -172,6 +173,7 @@ function mapEventTypeToTipo(code: string | null | undefined): HistoricoItem['tip
     case 'DELIVERY_PARTIAL': return 'entrega-parcial'
     case 'DELIVERY_DENIED': return 'entrega-negada'
     case 'DELIVERY_ABORTED': return 'entrega-abortada'
+    case 'CLIENT_ARRIVAL': return 'em-rota'
     case 'ROUTE_ENDED': return 'rota-finalizada'
     default: return 'rota-criada'
   }
@@ -765,21 +767,37 @@ export const RoutesPage = ({
           const mappedHistory: HistoricoItem[] = history.map((h) => {
             const code = h.history_type?.code ?? null
             const isDelivery = code !== null && DELIVERY_EVENT_TYPES.has(code)
-            const titulo = h.history_type?.description || h.description || 'Evento'
+            const hasDetail = code !== null && DETAIL_EVENT_TYPES.has(code)
+            const isClientArrival = code === 'CLIENT_ARRIVAL'
+            const titulo = h.description || h.title || h.history_type?.description || 'Evento'
+            const destinationName = h.metadata?.destination_name || h.metadata?.reference_name || ''
+            const arrivalPhotoPath = h.metadata?.arrival_photo_path
+            const arrivalPhotoUrl = h.metadata?.arrival_photo_url
             return {
               id: h.id,
               tipo: mapEventTypeToTipo(code),
               titulo,
               data: h.event_at ? new Date(h.event_at).toLocaleDateString('pt-BR') : '',
               hora: h.event_at ? new Date(h.event_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-              hasDetail: isDelivery,
-              detail: isDelivery ? {
+              hasDetail,
+              detail: hasDetail ? {
                 id: h.metadata?.invoice_id || h.id,
-                titulo,
-                local: h.metadata?.destination_name || '',
+                titulo: isClientArrival ? 'Chegada ao Cliente' : titulo,
+                local: destinationName,
                 notas: [],
-                observacao: '',
-                anexos: [],
+                observacao: isClientArrival
+                  ? (arrivalPhotoUrl
+                    ? (h.metadata?.justification ? `Justificativa: ${h.metadata.justification}` : 'Foto registrada na chegada ao cliente.')
+                    : 'Foto da chegada não encontrada no armazenamento.')
+                  : '',
+                anexos: isClientArrival && arrivalPhotoPath && arrivalPhotoUrl ? [{
+                  id: String(h.metadata?.id_route_stop || h.id),
+                  nome: 'Foto da chegada',
+                  tipo: 'imagem',
+                  url: arrivalPhotoUrl,
+                  file_url: arrivalPhotoUrl,
+                  file_path: arrivalPhotoPath,
+                }] : [],
               } : undefined,
             }
           })

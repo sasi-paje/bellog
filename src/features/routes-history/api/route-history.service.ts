@@ -13,6 +13,41 @@ export interface RouteHistoryItem {
 export interface HistoryWithDetails extends TrxRouteHistory {
   history_type?: RefRouteHistoryType
   metadata?: Record<string, any>
+  title?: string | null
+  id_route_history_type?: string | number | null
+}
+
+const ARRIVAL_PHOTO_BUCKET = 'bellog-files'
+const LEGACY_ARRIVAL_PHOTO_BUCKET = 'route-arrivals'
+
+const getArrivalPhotoUrl = async (path: string | null | undefined): Promise<string | null> => {
+  if (!path) return null
+
+  const isLegacyArrivalPath = /^(prod|test)?\/?route-\d+\/company-\d+\//.test(path)
+  const buckets = isLegacyArrivalPath
+    ? [LEGACY_ARRIVAL_PHOTO_BUCKET, ARRIVAL_PHOTO_BUCKET]
+    : [ARRIVAL_PHOTO_BUCKET, LEGACY_ARRIVAL_PHOTO_BUCKET]
+
+  try {
+    for (const bucket of buckets) {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, 60 * 60)
+
+      if (!error && data?.signedUrl) {
+        return data.signedUrl
+      }
+
+      if (error && !/object not found/i.test(error.message)) {
+        console.warn('[routeHistoryService] Could not sign arrival photo URL:', error.message)
+      }
+    }
+
+    return null
+  } catch (err) {
+    console.warn('[routeHistoryService] Could not sign arrival photo URL:', err)
+    return null
+  }
 }
 
 export const routeHistoryService = {
@@ -24,25 +59,38 @@ export const routeHistoryService = {
       .select('*')
       .eq('id_route', routeId)
       .eq('is_test', isTest)
-      .eq('is_active', true)
       .order('event_at', { ascending: true })
 
     if (error) throw new Error(error.message)
 
-    const typeIds = [...new Set((history || []).map(h => h.id_history_type).filter(Boolean))]
+    const rawHistory = (history || []) as any[]
+    const activeHistory = rawHistory.filter(h => h.is_active !== false)
+    const getHistoryTypeId = (h: any) => h.id_history_type ?? h.id_route_history_type ?? null
+    const typeIds = [...new Set(activeHistory.map(getHistoryTypeId).filter(Boolean).map(String))]
     const { data: types } = typeIds.length > 0
       ? await supabase.from('ref_route_history_type').select('*').in('id', typeIds)
       : { data: [] as RefRouteHistoryType[] }
 
-    const baseHistory: HistoryWithDetails[] = (history || []).map(h => ({
-      ...h,
-      history_type: types?.find(t => t.id === h.id_history_type),
+    const baseHistory: HistoryWithDetails[] = await Promise.all(activeHistory.map(async h => {
+      const historyType = types?.find(t => String(t.id) === String(getHistoryTypeId(h)))
+      const metadata = h.metadata as Record<string, any> | null | undefined
+      const photoUrl = historyType?.code === 'CLIENT_ARRIVAL'
+        ? await getArrivalPhotoUrl(metadata?.arrival_photo_path)
+        : null
+
+      return {
+        ...h,
+        id_history_type: getHistoryTypeId(h),
+        description: h.description ?? h.title ?? null,
+        history_type: historyType,
+        metadata: photoUrl ? { ...(metadata || {}), arrival_photo_url: photoUrl } : metadata,
+      }
     }))
 
     // Chegadas ao cliente (trx_route_stop) entram no histórico como eventos,
     // mesclados por event_at. Assim, ao registrar a chegada no mobile, ela
     // aparece na aba Histórico do modal da rota.
-    const arrivals = await this.getArrivalHistory(routeId)
+    const arrivals = await this.getArrivalHistory(routeId, baseHistory)
 
     const merged = [...baseHistory, ...arrivals].sort((a, b) => {
       const ta = a.event_at ? new Date(a.event_at).getTime() : 0
@@ -54,8 +102,10 @@ export const routeHistoryService = {
   },
 
   // Lê as chegadas registradas (trx_route_stop com arrived_at) e as converte
-  // em itens de histórico sintéticos (code CLIENT_ARRIVAL).
-  async getArrivalHistory(routeId: string): Promise<HistoryWithDetails[]> {
+  // em itens de histórico sintéticos (code CLIENT_ARRIVAL) quando ainda não
+  // existe uma linha real em trx_route_history. Mantém compatibilidade com
+  // chegadas registradas antes da criação do evento no backend.
+  async getArrivalHistory(routeId: string, existingHistory: HistoryWithDetails[] = []): Promise<HistoryWithDetails[]> {
     const isTest = IS_TEST
 
     const { data: stops, error } = await supabase
@@ -76,9 +126,23 @@ export const routeHistoryService = {
       (companies || []).map((c: any) => [String(c.id), c.trade_name || c.legal_name || ''])
     )
 
-    return stops.map(s => {
+    const arrivalItems = await Promise.all(stops.map(async s => {
       const company = companyMap.get(String(s.id_company)) || ''
       const label = company ? `Chegada ao Cliente — ${company}` : 'Chegada ao Cliente'
+      const alreadyInHistory = existingHistory.some(h => {
+        const metadata = h.metadata as Record<string, any> | null | undefined
+        const sameStop = String(metadata?.id_route_stop ?? '') === String(s.id)
+        const sameCompany = String(metadata?.company_id ?? '') === String(s.id_company)
+        const sameTime = Boolean(h.event_at && s.arrived_at && new Date(h.event_at).getTime() === new Date(s.arrived_at).getTime())
+        const isClientArrival = h.history_type?.code === 'CLIENT_ARRIVAL' || /Chegada ao Cliente/i.test(h.description || h.title || '')
+
+        return isClientArrival && (sameStop || (sameCompany && sameTime))
+      })
+
+      if (alreadyInHistory) return null
+
+      const photoUrl = await getArrivalPhotoUrl(s.arrival_photo_path)
+
       return {
         id: `arrival-${s.id}`,
         id_route: routeId,
@@ -102,9 +166,12 @@ export const routeHistoryService = {
           destination_name: company,
           company_id: s.id_company,
           arrival_photo_path: s.arrival_photo_path,
+          arrival_photo_url: photoUrl,
         },
       } as unknown as HistoryWithDetails
-    })
+    }))
+
+    return arrivalItems.filter(Boolean) as HistoryWithDetails[]
   },
 
   async create(routeId: string, historyTypeId: string, description?: string): Promise<TrxRouteHistory> {

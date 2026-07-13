@@ -689,6 +689,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
         allNotes={fiscalNotes}
         reasons={reasons}
         isLoading={isLoadingReasons || isConfirmingNote}
+        destinationId={localEntrega?.company_id}
       />
     </MobilePageShell>
   )

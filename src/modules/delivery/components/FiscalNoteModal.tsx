@@ -99,6 +99,16 @@ const DELIVERY_TYPE_OPTIONS = [
 ]
 
 // Ícone de upload (attach_file)
+const buildDeliveryStorageFolder = (
+  routeId: string | number | undefined,
+  destinationId: string | number | undefined,
+  folder: 'canhotos' | 'nfd'
+): string => {
+  if (!routeId || !destinationId) return folder
+
+  return `rota/${routeId}/destino/${destinationId}/${folder}`
+}
+
 const UploadIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M16.5 6V17.5C16.5 18.88 15.38 20 14 20C12.62 20 11.5 18.88 11.5 17.5V5C11.5 3.62 12.62 2.5 14 2.5C15.38 2.5 16.5 3.62 16.5 5V8.5H14.5V5H14V5.5H13.5V8.5H14.5V6H16.5ZM6.5 18C7.88 18 9 16.88 9 15.5C9 14.12 7.88 13 6.5 13C5.12 13 4 14.12 4 15.5C4 16.88 5.12 18 6.5 18ZM6.5 14.5C6.9 14.5 7.25 14.85 7.25 15.25C7.25 15.65 6.9 16 6.5 16C6.1 16 5.75 15.65 5.75 15.25C5.75 14.85 6.1 14.5 6.5 14.5ZM17.5 17.5C17.5 15.75 16.12 14.5 14.25 14.5V13C15.38 13 16.25 13.88 16.25 15C16.25 15.63 15.87 16.16 15.31 16.44C16.03 16.75 16.5 17.5 16.5 18.5H18.5C18.5 16.46 17.5 15 17.5 17.5Z" fill="#161a36"/>
@@ -368,7 +378,10 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
 
       // Se usuário enviou novo arquivo
       if (canhoto) {
-        canhotoPath = await storageService.uploadFile(canhoto, 'canhotos')
+        canhotoPath = await storageService.uploadFile(
+          canhoto,
+          buildDeliveryStorageFolder(note.id_route, destinationId, 'canhotos')
+        )
         if (!canhotoPath) {
           setError('Erro ao fazer upload do canhoto. Verifique o console.')
           setIsUploading(false)
@@ -383,7 +396,10 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
       }
 
       if (nfdFile) {
-        nfdPath = await storageService.uploadFile(nfdFile, 'nfd')
+        nfdPath = await storageService.uploadFile(
+          nfdFile,
+          buildDeliveryStorageFolder(note.id_route, destinationId, 'nfd')
+        )
         if (!nfdPath) {
           setError('Erro ao fazer upload da NFD. Verifique o console.')
           setIsUploading(false)

@@ -11,7 +11,7 @@ const corsHeaders = {
 // requisição — não de APP_ENV — para suportar staging (is_test=true) e produção
 // (is_test=false) no mesmo projeto Supabase.
 
-const ARRIVAL_PHOTO_BUCKET = Deno.env.get('ARRIVAL_PHOTO_BUCKET') ?? 'route-arrivals'
+const ARRIVAL_PHOTO_BUCKET = Deno.env.get('ARRIVAL_PHOTO_BUCKET') ?? 'bellog-files'
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
@@ -26,9 +26,10 @@ type DbId = number | string
 
 interface ProviderResponse {
   id: DbId
-  name: string
-  role: string
-  status: string
+  name?: string
+  role?: string
+  status?: string
+  email?: string
   customProps?: {
     email?: string
     [key: string]: unknown
@@ -100,12 +101,7 @@ const extractProviderResponse = (payload: unknown): ProviderResponse | null => {
   if (!isRecord(candidate)) return null
 
   const idType = typeof candidate.id
-  if (
-    (idType !== 'number' && idType !== 'string') ||
-    typeof candidate.name !== 'string' ||
-    typeof candidate.role !== 'string' ||
-    typeof candidate.status !== 'string'
-  ) {
+  if (idType !== 'number' && idType !== 'string') {
     return null
   }
 
@@ -113,18 +109,17 @@ const extractProviderResponse = (payload: unknown): ProviderResponse | null => {
 }
 
 const getProviderEmail = (provider: ProviderResponse): string | null => {
-  const email = provider.customProps?.email || provider.profileProps?.email
+  const email = provider.customProps?.email || provider.email || provider.profileProps?.email
   return typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null
 }
 
 const getSasiApiBaseUrl = (): string => {
-  const apiBaseUrl = Deno.env.get('SASI_API_URL')
+  const apiBaseUrl = Deno.env.get('SASI_API_URL') || 'https://api.sasi.io'
 
-  if (!apiBaseUrl) {
-    throw new Error('SASI_API_URL nao configurada.')
-  }
-
-  return apiBaseUrl.replace(/\/$/, '')
+  return apiBaseUrl
+    .replace(/\/+$/, '')
+    .replace(/\/api\/v2\/providers\/external\/me$/, '')
+    .replace(/\/api\/v2$/, '')
 }
 
 const getSupabaseAdmin = (): SupabaseClient => {
@@ -324,8 +319,7 @@ serve(async (req) => {
 
     const timestamp = Date.now()
     const fileName = sanitizeFileName(fileEntry.name)
-    const storageEnvFolder = routeIsTest ? 'test' : 'prod'
-    const storagePath = `${storageEnvFolder}/route-${routeId}/company-${companyId}/${timestamp}-${fileName}`
+    const storagePath = `rota/${routeId}/destino/${companyId}/chegada/${timestamp}-${fileName}`
     const fileBytes = new Uint8Array(await fileEntry.arrayBuffer())
 
     const { error: uploadError } = await supabase.storage

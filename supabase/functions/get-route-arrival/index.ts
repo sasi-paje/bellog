@@ -12,7 +12,8 @@ const corsHeaders = {
 // (is_test=false) no mesmo projeto Supabase.
 
 // Mesmo bucket usado pela register-route-arrival para manter leitura e escrita em sincronia.
-const ARRIVAL_PHOTO_BUCKET = Deno.env.get('ARRIVAL_PHOTO_BUCKET') ?? 'route-arrivals'
+const ARRIVAL_PHOTO_BUCKET = Deno.env.get('ARRIVAL_PHOTO_BUCKET') ?? 'bellog-files'
+const LEGACY_ARRIVAL_PHOTO_BUCKET = 'route-arrivals'
 const SIGNED_URL_TTL_SECONDS = 60 * 60
 
 type JsonBody = Record<string, unknown>
@@ -20,9 +21,10 @@ type DbId = number | string
 
 interface ProviderResponse {
   id: DbId
-  name: string
-  role: string
-  status: string
+  name?: string
+  role?: string
+  status?: string
+  email?: string
   customProps?: {
     email?: string
     [key: string]: unknown
@@ -79,12 +81,7 @@ const extractProviderResponse = (payload: unknown): ProviderResponse | null => {
   if (!isRecord(candidate)) return null
 
   const idType = typeof candidate.id
-  if (
-    (idType !== 'number' && idType !== 'string') ||
-    typeof candidate.name !== 'string' ||
-    typeof candidate.role !== 'string' ||
-    typeof candidate.status !== 'string'
-  ) {
+  if (idType !== 'number' && idType !== 'string') {
     return null
   }
 
@@ -92,18 +89,17 @@ const extractProviderResponse = (payload: unknown): ProviderResponse | null => {
 }
 
 const getProviderEmail = (provider: ProviderResponse): string | null => {
-  const email = provider.customProps?.email || provider.profileProps?.email
+  const email = provider.customProps?.email || provider.email || provider.profileProps?.email
   return typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null
 }
 
 const getSasiApiBaseUrl = (): string => {
-  const apiBaseUrl = Deno.env.get('SASI_API_URL')
+  const apiBaseUrl = Deno.env.get('SASI_API_URL') || 'https://api.sasi.io'
 
-  if (!apiBaseUrl) {
-    throw new Error('SASI_API_URL nao configurada.')
-  }
-
-  return apiBaseUrl.replace(/\/$/, '')
+  return apiBaseUrl
+    .replace(/\/+$/, '')
+    .replace(/\/api\/v2\/providers\/external\/me$/, '')
+    .replace(/\/api\/v2$/, '')
 }
 
 const getSupabaseAdmin = (): SupabaseClient => {
@@ -177,28 +173,35 @@ const buildPhotoUrl = async (
 ): Promise<string | null> => {
   if (!path) return null
 
-  const { data: bucket, error: bucketError } = await supabase.storage.getBucket(ARRIVAL_PHOTO_BUCKET)
+  const isLegacyArrivalPath = /^(prod|test)?\/?route-\d+\/company-\d+\//.test(path)
+  const buckets = isLegacyArrivalPath
+    ? [LEGACY_ARRIVAL_PHOTO_BUCKET, ARRIVAL_PHOTO_BUCKET]
+    : [ARRIVAL_PHOTO_BUCKET, LEGACY_ARRIVAL_PHOTO_BUCKET]
 
-  if (bucketError || !bucket) {
-    console.error(`[get-route-arrival] Bucket de fotos nao encontrado: ${ARRIVAL_PHOTO_BUCKET}`, bucketError)
-    return null
+  for (const bucket of buckets) {
+    const { error: bucketError } = await supabase.storage.getBucket(bucket)
+
+    if (bucketError) {
+      if (bucket === ARRIVAL_PHOTO_BUCKET) {
+        console.error(`[get-route-arrival] Bucket de fotos nao encontrado: ${bucket}`, bucketError)
+      }
+      continue
+    }
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
+
+    if (!error && data?.signedUrl) {
+      return data.signedUrl
+    }
+
+    if (error && !/object not found/i.test(error.message)) {
+      console.error('[get-route-arrival] createSignedUrl failed:', error)
+    }
   }
 
-  if (bucket.public) {
-    const { data } = supabase.storage.from(ARRIVAL_PHOTO_BUCKET).getPublicUrl(path)
-    return data?.publicUrl ?? null
-  }
-
-  const { data, error } = await supabase.storage
-    .from(ARRIVAL_PHOTO_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS)
-
-  if (error) {
-    console.error('[get-route-arrival] createSignedUrl failed:', error)
-    return null
-  }
-
-  return data?.signedUrl ?? null
+  return null
 }
 
 serve(async (req) => {

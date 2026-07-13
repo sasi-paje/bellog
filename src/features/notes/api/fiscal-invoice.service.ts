@@ -17,7 +17,9 @@ export interface InvoiceListItem {
   route_number?: string
   route_code?: string
   supplier_name?: string
+  supplier_group_name?: string
   destination_name?: string
+  city?: string
   vehicle_plate?: string
   driver_name?: string
   delivery_status?: string
@@ -52,6 +54,7 @@ type CompanyRow = {
   id: number | string
   trade_name: string | null
   legal_name: string | null
+  id_company_group?: number | string | null
 }
 
 const INVOICE_SELECT_WITH_IMPORT = `
@@ -448,7 +451,7 @@ export const fiscalInvoiceService = {
 
     let suppliers: CompanyRow[] = []
     if (supplierIds.length > 0) {
-      const { data } = await supabase.from('master_person_company').select('id, trade_name, legal_name').in('id', supplierIds)
+      const { data } = await supabase.from('master_person_company').select('id, trade_name, legal_name, id_company_group').in('id', supplierIds)
       suppliers = data || []
     }
 
@@ -458,8 +461,36 @@ export const fiscalInvoiceService = {
       destinations = data || []
     }
 
+    // Nome do grupo do fornecedor
+    const supplierGroupIds = [...new Set(suppliers.map((c) => c.id_company_group).filter(Boolean).map(String))]
+    let groupNameMap = new Map<string, string>()
+    if (supplierGroupIds.length > 0) {
+      const { data: groups } = await supabase.from('master_person_company_group').select('id, name').in('id', supplierGroupIds)
+      groupNameMap = new Map<string, string>((groups || []).map((g: any) => [String(g.id), g.name || '']))
+    }
+
+    // Cidade do destino (primeiro endereço ativo de cada empresa de destino)
+    const cityMap = new Map<string, string>()
+    if (destIds.length > 0) {
+      const { data: addresses } = await supabase
+        .from('master_person_company_address')
+        .select('id_company, city')
+        .in('id_company', destIds)
+        .eq('is_active', true)
+      for (const a of addresses || []) {
+        const key = String(a.id_company)
+        if (!cityMap.has(key) && a.city) cityMap.set(key, a.city)
+      }
+    }
+
     // FIX: Use string keys (UUIDs) for maps, not String conversion
     const supplierMap = new Map<string, string>(suppliers.map((company) => [company.id, company.trade_name ?? company.legal_name ?? '-']))
+    const supplierGroupMap = new Map<string, string>(
+      suppliers.map((company) => [
+        String(company.id),
+        company.id_company_group ? (groupNameMap.get(String(company.id_company_group)) || '') : '',
+      ])
+    )
     const destinationMap = new Map<string, string>(destinations.map((company) => [company.id, company.trade_name ?? company.legal_name ?? '-']))
 
     const result: InvoiceListItem[] = invoices.map((invoice) => ({
@@ -475,7 +506,9 @@ export const fiscalInvoiceService = {
       status: String(invoice.id_fiscal_invoice_status ?? ''),
       status_description: '',
       supplier_name: invoice.id_supplier_company ? (supplierMap.get(invoice.id_supplier_company) ?? '-') : '-',
+      supplier_group_name: invoice.id_supplier_company ? (supplierGroupMap.get(String(invoice.id_supplier_company)) || '') : '',
       destination_name: invoice.id_customer_company ? (destinationMap.get(invoice.id_customer_company) ?? '-') : '-',
+      city: invoice.id_customer_company ? (cityMap.get(String(invoice.id_customer_company)) || '') : '',
       is_active: invoice.is_active ?? true,
       attempt_number: maxAttemptMap.get(invoice.id) ?? invoiceRouteMap.get(invoice.id)?.attempt_number ?? 0,
       route_number: invoiceRouteMap.get(invoice.id)?.route_id || '',

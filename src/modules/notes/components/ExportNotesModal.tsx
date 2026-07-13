@@ -11,6 +11,7 @@ interface Option {
 interface ExportNotesModalProps {
   isOpen: boolean
   onClose: () => void
+  onExported?: () => void
   notes: InvoiceListItem[]
   title?: string
 }
@@ -19,35 +20,21 @@ const PRIMARY_DARK = '#0f3255'
 const TEXT_LIGHT25 = '#919191'
 const ORANGE_ACCENT = '#e67c26'
 
+// Mesma ordem e colunas da tabela de Notas (NotesTable)
 const COLUMN_OPTIONS: Option[] = [
-  { value: 'invoice_number', label: 'N° Nota' },
+  { value: 'supplier_group_name', label: 'Grupo Fornecedor' },
   { value: 'supplier_name', label: 'Fornecedor' },
-  { value: 'destination_name', label: 'Destino' },
   { value: 'tripNumber', label: 'Nº Viagem' },
-  { value: 'attempt_number', label: 'Nº Tentativa' },
+  { value: 'invoice_number', label: 'NF' },
+  { value: 'destination_name', label: 'Destino' },
+  { value: 'city', label: 'Cidade' },
+  { value: 'attempt_number', label: 'Nº Tentativas' },
   { value: 'volume', label: 'Caixas' },
   { value: 'weight', label: 'Peso Líquido' },
   { value: 'gross_weight', label: 'Peso Bruto' },
-  { value: 'value', label: 'Valor' },
+  { value: 'value', label: 'Valor da Nota' },
   { value: 'status', label: 'Status' },
-  { value: 'emission_date', label: 'Data Emissão' },
-  { value: 'order_number', label: 'Nº Pedido' },
-  { value: 'cnpj', label: 'CNPJ' },
 ]
-
-const formatDate = (dateStr: string | undefined): string => {
-  if (!dateStr) return ''
-  try {
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) return dateStr
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  } catch {
-    return dateStr
-  }
-}
 
 const getStatusText = (note: InvoiceListItem): string => {
   if (!note.is_active) return 'Cancelada'
@@ -55,7 +42,7 @@ const getStatusText = (note: InvoiceListItem): string => {
   return 'Pendente'
 }
 
-export const ExportNotesModal = ({ isOpen, onClose, notes, title = 'Selecionar Colunas para exportar' }: ExportNotesModalProps) => {
+export const ExportNotesModal = ({ isOpen, onClose, onExported, notes, title = 'Selecionar Colunas para exportar' }: ExportNotesModalProps) => {
   const [selectedColumns, setSelectedColumns] = useState<Option[]>(COLUMN_OPTIONS)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -108,17 +95,23 @@ export const ExportNotesModal = ({ isOpen, onClose, notes, title = 'Selecionar C
           let value = ''
 
           switch (key) {
-            case 'invoice_number':
-              value = note.invoice_number || ''
+            case 'supplier_group_name':
+              value = note.supplier_group_name || ''
               break
             case 'supplier_name':
               value = note.supplier_name || ''
               break
+            case 'tripNumber':
+              value = note.tripNumber || ''
+              break
+            case 'invoice_number':
+              value = note.invoice_number || ''
+              break
             case 'destination_name':
               value = note.destination_name || ''
               break
-            case 'tripNumber':
-              value = note.tripNumber || ''
+            case 'city':
+              value = note.city || ''
               break
             case 'attempt_number':
               value = note.attempt_number?.toString() || ''
@@ -141,15 +134,6 @@ export const ExportNotesModal = ({ isOpen, onClose, notes, title = 'Selecionar C
               break
             case 'status':
               value = getStatusText(note)
-              break
-            case 'emission_date':
-              value = formatDate(note.emission_date)
-              break
-            case 'order_number':
-              value = note.order_number || ''
-              break
-            case 'cnpj':
-              value = note.cnpj || ''
               break
             default:
               value = ''
@@ -192,7 +176,9 @@ export const ExportNotesModal = ({ isOpen, onClose, notes, title = 'Selecionar C
       )
 
       setTimeout(() => {
-        onClose()
+        // Após exportar com sucesso, encerra o fluxo de exportação
+        if (onExported) onExported()
+        else onClose()
       }, 1500)
     } catch (error) {
       console.error('[ExportNotesModal] Export error:', error)

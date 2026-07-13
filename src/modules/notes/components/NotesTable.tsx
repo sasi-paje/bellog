@@ -1,5 +1,6 @@
 import { SharedTable, TableColumn } from '../../../shared/components'
 import { InvoiceListItem } from '../../../features/notes'
+import { formatWeight } from '../../../shared/utils/format'
 
 const NEUTRAL_LIGHT75 = '#2A2A2A'
 
@@ -41,15 +42,17 @@ const renderStatus = (row: InvoiceListItem) => {
 
 // FIX: Use correct field names that match InvoiceListItem (not InvoiceViewModel)
 const notesColumns: TableColumn<InvoiceListItem>[] = [
-  { key: 'invoice_number', label: 'N° Nota', render: (row) => renderText(row.invoice_number) },
+  { key: 'supplier_group_name', label: 'Grupo Fornecedor', render: (row) => renderText(row.supplier_group_name) },
   { key: 'supplier_name', label: 'Fornecedor', render: (row) => renderText(row.supplier_name) },
-  { key: 'destination_name', label: 'Destino', render: (row) => renderText(row.destination_name) },
   { key: 'tripNumber', label: 'Nº Viagem', render: (row) => renderText(row.tripNumber) },
-  { key: 'attempt_number', label: 'Nº Tentativa', render: (row) => renderText(row.attempt_number) },
+  { key: 'invoice_number', label: 'NF', render: (row) => renderText(row.invoice_number) },
+  { key: 'destination_name', label: 'Destino', render: (row) => renderText(row.destination_name) },
+  { key: 'city', label: 'Cidade', render: (row) => renderText(row.city) },
+  { key: 'attempt_number', label: 'Nº Tentativas', render: (row) => renderText(row.attempt_number) },
   { key: 'volume', label: 'Caixas', render: (row) => renderText(row.volume) },
-  { key: 'weight', label: 'Peso Líquido', render: (row) => renderText(row.weight ? `${row.weight.toFixed(1)} kg` : null) },
-  { key: 'gross_weight', label: 'Peso Bruto', render: (row) => renderText(row.gross_weight ? `${row.gross_weight.toFixed(1)} kg` : null) },
-  { key: 'value', label: 'Valor', render: (row) => renderText(row.value != null ? formatCurrency(row.value) : null) },
+  { key: 'weight', label: 'Peso Líquido', render: (row) => renderText(row.weight ? formatWeight(row.weight) : null) },
+  { key: 'gross_weight', label: 'Peso Bruto', render: (row) => renderText(row.gross_weight ? formatWeight(row.gross_weight) : null) },
+  { key: 'value', label: 'Valor da Nota', render: (row) => renderText(row.value != null ? formatCurrency(row.value) : null) },
   { key: 'status', label: 'Status', render: renderStatus },
 ]
 

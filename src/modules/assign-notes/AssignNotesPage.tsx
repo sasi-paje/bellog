@@ -11,7 +11,8 @@ import { ConfirmRemoveModal } from './components/ConfirmRemoveModal'
 import { CapacityExceededModal } from './components/CapacityExceededModal'
 import { PlateFilterDropdown } from './components/PlateFilterDropdown'
 import { FilterPopover, FilterValues } from './components/FilterPopover'
-import { NoteDetailsDrawer } from '../notes/components/NoteDetailsDrawer'
+import { NoteDetailsDrawer, NoteDetailData } from '../notes/components/NoteDetailsDrawer'
+import { fiscalInvoiceService } from '../../features/notes'
 import { RouteEditForm } from '../routes/components/RouteEditForm'
 import { assignNotesService, FilterOption } from './services/assign-notes.service'
 import {
@@ -126,7 +127,7 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<{ routeId: string; noteId: string; invoiceNumber: string } | null>(null)
-  const [selectedNote, setSelectedNote] = useState<NoteItem | null>(null)
+  const [selectedNote, setSelectedNote] = useState<NoteDetailData | null>(null)
   const [createRouteData, setCreateRouteData] = useState<RouteFormData | null>(null)
   const [editRouteData, setEditRouteData] = useState<RouteFormData | null>(null)
   const [createDrawerError, setCreateDrawerError] = useState<string | null>(null)
@@ -433,11 +434,21 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
     const note = notesAvailable.find(n => String(n.id) === noteId)
     if (!note) return
 
+    // Preserva os mesmos campos de exibição das notas disponíveis (fornecedor
+    // pela regra grupo→nome exibição→nome, destino, etc.) ao mover para o card
+    // do veículo — senão o card perderia o nome do fornecedor/destino.
     const noteToAdd: AssignedNote = {
       id: String(noteId),
       invoice_number: note.invoice_number,
       peso: note.weight,
+      weight: note.weight,
+      fornecedor: note.fornecedor,
+      supplier_name: note.supplier_name,
+      customer_name: note.customer_name,
       destination_name: note.destination_name,
+      volume: note.volume,
+      value: note.value,
+      attempt_number: note.attempt_number,
     }
 
     // Veículo temporário — valida apenas se origem é rota persistida
@@ -579,10 +590,25 @@ export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLo
     setPendingRemove(null)
   }, [pendingRemove, localRouteNotes, routeNotes])
 
-  const handleSelectNote = useCallback((note: NoteItem) => {
-    setSelectedNote(note)
+  // Abre o modal de detalhe: mostra os dados que já temos e, em seguida,
+  // completa com a nota fiscal completa (getById) — garantindo Peso Bruto,
+  // Nº Viagem, Nº Tentativa, etc. corretos.
+  const openNoteDetail = useCallback(async (base: NoteDetailData) => {
+    setSelectedNote(base)
     setIsNoteDetailOpen(true)
+    try {
+      const full = await fiscalInvoiceService.getById(String(base.id))
+      if (full) {
+        setSelectedNote(prev => (prev && String(prev.id) === String(base.id) ? { ...base, ...full } : prev))
+      }
+    } catch (err) {
+      console.error('[AssignNotesPage] Erro ao carregar detalhe da nota:', err)
+    }
   }, [])
+
+  const handleSelectNote = useCallback((note: NoteItem) => {
+    openNoteDetail(note)
+  }, [openNoteDetail])
 
   const handleOpenCreateDrawer = useCallback((vehicleId: string) => {
     const vehicle = vehicles.find(v => String(v.id) === String(vehicleId))
@@ -819,7 +845,7 @@ const handleSaveNewRoute = useCallback(async (force = false) => {
   }, [notesPage, searchTerm, fetchUnassignedNotes, activeAdvancedFilters])
 
   const handleViewRouteNote = useCallback((note: AssignedNote) => {
-    setSelectedNote({
+    openNoteDetail({
       id: note.id,
       invoice_number: note.invoice_number,
       weight: note.peso || note.weight || 0,
@@ -829,10 +855,10 @@ const handleSaveNewRoute = useCallback(async (force = false) => {
       supplier_name: note.supplier_name || note.fornecedor || '',
       fornecedor: note.fornecedor || note.supplier_name || '',
       customer_name: note.customer_name || note.destination_name || '',
+      attempt_number: note.attempt_number || 0,
       is_active: true,
     })
-    setIsNoteDetailOpen(true)
-  }, [])
+  }, [openNoteDetail])
 
   // =====================================================
   // COMPUTED: permite edição apenas para status Pendente

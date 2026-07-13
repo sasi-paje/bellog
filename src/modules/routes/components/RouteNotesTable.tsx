@@ -1,4 +1,5 @@
 import { AppIcon } from '../../../shared/components'
+import { formatWeight as formatWeightShared } from '../../../shared/utils/format'
 
 interface InvoiceData {
   id: string
@@ -69,7 +70,7 @@ const statusActiveStyle = {
 
 const formatWeight = (weight?: number): string => {
   if (!weight) return '-'
-  return weight.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' kg'
+  return formatWeightShared(weight)
 }
 
 const formatValue = (value?: number): string => {

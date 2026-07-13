@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AppIcon } from '../../../shared/components'
+import { formatWeight, formatPercent } from '../../../shared/utils/format'
 import { AssignedNote, RouteCardData, DivergenceInfo } from '../types/assign-notes.types'
 
 interface RouteCardProps {
@@ -58,7 +59,7 @@ const AssignedNoteItem = ({
 
         {/* Peso */}
         <span className="font-medium text-[10px] text-[#919191] whitespace-nowrap">
-          {note.peso} KG
+          {formatWeight(note.peso)}
         </span>
 
         {/* Fornecedor */}
@@ -230,7 +231,7 @@ export const RouteCard = ({
         <div className="flex gap-2 items-center text-[12px] mb-1">
           <span className="flex-1 font-medium text-[#2b303b]">Carga</span>
           <span className={`font-bold ${isOverCapacity ? 'text-[#c7392c]' : 'text-[#2b303b]'}`}>
-            {Math.round(route.cargaAtual * 10) / 10} kg / {Math.round(route.capacidade * 10) / 10} kg{route.capacidade > 0 ? ` - ${Math.round(capacidadePercent)}%` : ''}
+            {formatWeight(route.cargaAtual)} / {formatWeight(route.capacidade)}{route.capacidade > 0 ? ` - ${formatPercent(capacidadePercent)}` : ''}
           </span>
         </div>
 

@@ -227,6 +227,10 @@ export const RoutesPage = ({
   // Estado para seleção de linhas
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set())
   const [isExportSelectionMode, setIsExportSelectionMode] = useState(false)
+  // Seleção de todos os registros dos filtros (todas as páginas)
+  const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false)
+  const [allFilteredRoutes, setAllFilteredRoutes] = useState<any[]>([])
+  const [selectingAll, setSelectingAll] = useState(false)
 
   // Refs para guardar valores atuais para o callback global
   const routeIdRef = useRef(selectedRouteId)
@@ -276,7 +280,7 @@ export const RoutesPage = ({
   // Recarrega a lista respeitando busca, toggle de inativos, página e
   // os filtros aplicados no toolbar. Sem filtro aplicado, usa o dia atual
   // como padrão; com filtro, usa as datas/critérios informados.
-  const reloadRoutes = () => {
+  const buildRoutesParams = () => {
     const today = new Date()
     const day = String(today.getDate()).padStart(2, '0')
     const month = String(today.getMonth() + 1).padStart(2, '0')
@@ -285,7 +289,7 @@ export const RoutesPage = ({
 
     const f = appliedFilters
 
-    fetchRoutes({
+    return {
       search: searchTerm || undefined,
       isActive: showInactive ? undefined : true,
       page: currentPage,
@@ -301,7 +305,11 @@ export const RoutesPage = ({
       rotaInicio: f?.rotaInicio || undefined,
       rotaFim: f?.rotaFim || undefined,
       responsavel: f?.responsavel || undefined,
-    })
+    }
+  }
+
+  const reloadRoutes = () => {
+    fetchRoutes(buildRoutesParams())
   }
 
   // Fetch routes on mount and when filtros/busca/página mudam
@@ -309,6 +317,13 @@ export const RoutesPage = ({
     reloadRoutes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, showInactive, currentPage, appliedFilters, fetchRoutes])
+
+  // Reseta a seleção quando filtros/busca mudam (não ao paginar)
+  useEffect(() => {
+    setSelectedRouteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setAllFilteredRoutes([])
+  }, [searchTerm, showInactive, appliedFilters])
 
   // Fetch reference data
   useEffect(() => {
@@ -432,6 +447,7 @@ export const RoutesPage = ({
 
   // Handlers para seleção de linhas
   const handleSelectRoute = (id: string, selected: boolean) => {
+    setSelectAllAcrossPages(false)
     setSelectedRouteIds(prev => {
       const newSet = new Set(prev)
       if (selected) {
@@ -443,16 +459,33 @@ export const RoutesPage = ({
     })
   }
 
+  // Checkbox do cabeçalho: seleciona apenas os registros da página atual
   const handleSelectAllRoutes = (selected: boolean) => {
-    if (selected) {
-      setSelectedRouteIds(new Set(routes.map(r => String(r.id))))
-    } else {
-      setSelectedRouteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setSelectedRouteIds(selected ? new Set(routes.map(r => String(r.id))) : new Set())
+  }
+
+  // Seleciona todos os registros retornados pelos filtros (todas as páginas)
+  const handleSelectAllAcrossPages = async () => {
+    setSelectingAll(true)
+    try {
+      const result = await routeService.list({ ...buildRoutesParams(), page: 1, limit: total || 10000 })
+      setAllFilteredRoutes(result.data)
+      setSelectedRouteIds(new Set(result.data.map((r: any) => String(r.id))))
+      setSelectAllAcrossPages(true)
+      showSuccess(`Todos os ${result.data.length} registros encontrados foram selecionados.`)
+    } catch (err) {
+      console.error('[RoutesPage] Erro ao selecionar todos os registros:', err)
+      showError('Não foi possível selecionar todos os registros. Tente novamente.')
+    } finally {
+      setSelectingAll(false)
     }
   }
 
   const handleClearSelection = () => {
     setSelectedRouteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setAllFilteredRoutes([])
     setIsExportSelectionMode(false)
   }
 
@@ -901,7 +934,7 @@ export const RoutesPage = ({
               >
                 <AppIcon name="delete_forever" size={20} color="#C7392C" />
                 <span className="font-bold text-[13px]" style={{ fontFamily: 'Inter, sans-serif', color: '#C7392C' }}>
-                  Cancelar Seleção
+                  Cancelar Exportação
                 </span>
               </button>
             )}
@@ -916,6 +949,30 @@ export const RoutesPage = ({
             />
           </div>
         </div>
+
+        {/* Banner de seleção entre páginas (estilo Gmail) */}
+        {isExportSelectionMode && (() => {
+          const currentPageCount = routes.length
+          const allCurrentSelected = currentPageCount > 0 && routes.every((r) => selectedRouteIds.has(String(r.id)))
+          const hasMore = total > currentPageCount
+          if (!allCurrentSelected || !hasMore || selectAllAcrossPages) return null
+          return (
+            <div className="flex items-center justify-center gap-3 shrink-0 w-full bg-[#eef3fc] border border-[#4077d9]/40 rounded-[6px] px-4 py-2">
+              <span className="text-[13px] text-[#2a2a2a]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                Todos os <strong>{currentPageCount}</strong> registros desta página foram selecionados.
+              </span>
+              <button
+                type="button"
+                onClick={handleSelectAllAcrossPages}
+                disabled={selectingAll}
+                className="text-[13px] font-bold text-[#4077d9] underline disabled:opacity-50"
+                style={{ fontFamily: 'Inter, sans-serif' }}
+              >
+                {selectingAll ? 'Selecionando...' : `Deseja selecionar todos os ${total} registros encontrados?`}
+              </button>
+            </div>
+          )
+        })()}
 
         {/* Table */}
         <div className="flex flex-1 flex-col w-full min-w-0">
@@ -1021,11 +1078,22 @@ export const RoutesPage = ({
       <ExportModal
         isOpen={isExportModalOpen}
         onClose={() => {
+          // Voltar: apenas fecha o modal, mantendo a seleção e o modo de exportação
+          setIsExportModalOpen(false)
+        }}
+        onExported={() => {
+          // Exportou com sucesso: encerra o fluxo de exportação
           setIsExportModalOpen(false)
           setIsExportSelectionMode(false)
           setSelectedRouteIds(new Set())
+          setSelectAllAcrossPages(false)
+          setAllFilteredRoutes([])
         }}
-        routes={selectedRouteIds.size > 0 ? routes.filter(r => selectedRouteIds.has(String(r.id))) : routes}
+        routes={
+          selectAllAcrossPages
+            ? allFilteredRoutes
+            : (selectedRouteIds.size > 0 ? routes.filter(r => selectedRouteIds.has(String(r.id))) : routes)
+        }
       />
 
       {/* Modal de confirmação de ativação/inativação de rota */}

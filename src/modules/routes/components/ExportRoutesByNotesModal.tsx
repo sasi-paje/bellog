@@ -11,6 +11,7 @@ interface Option {
 interface ExportRoutesByNotesModalProps {
   isOpen: boolean
   onClose: () => void
+  onExported?: () => void
   notes: NoteByRouteData[]
   title?: string
 }
@@ -56,7 +57,7 @@ const formatWeight = (weight?: number): string => {
   return weight.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' kg'
 }
 
-export const ExportRoutesByNotesModal = ({ isOpen, onClose, notes, title = 'Selecionar Colunas para exportar' }: ExportRoutesByNotesModalProps) => {
+export const ExportRoutesByNotesModal = ({ isOpen, onClose, onExported, notes, title = 'Selecionar Colunas para exportar' }: ExportRoutesByNotesModalProps) => {
   const [selectedColumns, setSelectedColumns] = useState<Option[]>(COLUMN_OPTIONS)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -183,7 +184,9 @@ export const ExportRoutesByNotesModal = ({ isOpen, onClose, notes, title = 'Sele
       )
 
       setTimeout(() => {
-        onClose()
+        // Após exportar com sucesso, encerra o fluxo de exportação
+        if (onExported) onExported()
+        else onClose()
       }, 1500)
     } catch (error) {
       console.error('[ExportRoutesByNotesModal] Export error:', error)

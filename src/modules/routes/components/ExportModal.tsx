@@ -29,6 +29,7 @@ interface Option {
 interface ExportModalProps {
   isOpen: boolean
   onClose: () => void
+  onExported?: () => void
   routes: RouteData[]
   title?: string
 }
@@ -56,7 +57,7 @@ const COLUMN_OPTIONS: Option[] = [
   { value: 'status_description', label: 'Status' },
 ]
 
-export const ExportModal = ({ isOpen, onClose, routes, title = 'Selecionar Colunas para exportar' }: ExportModalProps) => {
+export const ExportModal = ({ isOpen, onClose, onExported, routes, title = 'Selecionar Colunas para exportar' }: ExportModalProps) => {
   const [selectedColumns, setSelectedColumns] = useState<Option[]>(COLUMN_OPTIONS)
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -229,7 +230,9 @@ export const ExportModal = ({ isOpen, onClose, routes, title = 'Selecionar Colun
       )
 
       setTimeout(() => {
-        onClose()
+        // Após exportar com sucesso, encerra o fluxo de exportação
+        if (onExported) onExported()
+        else onClose()
       }, 1500)
     } catch (error) {
       console.error('[ExportModal] Export error:', error)

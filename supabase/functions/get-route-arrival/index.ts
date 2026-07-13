@@ -330,6 +330,7 @@ serve(async (req) => {
     })
   } catch (error) {
     console.error('[get-route-arrival] unhandled error:', error)
-    return fail('Nao foi possivel consultar a chegada. Tente novamente.', 500)
+    const detail = error instanceof Error ? error.message : String(error)
+    return fail(`Nao foi possivel consultar a chegada: ${detail}`, 500)
   }
 })

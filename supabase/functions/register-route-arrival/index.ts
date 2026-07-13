@@ -7,10 +7,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-// Ambiente teste x produção (banco único).
-// APP_ENV=production → produção (is_test = false); qualquer outro valor → teste.
-const IS_TEST = Deno.env.get('APP_ENV') !== 'production'
-const STORAGE_ENV_FOLDER = IS_TEST ? 'test' : 'prod'
+// O ambiente (is_test) é derivado da própria rota (trx_route.is_test) em cada
+// requisição — não de APP_ENV — para suportar staging (is_test=true) e produção
+// (is_test=false) no mesmo projeto Supabase.
 
 const ARRIVAL_PHOTO_BUCKET = Deno.env.get('ARRIVAL_PHOTO_BUCKET') ?? 'route-arrivals'
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024
@@ -51,6 +50,7 @@ interface Route {
   id: DbId
   id_driver: DbId | null
   is_active: boolean
+  is_test: boolean
 }
 
 interface RouteStop {
@@ -170,7 +170,8 @@ const validateSasiToken = async (token: string): Promise<ProviderResponse> => {
 const hasRouteDriverRelation = async (
   supabase: SupabaseClient,
   routeId: string,
-  driverId: DbId
+  driverId: DbId,
+  isTest: boolean
 ): Promise<boolean> => {
   const { data, error } = await supabase
     .from('rel_route_driver')
@@ -178,7 +179,7 @@ const hasRouteDriverRelation = async (
     .eq('id_route', routeId)
     .eq('id_driver', driverId)
     .eq('is_active', true)
-    .eq('is_test', IS_TEST)
+    .eq('is_test', isTest)
     .limit(1)
 
   if (error) {
@@ -246,12 +247,32 @@ serve(async (req) => {
       return fail('Email do motorista nao encontrado no retorno da SASI.', 401)
     }
 
+    // Ambiente (is_test) é derivado da PRÓPRIA rota — não de APP_ENV — para
+    // funcionar num projeto Supabase único compartilhado por staging (is_test=true)
+    // e produção (is_test=false). A rota é única por id.
+    const { data: route, error: routeError } = await supabase
+      .from('trx_route')
+      .select('id, id_driver, is_active, is_test')
+      .eq('id', routeId)
+      .eq('is_active', true)
+      .maybeSingle<Route>()
+
+    if (routeError) {
+      console.error('[register-route-arrival] route lookup failed:', routeError)
+      return fail('Erro ao buscar rota informada.', 500)
+    }
+    if (!route) {
+      return fail('Rota informada nao encontrada.', 404)
+    }
+
+    const routeIsTest = route.is_test
+
     const { data: drivers, error: driverError } = await supabase
       .from('master_person_driver')
       .select('id, name, email, is_active')
       .ilike('email', providerEmail)
       .eq('is_active', true)
-      .eq('is_test', IS_TEST)
+      .eq('is_test', routeIsTest)
       .limit(2)
 
     if (driverError) {
@@ -267,26 +288,10 @@ serve(async (req) => {
 
     const driver = drivers[0] as Driver
 
-    const { data: route, error: routeError } = await supabase
-      .from('trx_route')
-      .select('id, id_driver, is_active')
-      .eq('id', routeId)
-      .eq('is_active', true)
-      .eq('is_test', IS_TEST)
-      .maybeSingle<Route>()
-
-    if (routeError) {
-      console.error('[register-route-arrival] route lookup failed:', routeError)
-      return fail('Erro ao buscar rota informada.', 500)
-    }
-    if (!route) {
-      return fail('Rota informada nao encontrada.', 404)
-    }
-
     const hasDirectRouteAccess = idsMatch(route.id_driver, driver.id)
     const hasRelationRouteAccess = hasDirectRouteAccess
       ? true
-      : await hasRouteDriverRelation(supabase, routeId, driver.id)
+      : await hasRouteDriverRelation(supabase, routeId, driver.id, routeIsTest)
 
     if (!hasDirectRouteAccess && !hasRelationRouteAccess) {
       return fail('Motorista nao possui acesso a esta rota.', 403)
@@ -298,7 +303,7 @@ serve(async (req) => {
       .eq('id_route', routeId)
       .eq('id_company', companyId)
       .eq('is_active', true)
-      .eq('is_test', IS_TEST)
+      .eq('is_test', routeIsTest)
       .maybeSingle<RouteStop>()
 
     if (stopError) {
@@ -319,7 +324,8 @@ serve(async (req) => {
 
     const timestamp = Date.now()
     const fileName = sanitizeFileName(fileEntry.name)
-    const storagePath = `${STORAGE_ENV_FOLDER}/route-${routeId}/company-${companyId}/${timestamp}-${fileName}`
+    const storageEnvFolder = routeIsTest ? 'test' : 'prod'
+    const storagePath = `${storageEnvFolder}/route-${routeId}/company-${companyId}/${timestamp}-${fileName}`
     const fileBytes = new Uint8Array(await fileEntry.arrayBuffer())
 
     const { error: uploadError } = await supabase.storage

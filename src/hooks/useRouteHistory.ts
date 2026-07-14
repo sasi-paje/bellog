@@ -19,78 +19,75 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
   const [error, setError] = useState<string | null>(null)
   const [historyTypes, setHistoryTypes] = useState<any[]>([])
 
+  // Converte eventos sintéticos (ciclo de vida) para o formato HistoryWithDetails
+  const toConverted = useCallback((routeHistory: RouteHistoryItem[]): HistoryWithDetails[] =>
+    routeHistory.map((h) => ({
+      id: h.id,
+      id_route: '',
+      id_history_type: null,
+      event_at: h.event_at,
+      description: h.event_label,
+      is_active: true,
+      is_test: IS_TEST,
+      created_at: h.event_at,
+      updated_at: h.event_at,
+      history_type: {
+        id: `synthetic-${h.event_type}`,
+        code: h.event_type,
+        description: h.event_label,
+        is_active: true,
+        is_test: IS_TEST,
+        created_at: h.event_at,
+        updated_at: h.event_at,
+      },
+      metadata: h.metadata ?? undefined,
+    } as unknown as HistoryWithDetails)), [])
+
   const fetchHistory = useCallback(async (routeId: string) => {
     setLoading(true)
     setError(null)
     try {
-      // First try to get history from route_history table
-      const dbHistory = await routeHistoryService.getByRouteId(routeId)
-
-      // If no history in database, generate from route data
-      if (!dbHistory || dbHistory.length === 0) {
-        console.log('[useRouteHistory] No history in database, generating from route data')
-        const routeHistory = await routeService.getHistory(routeId)
-
-        // Convert routeService history to HistoryWithDetails format
-        const convertedHistory: HistoryWithDetails[] = routeHistory.map((h) => ({
-          id: h.id,
-          id_route: routeId,
-          id_history_type: null,
-          event_at: h.event_at,
-          description: h.event_label,
-          is_active: true,
-          is_test: IS_TEST,
-          created_at: h.event_at,
-          updated_at: h.event_at,
-          history_type: {
-            id: `synthetic-${h.event_type}`,
-            code: h.event_type,
-            description: h.event_label,
-            is_active: true,
-            is_test: IS_TEST,
-            created_at: h.event_at,
-            updated_at: h.event_at,
-          },
-          metadata: h.metadata ?? undefined,
-        }))
-        setHistory(convertedHistory)
-      } else {
-        setHistory(dbHistory)
+      // Ciclo de vida (Rota Criada, Em Andamento, entregas, Finalizada) —
+      // derivado dos dados da rota. Sempre computado.
+      let synthetic: HistoryWithDetails[] = []
+      try {
+        synthetic = toConverted(await routeService.getHistory(routeId))
+      } catch (e) {
+        console.warn('[useRouteHistory] getHistory (sintético) falhou:', e)
       }
+
+      // Eventos reais em trx_route_history (inclui a Chegada ao Cliente).
+      let dbHistory: HistoryWithDetails[] = []
+      try {
+        dbHistory = await routeHistoryService.getByRouteId(routeId)
+      } catch (e) {
+        console.warn('[useRouteHistory] getByRouteId falhou:', e)
+      }
+
+      // Mescla: mantém todos os eventos reais e acrescenta os sintéticos cujo
+      // código ainda NÃO existe no real (evita duplicar Criada/Em Andamento/
+      // entregas já persistidas). Assim a chegada (real) aparece junto do ciclo
+      // de vida (sintético), ordenados por data/hora.
+      const dbCodes = new Set(
+        dbHistory.map((h) => h.history_type?.code).filter(Boolean) as string[]
+      )
+      const syntheticToAdd = synthetic.filter(
+        (s) => !dbCodes.has(s.history_type?.code as string)
+      )
+      const merged = [...dbHistory, ...syntheticToAdd].sort((a, b) => {
+        const ta = a.event_at ? new Date(a.event_at).getTime() : 0
+        const tb = b.event_at ? new Date(b.event_at).getTime() : 0
+        return ta - tb
+      })
+
+      setHistory(merged)
     } catch (err) {
       console.error('[useRouteHistory] Error:', err)
-      // Fallback to route data even on error
-      try {
-        const routeHistory = await routeService.getHistory(routeId)
-        const convertedHistory: HistoryWithDetails[] = routeHistory.map((h) => ({
-          id: h.id,
-          id_route: routeId,
-          id_history_type: null,
-          event_at: h.event_at,
-          description: h.event_label,
-          is_active: true,
-          is_test: IS_TEST,
-          created_at: h.event_at,
-          updated_at: h.event_at,
-          history_type: {
-            id: `synthetic-${h.event_type}`,
-            code: h.event_type,
-            description: h.event_label,
-            is_active: true,
-            is_test: IS_TEST,
-            created_at: h.event_at,
-            updated_at: h.event_at,
-          },
-          metadata: h.metadata ?? undefined,
-        }))
-        setHistory(convertedHistory)
-      } catch (fallbackErr) {
-        setError((fallbackErr as Error).message)
-      }
+      setError((err as Error).message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [toConverted])
 
   const createHistoryEntry = useCallback(async (routeId: string, historyTypeId: string, description?: string) => {
     setLoading(true)

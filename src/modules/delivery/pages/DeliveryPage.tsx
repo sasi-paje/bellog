@@ -140,7 +140,6 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
   }
   const [destinations, setDestinations] = useState<DeliveryDestination[]>([])
   const [isLoadingDestinations, setIsLoadingDestinations] = useState(true)
-  const [showDropdown, setShowDropdown] = useState(false)
   const [fiscalNotes, setFiscalNotes] = useState<FiscalNote[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedNote, setSelectedNote] = useState<FiscalNote | null>(null)
@@ -568,37 +567,27 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
               <span className="text-[#bdbdbd] text-[14px]">Nenhum destino disponível</span>
             </div>
           ) : (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowDropdown(!showDropdown)}
-                className="bg-white border border-[#161a36] border-solid h-[45px] items-center justify-between px-[16px] py-[12px] relative rounded-[5px] w-full flex"
+            <div className="relative w-full">
+              <select
+                value={localEntrega ? String(localEntrega.id) : ''}
+                onChange={(e) => {
+                  const dest = destinations.find((d) => String(d.id) === e.target.value) || null
+                  setLocalEntrega(dest)
+                }}
+                className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] cursor-pointer ${localEntrega ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}
               >
-                <span className={`text-[14px] ${localEntrega ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}>
-                  {localEntrega ? localEntrega.company_name : 'Selecione o local da entrega'}
-                </span>
+                <option value="" disabled>Selecione o local da entrega</option>
+                {destinations.map((dest) => (
+                  <option key={dest.id} value={String(dest.id)} className="text-[#2a2a2a]">
+                    {dest.company_name}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute right-[16px] top-1/2 -translate-y-1/2 flex items-center justify-center">
                 <svg width="14" height="8" viewBox="0 0 14 8" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M1 1L7 7L13 1" stroke="#161a36" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-              </button>
-
-              {showDropdown && (
-                <div className="absolute top-full left-0 right-0 bg-white border border-[#161a36] border-t-0 rounded-b-[5px] max-h-[200px] overflow-y-auto z-50">
-                  {destinations.map((dest) => (
-                    <button
-                      key={dest.id}
-                      type="button"
-                      onClick={() => {
-                        setLocalEntrega(dest)
-                        setShowDropdown(false)
-                      }}
-                      className="w-full px-[16px] py-[12px] text-left hover:bg-gray-50 text-[14px] text-[#2a2a2a]"
-                    >
-                      {dest.company_name}
-                    </button>
-                  ))}
-                </div>
-              )}
+              </div>
             </div>
           )}
         </div>

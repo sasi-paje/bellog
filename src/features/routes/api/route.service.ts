@@ -853,18 +853,17 @@ export const routeService = {
   async getHistory(routeId: string): Promise<RouteHistoryItem[]> {
     const isTest = IS_TEST
 
-    const DELIVERY_TYPE_LABEL: Record<number, string> = {
-      1: 'ENTREGA TOTAL',
-      2: 'ENTREGA PARCIAL',
-      3: 'ENTREGA NEGADA',
-      4: 'ENTREGA ABORTADA',
+    // Mapa estável do `code` de ref_delivery_reason_type para o event code do
+    // histórico. Os ids NÃO seguem a ordem da UI, então nunca mapear por id fixo.
+    const CODE_TO_EVENT: Record<string, string> = {
+      delivery_total: 'DELIVERY_TOTAL',
+      partial_return: 'DELIVERY_PARTIAL',
+      delivery_denied: 'DELIVERY_DENIED',
+      delivery_aborted: 'DELIVERY_ABORTED',
     }
-    const DELIVERY_TYPE_EVENT: Record<number, string> = {
-      1: 'DELIVERY_TOTAL',
-      2: 'DELIVERY_PARTIAL',
-      3: 'DELIVERY_DENIED',
-      4: 'DELIVERY_ABORTED',
-    }
+    // id -> nome / id -> event code, preenchidos a partir do banco.
+    const DELIVERY_TYPE_LABEL: Record<number, string> = {}
+    const DELIVERY_TYPE_EVENT: Record<number, string> = {}
 
     try {
       const { data: route, error: routeError } = await supabase
@@ -889,10 +888,23 @@ export const routeService = {
       // Buscar entregas de notas fiscais desta rota
       const { data: deliveries } = await supabase
         .from('trx_route_invoice_delivery')
-        .select('id, id_fiscal_invoice, id_delivery_type, delivered_at, created_at')
+        .select('id, id_fiscal_invoice, id_delivery_type, delivered_at, created_at, receipt_image_path, nfd_image_path, observation')
         .eq('id_route', routeId)
         .eq('is_active', true)
         .eq('is_test', isTest)
+
+      // Resolver rótulos/eventos dos tipos de entrega a partir do banco (por code)
+      const deliveryTypeIds = [...new Set((deliveries || []).map(d => d.id_delivery_type).filter(Boolean))]
+      if (deliveryTypeIds.length > 0) {
+        const { data: types } = await supabase
+          .from('ref_delivery_reason_type')
+          .select('id, code, name')
+          .in('id', deliveryTypeIds)
+        for (const t of types || []) {
+          DELIVERY_TYPE_LABEL[t.id] = t.name || ''
+          DELIVERY_TYPE_EVENT[t.id] = CODE_TO_EVENT[t.code] || 'DELIVERY_TOTAL'
+        }
+      }
 
       // Resolver nomes dos destinos para os eventos de entrega
       const invoiceIds = [...new Set((deliveries || []).map(d => d.id_fiscal_invoice).filter(Boolean))]
@@ -961,7 +973,11 @@ export const routeService = {
           metadata: {
             invoice_id: String(delivery.id_fiscal_invoice),
             delivery_type: typeId,
+            delivery_label: DELIVERY_TYPE_LABEL[typeId],
             destination_name: destName,
+            receipt_image_path: delivery.receipt_image_path || null,
+            nfd_image_path: delivery.nfd_image_path || null,
+            observation: delivery.observation || null,
           },
         })
       }

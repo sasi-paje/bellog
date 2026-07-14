@@ -381,6 +381,34 @@ export const deliveryService = {
   },
 
   /**
+   * Resolve o id do tipo de entrega pelo `code` estável em
+   * ref_delivery_reason_type (nunca por id fixo — os ids não são garantidos).
+   * O valor da UI ('entrega_total'...) é mapeado para o code do banco.
+   */
+  async getDeliveryTypeId(optionValue: string): Promise<number | null> {
+    const VALUE_TO_CODE: Record<string, string> = {
+      entrega_total: 'delivery_total',
+      entrega_parcial: 'partial_return',
+      entrega_negada: 'delivery_denied',
+      entrega_abortada: 'delivery_aborted',
+    }
+    const code = VALUE_TO_CODE[optionValue]
+    if (!code) return null
+
+    const { data, error } = await supabase
+      .from('ref_delivery_reason_type')
+      .select('id')
+      .eq('code', code)
+      .maybeSingle()
+
+    if (error || !data?.id) {
+      console.error('[deliveryService] getDeliveryTypeId falhou para', optionValue, error)
+      return null
+    }
+    return Number(data.id)
+  },
+
+  /**
    * Salvar resultado da entrega - usa RPC register_invoice_delivery_result
    */
   async saveDeliveryResult(

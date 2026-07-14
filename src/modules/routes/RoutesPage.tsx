@@ -769,10 +769,49 @@ export const RoutesPage = ({
             const isDelivery = code !== null && DELIVERY_EVENT_TYPES.has(code)
             const hasDetail = code !== null && DETAIL_EVENT_TYPES.has(code)
             const isClientArrival = code === 'CLIENT_ARRIVAL'
-            const titulo = h.description || h.title || h.history_type?.description || 'Evento'
             const destinationName = h.metadata?.destination_name || h.metadata?.reference_name || ''
+            const titulo = isClientArrival
+              ? (destinationName ? `Chegada em ${destinationName}` : 'Chegada ao Cliente')
+              : (h.description || h.title || h.history_type?.description || 'Evento')
             const arrivalPhotoPath = h.metadata?.arrival_photo_path
             const arrivalPhotoUrl = h.metadata?.arrival_photo_url
+
+            // Anexos da entrega (canhoto/NFD) — as URLs já são públicas (bellog-files)
+            const receiptUrl = h.metadata?.receipt_image_path
+            const nfdUrl = h.metadata?.nfd_image_path
+            const deliveryAnexos: NonNullable<HistoricoItem['detail']>['anexos'] = isDelivery
+              ? [
+                  ...(receiptUrl ? [{ id: `${h.id}-canhoto`, nome: 'Canhoto', tipo: 'imagem' as const, url: receiptUrl, file_url: receiptUrl, file_path: receiptUrl }] : []),
+                  ...(nfdUrl ? [{ id: `${h.id}-nfd`, nome: 'NFD', tipo: 'documento' as const, url: nfdUrl, file_url: nfdUrl, file_path: nfdUrl }] : []),
+                ]
+              : []
+
+            // Título do detalhe: só o rótulo (o modal já renderiza "titulo em local")
+            const detailTitulo = isClientArrival
+              ? 'Chegada ao Cliente'
+              : isDelivery
+                ? (h.metadata?.delivery_label || titulo)
+                : titulo
+
+            const detailObs = isClientArrival
+              ? (arrivalPhotoUrl
+                ? (h.metadata?.justification ? `Justificativa: ${h.metadata.justification}` : 'Foto registrada na chegada ao cliente.')
+                : 'Foto da chegada não encontrada no armazenamento.')
+              : isDelivery
+                ? (h.metadata?.observation || '')
+                : ''
+
+            const arrivalAnexos: NonNullable<HistoricoItem['detail']>['anexos'] = (isClientArrival && arrivalPhotoPath && arrivalPhotoUrl)
+              ? [{
+                  id: String(h.metadata?.id_route_stop || h.id),
+                  nome: 'Foto da chegada',
+                  tipo: 'imagem' as const,
+                  url: arrivalPhotoUrl,
+                  file_url: arrivalPhotoUrl,
+                  file_path: arrivalPhotoPath,
+                }]
+              : []
+
             return {
               id: h.id,
               tipo: mapEventTypeToTipo(code),
@@ -782,22 +821,11 @@ export const RoutesPage = ({
               hasDetail,
               detail: hasDetail ? {
                 id: h.metadata?.invoice_id || h.id,
-                titulo: isClientArrival ? 'Chegada ao Cliente' : titulo,
+                titulo: detailTitulo,
                 local: destinationName,
                 notas: [],
-                observacao: isClientArrival
-                  ? (arrivalPhotoUrl
-                    ? (h.metadata?.justification ? `Justificativa: ${h.metadata.justification}` : 'Foto registrada na chegada ao cliente.')
-                    : 'Foto da chegada não encontrada no armazenamento.')
-                  : '',
-                anexos: isClientArrival && arrivalPhotoPath && arrivalPhotoUrl ? [{
-                  id: String(h.metadata?.id_route_stop || h.id),
-                  nome: 'Foto da chegada',
-                  tipo: 'imagem',
-                  url: arrivalPhotoUrl,
-                  file_url: arrivalPhotoUrl,
-                  file_path: arrivalPhotoPath,
-                }] : [],
+                observacao: detailObs,
+                anexos: isClientArrival ? arrivalAnexos : deliveryAnexos,
               } : undefined,
             }
           })

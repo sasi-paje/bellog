@@ -5,6 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { storageService } from '../../../features/storage'
+import { deliveryService } from '../services/delivery.service'
 import type { DeliveryReason, DeliveryResultInput } from '../services/delivery.service'
 
 // Mask functions
@@ -413,13 +414,13 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
         nfdPath = null
       }
 
-      // Mapear tipo de entrega para ID
-      // 1 = Entrega Total, 2 = Entrega Parcial, 3 = Entrega Negada, 4 = Entrega Abortada
-      const deliveryTypeMap: Record<string, number> = {
-        'entrega_total': 1,
-        'entrega_parcial': 2,
-        'entrega_negada': 3,
-        'entrega_abortada': 4,
+      // Resolve o id do tipo de entrega pelo code (nunca por id fixo — a
+      // ordem dos ids em ref_delivery_reason_type não segue a da UI).
+      const deliveryTypeId = await deliveryService.getDeliveryTypeId(deliveryType)
+      if (!deliveryTypeId) {
+        setError('Tipo de entrega inválido. Tente novamente.')
+        setIsUploading(false)
+        return
       }
 
       // Converter IDs para number (tabela espera bigint)
@@ -428,7 +429,6 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
       const idReasonNum = motivo ? parseInt(motivo, 10) : null
       const returnedBoxNum = caixasDevolvidas ? parseInt(caixasDevolvidas, 10) : null
       const returnedAmtNum = valorDevolucao ? parseFloat(valorDevolucao) : null
-      const deliveryTypeId = deliveryTypeMap[deliveryType] || 1
 
       // Montar payload
       const deliveryData: DeliveryResultInput = {
@@ -549,15 +549,15 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
 
       {/* Modal - centered in container */}
       <div className="fixed inset-0 flex items-center justify-center z-[200] p-[12px]">
-        <div className="bg-white flex flex-col gap-[20px] p-[12px] rounded-[6px] w-full min-w-[50vw] max-h-[90vh] overflow-visible">
-          {/* Header - NF Number + Close */}
-          <div className="flex items-center justify-between w-full shrink-0">
+        <div className="bg-white flex flex-col gap-[16px] p-[16px] rounded-[8px] shadow-xl w-full max-w-[520px] max-h-[90vh] overflow-hidden">
+          {/* Header - NF Number + Close (fixo no topo) */}
+          <div className="flex items-center justify-between w-full shrink-0 pb-[12px] border-b border-[#e0e0e0]">
             <p className="font-extrabold text-[16px] text-[#0f3255]">
-              {note.invoice_number}
+              NF {note.invoice_number}
             </p>
-            <div className="cursor-pointer" onClick={onClose}>
+            <button type="button" className="cursor-pointer flex items-center justify-center w-8 h-8 rounded hover:bg-gray-100 -mr-1" onClick={onClose} aria-label="Fechar">
               <CloseIcon />
-            </div>
+            </button>
           </div>
 
           {/* Error message */}
@@ -567,8 +567,8 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
             </div>
           )}
 
-          {/* Body */}
-          <div className="flex flex-col gap-[16px]">
+          {/* Body - rolável quando ultrapassa a altura da tela */}
+          <div className="flex flex-col gap-[16px] flex-1 overflow-y-auto min-h-0 pr-[4px] -mr-[4px]">
             {/* Tipo da entrega - Dropdown */}
             <div className="flex flex-col gap-[8px] w-full shrink-0">
               <p className="font-semibold text-[14px] text-[#161a36]">
@@ -984,8 +984,8 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
             )}
           </div>
 
-          {/* Footer - Buttons */}
-          <div className="flex gap-[16px] h-[40px] items-end justify-center w-full shrink-0">
+          {/* Footer - Buttons (fixo no rodapé) */}
+          <div className="flex gap-[16px] h-[45px] items-stretch justify-center w-full shrink-0 pt-[12px] border-t border-[#e0e0e0]">
             {/* Voltar Button */}
             <div
               className="bg-white border border-[#e67c26] border-solid flex flex-[1_0_0] h-full items-center justify-center px-[8px] py-[2px] rounded-[4px] cursor-pointer"

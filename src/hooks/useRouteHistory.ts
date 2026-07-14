@@ -68,13 +68,20 @@ export const useRouteHistory = (): UseRouteHistoryResult => {
       // código ainda NÃO existe no real (evita duplicar Criada/Em Andamento/
       // entregas já persistidas). Assim a chegada (real) aparece junto do ciclo
       // de vida (sintético), ordenados por data/hora.
+      // A finalização de entrega grava uma linha genérica ENTREGA_FINALIZADA em
+      // trx_route_history (auditoria), mas os eventos sintéticos por nota
+      // ("Entrega Total/Parcial em <destino>") são mais informativos — usamos
+      // esses no display e ocultamos a linha genérica para não duplicar.
+      const dbForDisplay = dbHistory.filter(
+        (h) => h.history_type?.code !== 'ENTREGA_FINALIZADA'
+      )
       const dbCodes = new Set(
-        dbHistory.map((h) => h.history_type?.code).filter(Boolean) as string[]
+        dbForDisplay.map((h) => h.history_type?.code).filter(Boolean) as string[]
       )
       const syntheticToAdd = synthetic.filter(
         (s) => !dbCodes.has(s.history_type?.code as string)
       )
-      const merged = [...dbHistory, ...syntheticToAdd].sort((a, b) => {
+      const merged = [...dbForDisplay, ...syntheticToAdd].sort((a, b) => {
         const ta = a.event_at ? new Date(a.event_at).getTime() : 0
         const tb = b.event_at ? new Date(b.event_at).getTime() : 0
         return ta - tb

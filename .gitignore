@@ -31,3 +31,6 @@ atomic-component-library/
 bellog/
 .vercel
 .env*
+
+# MCP local config (machine-specific)
+.mcp.json

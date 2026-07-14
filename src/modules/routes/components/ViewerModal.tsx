@@ -129,7 +129,7 @@ export const ViewerModal = ({ isOpen, onClose, fileName, fileUrl, fileType }: Vi
                 window.open(fileUrl, '_blank')
               }
             }}
-            className="flex items-center justify-center h-[45px] px-[16px] py-[2px] rounded-[4px] gap-2"
+            className="flex items-center justify-center h-[45px] w-[150px] rounded-[5px] gap-2"
             style={{ backgroundColor: '#e67c26' }}
           >
             <AppIcon name="download" size={20} color="white" />
@@ -140,7 +140,7 @@ export const ViewerModal = ({ isOpen, onClose, fileName, fileUrl, fileType }: Vi
           <button
             type="button"
             onClick={onClose}
-            className="flex items-center justify-center h-[45px] px-[16px] py-[2px] rounded-[4px] border bg-white w-[120px]"
+            className="flex items-center justify-center h-[45px] w-[150px] rounded-[5px] border bg-white"
             style={{ borderColor: '#e67c26' }}
           >
             <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: '#e67c26' }}>

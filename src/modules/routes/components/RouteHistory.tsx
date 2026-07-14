@@ -1,4 +1,4 @@
-import { AppIcon } from '../../../shared/components'
+import { ExternalLink } from 'lucide-react'
 
 interface OccurrenceDetail {
   id: string
@@ -38,14 +38,18 @@ interface TimelineItemProps {
   onClick: () => void
 }
 
+// Espaçamento vertical uniforme entre eventos (px). Também é o quanto a linha
+// inferior "vaza" além do card para atravessar o gap e alcançar o próximo card.
+const ITEM_GAP = 16
+
 const TimelineItem = ({ item, isFirst, isLast, onClick }: TimelineItemProps) => {
   const isMostRecent = isLast
-  const cardGap = isLast ? 0 : 16
 
   return (
     <div className="grid grid-cols-[24px_1fr] gap-4 w-full items-stretch">
-      {/* Timeline */}
-      <div className="relative flex justify-center">
+      {/* Timeline — a coluna tem exatamente a altura do card (items-stretch, sem
+          margem no card), então top-1/2 = centro vertical do card. */}
+      <div className="relative">
         {!isFirst && (
           <div
             className="absolute top-0 left-1/2 -translate-x-1/2 w-[2px]"
@@ -58,10 +62,11 @@ const TimelineItem = ({ item, isFirst, isLast, onClick }: TimelineItemProps) => 
 
         {!isLast && (
           <div
-            className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[2px]"
+            className="absolute left-1/2 -translate-x-1/2 w-[2px]"
             style={{
               backgroundColor: SECONDARY_LIGHTER,
-              height: `calc(50% + ${cardGap}px - 6px)`,
+              top: 'calc(50% + 6px)',
+              height: `calc(50% + ${ITEM_GAP}px - 6px)`,
             }}
           />
         )}
@@ -76,12 +81,11 @@ const TimelineItem = ({ item, isFirst, isLast, onClick }: TimelineItemProps) => 
         />
       </div>
 
-      {/* Card */}
+      {/* Card — sem marginBottom; o espaçamento vem do gap do container. */}
       <div
         className={`border border-[#919191] rounded-[6px] p-3 w-full ${
           item.hasDetail ? 'cursor-pointer hover:bg-gray-50' : ''
         }`}
-        style={{ marginBottom: `${cardGap}px` }}
         onClick={item.hasDetail ? onClick : undefined}
       >
         <div className="flex flex-col gap-2">
@@ -125,7 +129,7 @@ const TimelineItem = ({ item, isFirst, isLast, onClick }: TimelineItemProps) => 
 
             {item.hasDetail && (
               <div className="shrink-0">
-                <AppIcon name="open_in_new" size={20} color={ACCENT_ORANGE} />
+                <ExternalLink size={20} color={ACCENT_ORANGE} aria-hidden="true" />
               </div>
             )}
           </div>
@@ -150,7 +154,7 @@ export const RouteHistory = ({ data, onItemClick }: RouteHistoryProps) => {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col gap-4">
       {data.map((item, index) => (
         <TimelineItem
           key={item.id}

@@ -3,6 +3,7 @@ import { Drawer, TabId, FormDropdown, AppIcon } from '../../../shared/components
 import { CompanyOption } from '../../../features/companies'
 import { supabase, IS_TEST } from '../../../lib/supabase'
 import { ViewerModal } from '../../routes/components/ViewerModal'
+import { formatWeight } from '../../../shared/utils/format'
 
 export interface NoteDetailData {
   id: string
@@ -330,10 +331,10 @@ export function NoteDetailsDrawer({
             </h3>
             <div className="flex gap-4">
               <div className="flex-1">
-                <ReadonlyField label="Peso Líquido" value={note.weight ? `${note.weight.toFixed(1)} kg` : '-'} />
+                <ReadonlyField label="Peso Líquido" value={note.weight ? formatWeight(note.weight) : '-'} />
               </div>
               <div className="flex-1">
-                <ReadonlyField label="Peso Bruto" value={note.gross_weight ? `${note.gross_weight.toFixed(1)} kg` : '-'} />
+                <ReadonlyField label="Peso Bruto" value={note.gross_weight ? formatWeight(note.gross_weight) : '-'} />
               </div>
             </div>
           </div>

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { PageHeader, Pagination, SharedTable, TableColumn, AppIcon } from '../../shared/components'
+import { PageHeader, Pagination, SharedTable, TableColumn, AppIcon, useToast, ToastContainer } from '../../shared/components'
 import { RoutesByNotesToolbar, NoteByRouteData } from './components/RoutesByNotesToolbar'
 import { ExportRoutesByNotesModal } from './components/ExportRoutesByNotesModal'
 import { useFiscalInvoices } from '../../hooks/useFiscalInvoices'
+import { fiscalInvoiceService } from '../../features/notes'
+import { formatWeight as formatWeightShared } from '../../shared/utils/format'
 
 interface RoutesByNotesPageProps {
   userName?: string
@@ -19,10 +21,10 @@ const TEXT_LIGHT25 = '#919191'
 const BORDER_HEADER = '#7d9dd3'
 const BORDER_ROW = '#828282'
 
-// Helper para formatar peso
+// Helper para formatar peso (padrão do sistema: X.XXX kg)
 const formatWeight = (weight?: number): string => {
   if (!weight) return '-'
-  return weight.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' kg'
+  return formatWeightShared(weight)
 }
 
 // Helper para formatar valor monetário
@@ -75,6 +77,23 @@ const columns: TableColumn<NoteByRouteData>[] = [
   { key: 'motivo', label: 'Motivo', render: (row) => renderMotivo(row.motivo) },
 ]
 
+// Converte uma nota fiscal (InvoiceListItem) para o formato da tabela
+const mapInvoiceToNote = (inv: any): NoteByRouteData => ({
+  id: inv.id,
+  route_code: inv.route_code || '',
+  route_number: inv.route_number || '',
+  invoice_number: inv.invoice_number || '',
+  attempt_number: inv.attempt_number ?? 0,
+  supplier_name: inv.supplier_name || '',
+  destination_name: inv.destination_name || '',
+  vehicle_plate: inv.vehicle_plate || '',
+  driver_name: inv.driver_name || '',
+  gross_weight: inv.gross_weight || inv.weight || 0,
+  invoice_value: inv.value || 0,
+  delivery_status: inv.delivery_status_description || '',
+  motivo: '',
+})
+
 export const RoutesByNotesPage = ({
   userName = 'Leon Kennedy',
   userRole = 'Usuário',
@@ -84,6 +103,7 @@ export const RoutesByNotesPage = ({
   onToggleSidebar,
 }: RoutesByNotesPageProps) => {
   const { invoices, total, loading, fetchInvoices } = useFiscalInvoices()
+  const { showSuccess, showError, toasts, removeToast } = useToast()
   const [currentPage, setCurrentPage] = useState(1)
   const LIMIT = 50
   const totalPages = Math.ceil(total / LIMIT) || 1
@@ -92,30 +112,21 @@ export const RoutesByNotesPage = ({
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [isExportSelectionMode, setIsExportSelectionMode] = useState(false)
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set())
+  // Seleção de todos os registros dos filtros (todas as páginas)
+  const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false)
+  const [allFilteredNotes, setAllFilteredNotes] = useState<NoteByRouteData[]>([])
+  const [selectingAll, setSelectingAll] = useState(false)
 
   useEffect(() => {
     fetchInvoices({ page: currentPage, limit: LIMIT, onlyWithRoute: true })
   }, [currentPage])
 
   // Transformar dados das notas para o formato da tabela
-  const notesData: NoteByRouteData[] = invoices.map(inv => ({
-    id: inv.id,
-    route_code: inv.route_code || '',
-    route_number: inv.route_number || '',
-    invoice_number: inv.invoice_number || '',
-    attempt_number: inv.attempt_number ?? 0,
-    supplier_name: inv.supplier_name || '',
-    destination_name: inv.destination_name || '',
-    vehicle_plate: inv.vehicle_plate || '',
-    driver_name: inv.driver_name || '',
-    gross_weight: inv.gross_weight || inv.weight || 0,
-    invoice_value: inv.value || 0,
-    delivery_status: inv.delivery_status_description || '',
-    motivo: '',
-  }))
+  const notesData: NoteByRouteData[] = invoices.map(mapInvoiceToNote)
 
   // Selection handlers
   const handleSelectNote = (id: string, selected: boolean) => {
+    setSelectAllAcrossPages(false)
     setSelectedNoteIds(prev => {
       const newSet = new Set(prev)
       if (selected) {
@@ -127,16 +138,34 @@ export const RoutesByNotesPage = ({
     })
   }
 
+  // Checkbox do cabeçalho: seleciona apenas os registros da página atual
   const handleSelectAllNotes = (selected: boolean) => {
-    if (selected) {
-      setSelectedNoteIds(new Set(notesData.map(n => String(n.id))))
-    } else {
-      setSelectedNoteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setSelectedNoteIds(selected ? new Set(notesData.map(n => String(n.id))) : new Set())
+  }
+
+  // Seleciona todos os registros retornados pelos filtros (todas as páginas)
+  const handleSelectAllAcrossPages = async () => {
+    setSelectingAll(true)
+    try {
+      const result = await fiscalInvoiceService.list({ page: 1, limit: total || 10000, onlyWithRoute: true })
+      const mapped = result.data.map(mapInvoiceToNote)
+      setAllFilteredNotes(mapped)
+      setSelectedNoteIds(new Set(mapped.map(n => String(n.id))))
+      setSelectAllAcrossPages(true)
+      showSuccess(`Todos os ${mapped.length} registros encontrados foram selecionados.`)
+    } catch (err) {
+      console.error('[RoutesByNotesPage] Erro ao selecionar todos os registros:', err)
+      showError('Não foi possível selecionar todos os registros. Tente novamente.')
+    } finally {
+      setSelectingAll(false)
     }
   }
 
   const handleClearSelection = () => {
     setSelectedNoteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setAllFilteredNotes([])
     setIsExportSelectionMode(false)
   }
 
@@ -147,10 +176,6 @@ export const RoutesByNotesPage = ({
   const handleExportSelected = () => {
     if (selectedNoteIds.size === 0) return
     setIsExportModalOpen(true)
-  }
-
-  const handleExportModalClose = () => {
-    setIsExportModalOpen(false)
   }
 
   console.log('[RoutesByNotesPage] notesData:', notesData)
@@ -187,7 +212,7 @@ export const RoutesByNotesPage = ({
               >
                 <AppIcon name="delete_forever" size={20} color="#C7392C" />
                 <span className="font-bold text-[13px]" style={{ fontFamily: 'Inter, sans-serif', color: '#C7392C' }}>
-                  Cancelar Seleção
+                  Cancelar Exportação
                 </span>
               </button>
             </div>
@@ -202,6 +227,30 @@ export const RoutesByNotesPage = ({
             />
           </div>
         </div>
+
+        {/* Banner de seleção entre páginas (estilo Gmail) */}
+        {isExportSelectionMode && (() => {
+          const currentPageCount = notesData.length
+          const allCurrentSelected = currentPageCount > 0 && notesData.every((n) => selectedNoteIds.has(String(n.id)))
+          const hasMore = total > currentPageCount
+          if (!allCurrentSelected || !hasMore || selectAllAcrossPages) return null
+          return (
+            <div className="flex items-center justify-center gap-3 shrink-0 w-full bg-[#eef3fc] border border-[#4077d9]/40 rounded-[6px] px-4 py-2">
+              <span className="text-[13px] text-[#2a2a2a]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                Todos os <strong>{currentPageCount}</strong> registros desta página foram selecionados.
+              </span>
+              <button
+                type="button"
+                onClick={handleSelectAllAcrossPages}
+                disabled={selectingAll}
+                className="text-[13px] font-bold text-[#4077d9] underline disabled:opacity-50"
+                style={{ fontFamily: 'Inter, sans-serif' }}
+              >
+                {selectingAll ? 'Selecionando...' : `Deseja selecionar todos os ${total} registros encontrados?`}
+              </button>
+            </div>
+          )
+        })()}
 
         {/* Table */}
         <div className="flex flex-1 flex-col w-full min-w-0">
@@ -221,9 +270,26 @@ export const RoutesByNotesPage = ({
       {/* Export Modal */}
       <ExportRoutesByNotesModal
         isOpen={isExportModalOpen}
-        onClose={handleExportModalClose}
-        notes={selectedNoteIds.size > 0 ? notesData.filter(n => selectedNoteIds.has(String(n.id))) : notesData}
+        onClose={() => {
+          // Voltar: apenas fecha o modal, mantendo a seleção e o modo de exportação
+          setIsExportModalOpen(false)
+        }}
+        onExported={() => {
+          // Exportou com sucesso: encerra o fluxo de exportação
+          setIsExportModalOpen(false)
+          setIsExportSelectionMode(false)
+          setSelectedNoteIds(new Set())
+          setSelectAllAcrossPages(false)
+          setAllFilteredNotes([])
+        }}
+        notes={
+          selectAllAcrossPages
+            ? allFilteredNotes
+            : (selectedNoteIds.size > 0 ? notesData.filter(n => selectedNoteIds.has(String(n.id))) : notesData)
+        }
       />
+
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
   )
 }

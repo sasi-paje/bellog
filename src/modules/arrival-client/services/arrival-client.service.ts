@@ -59,7 +59,9 @@ interface RegisterRouteArrivalResponse {
   error?: string
 }
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
+// Remove barra(s) final(is) do VITE_SUPABASE_URL para evitar URL com '//'
+// (ex.: '.../co//functions/...') quando a env termina com '/'.
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '')
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 const toArrivalDateTime = (arrivalTime: string): string => {

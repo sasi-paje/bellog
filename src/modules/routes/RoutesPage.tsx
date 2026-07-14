@@ -64,7 +64,7 @@ interface HistoricoItem {
     local: string
     notas: string[]
     observacao: string
-    anexos: { id: string; nome: string; tipo: 'imagem' | 'documento' }[]
+    anexos: { id: string; nome: string; tipo: 'imagem' | 'documento'; url?: string; file_path?: string; file_url?: string }[]
   }
 }
 
@@ -162,6 +162,7 @@ const convertRouteToFormData = (route: any): RouteFormData => {
 }
 
 const DELIVERY_EVENT_TYPES = new Set(['DELIVERY_TOTAL', 'DELIVERY_PARTIAL', 'DELIVERY_DENIED', 'DELIVERY_ABORTED'])
+const DETAIL_EVENT_TYPES = new Set([...DELIVERY_EVENT_TYPES, 'CLIENT_ARRIVAL'])
 
 function mapEventTypeToTipo(code: string | null | undefined): HistoricoItem['tipo'] {
   switch (code) {
@@ -172,6 +173,7 @@ function mapEventTypeToTipo(code: string | null | undefined): HistoricoItem['tip
     case 'DELIVERY_PARTIAL': return 'entrega-parcial'
     case 'DELIVERY_DENIED': return 'entrega-negada'
     case 'DELIVERY_ABORTED': return 'entrega-abortada'
+    case 'CLIENT_ARRIVAL': return 'em-rota'
     case 'ROUTE_ENDED': return 'rota-finalizada'
     default: return 'rota-criada'
   }
@@ -227,6 +229,10 @@ export const RoutesPage = ({
   // Estado para seleção de linhas
   const [selectedRouteIds, setSelectedRouteIds] = useState<Set<string>>(new Set())
   const [isExportSelectionMode, setIsExportSelectionMode] = useState(false)
+  // Seleção de todos os registros dos filtros (todas as páginas)
+  const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false)
+  const [allFilteredRoutes, setAllFilteredRoutes] = useState<any[]>([])
+  const [selectingAll, setSelectingAll] = useState(false)
 
   // Refs para guardar valores atuais para o callback global
   const routeIdRef = useRef(selectedRouteId)
@@ -276,7 +282,7 @@ export const RoutesPage = ({
   // Recarrega a lista respeitando busca, toggle de inativos, página e
   // os filtros aplicados no toolbar. Sem filtro aplicado, usa o dia atual
   // como padrão; com filtro, usa as datas/critérios informados.
-  const reloadRoutes = () => {
+  const buildRoutesParams = () => {
     const today = new Date()
     const day = String(today.getDate()).padStart(2, '0')
     const month = String(today.getMonth() + 1).padStart(2, '0')
@@ -285,7 +291,7 @@ export const RoutesPage = ({
 
     const f = appliedFilters
 
-    fetchRoutes({
+    return {
       search: searchTerm || undefined,
       isActive: showInactive ? undefined : true,
       page: currentPage,
@@ -301,7 +307,11 @@ export const RoutesPage = ({
       rotaInicio: f?.rotaInicio || undefined,
       rotaFim: f?.rotaFim || undefined,
       responsavel: f?.responsavel || undefined,
-    })
+    }
+  }
+
+  const reloadRoutes = () => {
+    fetchRoutes(buildRoutesParams())
   }
 
   // Fetch routes on mount and when filtros/busca/página mudam
@@ -309,6 +319,13 @@ export const RoutesPage = ({
     reloadRoutes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, showInactive, currentPage, appliedFilters, fetchRoutes])
+
+  // Reseta a seleção quando filtros/busca mudam (não ao paginar)
+  useEffect(() => {
+    setSelectedRouteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setAllFilteredRoutes([])
+  }, [searchTerm, showInactive, appliedFilters])
 
   // Fetch reference data
   useEffect(() => {
@@ -432,6 +449,7 @@ export const RoutesPage = ({
 
   // Handlers para seleção de linhas
   const handleSelectRoute = (id: string, selected: boolean) => {
+    setSelectAllAcrossPages(false)
     setSelectedRouteIds(prev => {
       const newSet = new Set(prev)
       if (selected) {
@@ -443,16 +461,33 @@ export const RoutesPage = ({
     })
   }
 
+  // Checkbox do cabeçalho: seleciona apenas os registros da página atual
   const handleSelectAllRoutes = (selected: boolean) => {
-    if (selected) {
-      setSelectedRouteIds(new Set(routes.map(r => String(r.id))))
-    } else {
-      setSelectedRouteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setSelectedRouteIds(selected ? new Set(routes.map(r => String(r.id))) : new Set())
+  }
+
+  // Seleciona todos os registros retornados pelos filtros (todas as páginas)
+  const handleSelectAllAcrossPages = async () => {
+    setSelectingAll(true)
+    try {
+      const result = await routeService.list({ ...buildRoutesParams(), page: 1, limit: total || 10000 })
+      setAllFilteredRoutes(result.data)
+      setSelectedRouteIds(new Set(result.data.map((r: any) => String(r.id))))
+      setSelectAllAcrossPages(true)
+      showSuccess(`Todos os ${result.data.length} registros encontrados foram selecionados.`)
+    } catch (err) {
+      console.error('[RoutesPage] Erro ao selecionar todos os registros:', err)
+      showError('Não foi possível selecionar todos os registros. Tente novamente.')
+    } finally {
+      setSelectingAll(false)
     }
   }
 
   const handleClearSelection = () => {
     setSelectedRouteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setAllFilteredRoutes([])
     setIsExportSelectionMode(false)
   }
 
@@ -732,21 +767,65 @@ export const RoutesPage = ({
           const mappedHistory: HistoricoItem[] = history.map((h) => {
             const code = h.history_type?.code ?? null
             const isDelivery = code !== null && DELIVERY_EVENT_TYPES.has(code)
-            const titulo = h.history_type?.description || h.description || 'Evento'
+            const hasDetail = code !== null && DETAIL_EVENT_TYPES.has(code)
+            const isClientArrival = code === 'CLIENT_ARRIVAL'
+            const destinationName = h.metadata?.destination_name || h.metadata?.reference_name || ''
+            const titulo = isClientArrival
+              ? (destinationName ? `Chegada em ${destinationName}` : 'Chegada ao Cliente')
+              : (h.description || h.title || h.history_type?.description || 'Evento')
+            const arrivalPhotoPath = h.metadata?.arrival_photo_path
+            const arrivalPhotoUrl = h.metadata?.arrival_photo_url
+
+            // Anexos da entrega (canhoto/NFD) — as URLs já são públicas (bellog-files)
+            const receiptUrl = h.metadata?.receipt_image_path
+            const nfdUrl = h.metadata?.nfd_image_path
+            const deliveryAnexos: NonNullable<HistoricoItem['detail']>['anexos'] = isDelivery
+              ? [
+                  ...(receiptUrl ? [{ id: `${h.id}-canhoto`, nome: 'Canhoto', tipo: 'imagem' as const, url: receiptUrl, file_url: receiptUrl, file_path: receiptUrl }] : []),
+                  ...(nfdUrl ? [{ id: `${h.id}-nfd`, nome: 'NFD', tipo: 'documento' as const, url: nfdUrl, file_url: nfdUrl, file_path: nfdUrl }] : []),
+                ]
+              : []
+
+            // Título do detalhe: só o rótulo (o modal já renderiza "titulo em local")
+            const detailTitulo = isClientArrival
+              ? 'Chegada ao Cliente'
+              : isDelivery
+                ? (h.metadata?.delivery_label || titulo)
+                : titulo
+
+            const detailObs = isClientArrival
+              ? (arrivalPhotoUrl
+                ? (h.metadata?.justification ? `Justificativa: ${h.metadata.justification}` : 'Foto registrada na chegada ao cliente.')
+                : 'Foto da chegada não encontrada no armazenamento.')
+              : isDelivery
+                ? (h.metadata?.observation || '')
+                : ''
+
+            const arrivalAnexos: NonNullable<HistoricoItem['detail']>['anexos'] = (isClientArrival && arrivalPhotoPath && arrivalPhotoUrl)
+              ? [{
+                  id: String(h.metadata?.id_route_stop || h.id),
+                  nome: 'Foto da chegada',
+                  tipo: 'imagem' as const,
+                  url: arrivalPhotoUrl,
+                  file_url: arrivalPhotoUrl,
+                  file_path: arrivalPhotoPath,
+                }]
+              : []
+
             return {
               id: h.id,
               tipo: mapEventTypeToTipo(code),
               titulo,
               data: h.event_at ? new Date(h.event_at).toLocaleDateString('pt-BR') : '',
               hora: h.event_at ? new Date(h.event_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-              hasDetail: isDelivery,
-              detail: isDelivery ? {
+              hasDetail,
+              detail: hasDetail ? {
                 id: h.metadata?.invoice_id || h.id,
-                titulo,
-                local: h.metadata?.destination_name || '',
+                titulo: detailTitulo,
+                local: destinationName,
                 notas: [],
-                observacao: '',
-                anexos: [],
+                observacao: detailObs,
+                anexos: isClientArrival ? arrivalAnexos : deliveryAnexos,
               } : undefined,
             }
           })
@@ -901,7 +980,7 @@ export const RoutesPage = ({
               >
                 <AppIcon name="delete_forever" size={20} color="#C7392C" />
                 <span className="font-bold text-[13px]" style={{ fontFamily: 'Inter, sans-serif', color: '#C7392C' }}>
-                  Cancelar Seleção
+                  Cancelar Exportação
                 </span>
               </button>
             )}
@@ -916,6 +995,30 @@ export const RoutesPage = ({
             />
           </div>
         </div>
+
+        {/* Banner de seleção entre páginas (estilo Gmail) */}
+        {isExportSelectionMode && (() => {
+          const currentPageCount = routes.length
+          const allCurrentSelected = currentPageCount > 0 && routes.every((r) => selectedRouteIds.has(String(r.id)))
+          const hasMore = total > currentPageCount
+          if (!allCurrentSelected || !hasMore || selectAllAcrossPages) return null
+          return (
+            <div className="flex items-center justify-center gap-3 shrink-0 w-full bg-[#eef3fc] border border-[#4077d9]/40 rounded-[6px] px-4 py-2">
+              <span className="text-[13px] text-[#2a2a2a]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                Todos os <strong>{currentPageCount}</strong> registros desta página foram selecionados.
+              </span>
+              <button
+                type="button"
+                onClick={handleSelectAllAcrossPages}
+                disabled={selectingAll}
+                className="text-[13px] font-bold text-[#4077d9] underline disabled:opacity-50"
+                style={{ fontFamily: 'Inter, sans-serif' }}
+              >
+                {selectingAll ? 'Selecionando...' : `Deseja selecionar todos os ${total} registros encontrados?`}
+              </button>
+            </div>
+          )
+        })()}
 
         {/* Table */}
         <div className="flex flex-1 flex-col w-full min-w-0">
@@ -1021,11 +1124,22 @@ export const RoutesPage = ({
       <ExportModal
         isOpen={isExportModalOpen}
         onClose={() => {
+          // Voltar: apenas fecha o modal, mantendo a seleção e o modo de exportação
+          setIsExportModalOpen(false)
+        }}
+        onExported={() => {
+          // Exportou com sucesso: encerra o fluxo de exportação
           setIsExportModalOpen(false)
           setIsExportSelectionMode(false)
           setSelectedRouteIds(new Set())
+          setSelectAllAcrossPages(false)
+          setAllFilteredRoutes([])
         }}
-        routes={selectedRouteIds.size > 0 ? routes.filter(r => selectedRouteIds.has(String(r.id))) : routes}
+        routes={
+          selectAllAcrossPages
+            ? allFilteredRoutes
+            : (selectedRouteIds.size > 0 ? routes.filter(r => selectedRouteIds.has(String(r.id))) : routes)
+        }
       />
 
       {/* Modal de confirmação de ativação/inativação de rota */}

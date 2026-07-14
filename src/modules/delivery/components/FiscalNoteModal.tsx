@@ -5,6 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { storageService } from '../../../features/storage'
+import { deliveryService } from '../services/delivery.service'
 import type { DeliveryReason, DeliveryResultInput } from '../services/delivery.service'
 
 // Mask functions
@@ -99,6 +100,16 @@ const DELIVERY_TYPE_OPTIONS = [
 ]
 
 // Ícone de upload (attach_file)
+const buildDeliveryStorageFolder = (
+  routeId: string | number | undefined,
+  destinationId: string | number | undefined,
+  folder: 'canhotos' | 'nfd'
+): string => {
+  if (!routeId || !destinationId) return folder
+
+  return `rota/${routeId}/destino/${destinationId}/${folder}`
+}
+
 const UploadIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M16.5 6V17.5C16.5 18.88 15.38 20 14 20C12.62 20 11.5 18.88 11.5 17.5V5C11.5 3.62 12.62 2.5 14 2.5C15.38 2.5 16.5 3.62 16.5 5V8.5H14.5V5H14V5.5H13.5V8.5H14.5V6H16.5ZM6.5 18C7.88 18 9 16.88 9 15.5C9 14.12 7.88 13 6.5 13C5.12 13 4 14.12 4 15.5C4 16.88 5.12 18 6.5 18ZM6.5 14.5C6.9 14.5 7.25 14.85 7.25 15.25C7.25 15.65 6.9 16 6.5 16C6.1 16 5.75 15.65 5.75 15.25C5.75 14.85 6.1 14.5 6.5 14.5ZM17.5 17.5C17.5 15.75 16.12 14.5 14.25 14.5V13C15.38 13 16.25 13.88 16.25 15C16.25 15.63 15.87 16.16 15.31 16.44C16.03 16.75 16.5 17.5 16.5 18.5H18.5C18.5 16.46 17.5 15 17.5 17.5Z" fill="#161a36"/>
@@ -158,8 +169,6 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
   const [caixasDevolvidas, setCaixasDevolvidas] = useState('')
   const [valorDevolucao, setValorDevolucao] = useState('')
   const [todasNotasAbortadas, setTodasNotasAbortadas] = useState(false)
-  const [isDeliveryTypeDropdownOpen, setIsDeliveryTypeDropdownOpen] = useState(false)
-  const [isMotivoDropdownOpen, setIsMotivoDropdownOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // State para modal de confirmação de anexos pendentes
@@ -295,8 +304,6 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
     return groupReasonsByCategory(filtered)
   }
 
-  const selectedMotivo = getMotivoOptions().find(opt => String(opt.id) === String(motivo))
-
   const handleCanhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -368,7 +375,10 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
 
       // Se usuário enviou novo arquivo
       if (canhoto) {
-        canhotoPath = await storageService.uploadFile(canhoto, 'canhotos')
+        canhotoPath = await storageService.uploadFile(
+          canhoto,
+          buildDeliveryStorageFolder(note.id_route, destinationId, 'canhotos')
+        )
         if (!canhotoPath) {
           setError('Erro ao fazer upload do canhoto. Verifique o console.')
           setIsUploading(false)
@@ -383,7 +393,10 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
       }
 
       if (nfdFile) {
-        nfdPath = await storageService.uploadFile(nfdFile, 'nfd')
+        nfdPath = await storageService.uploadFile(
+          nfdFile,
+          buildDeliveryStorageFolder(note.id_route, destinationId, 'nfd')
+        )
         if (!nfdPath) {
           setError('Erro ao fazer upload da NFD. Verifique o console.')
           setIsUploading(false)
@@ -397,13 +410,13 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
         nfdPath = null
       }
 
-      // Mapear tipo de entrega para ID
-      // 1 = Entrega Total, 2 = Entrega Parcial, 3 = Entrega Negada, 4 = Entrega Abortada
-      const deliveryTypeMap: Record<string, number> = {
-        'entrega_total': 1,
-        'entrega_parcial': 2,
-        'entrega_negada': 3,
-        'entrega_abortada': 4,
+      // Resolve o id do tipo de entrega pelo code (nunca por id fixo — a
+      // ordem dos ids em ref_delivery_reason_type não segue a da UI).
+      const deliveryTypeId = await deliveryService.getDeliveryTypeId(deliveryType)
+      if (!deliveryTypeId) {
+        setError('Tipo de entrega inválido. Tente novamente.')
+        setIsUploading(false)
+        return
       }
 
       // Converter IDs para number (tabela espera bigint)
@@ -412,7 +425,6 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
       const idReasonNum = motivo ? parseInt(motivo, 10) : null
       const returnedBoxNum = caixasDevolvidas ? parseInt(caixasDevolvidas, 10) : null
       const returnedAmtNum = valorDevolucao ? parseFloat(valorDevolucao) : null
-      const deliveryTypeId = deliveryTypeMap[deliveryType] || 1
 
       // Montar payload
       const deliveryData: DeliveryResultInput = {
@@ -520,9 +532,6 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
   const confirmStatus = getConfirmStatus()
   const canConfirm = () => confirmStatus.canConfirm
 
-  // Selected option label
-  const selectedOption = DELIVERY_TYPE_OPTIONS.find(opt => opt.value === deliveryType)
-
   return (
     <>
       {/* Backdrop */}
@@ -533,15 +542,15 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
 
       {/* Modal - centered in container */}
       <div className="fixed inset-0 flex items-center justify-center z-[200] p-[12px]">
-        <div className="bg-white flex flex-col gap-[20px] p-[12px] rounded-[6px] w-full min-w-[50vw] max-h-[90vh] overflow-visible">
-          {/* Header - NF Number + Close */}
-          <div className="flex items-center justify-between w-full shrink-0">
+        <div className="bg-white flex flex-col gap-[16px] p-[16px] rounded-[8px] shadow-xl w-full max-w-[520px] max-h-[90dvh] overflow-hidden">
+          {/* Header - NF Number + Close (fixo no topo) */}
+          <div className="flex items-center justify-between w-full shrink-0 pb-[12px] border-b border-[#e0e0e0]">
             <p className="font-extrabold text-[16px] text-[#0f3255]">
-              {note.invoice_number}
+              NF {note.invoice_number}
             </p>
-            <div className="cursor-pointer" onClick={onClose}>
+            <button type="button" className="cursor-pointer flex items-center justify-center w-8 h-8 rounded hover:bg-gray-100 -mr-1" onClick={onClose} aria-label="Fechar">
               <CloseIcon />
-            </div>
+            </button>
           </div>
 
           {/* Error message */}
@@ -551,51 +560,39 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
             </div>
           )}
 
-          {/* Body */}
-          <div className="flex flex-col gap-[16px]">
+          {/* Body - rolável quando ultrapassa a altura da tela */}
+          <div className="flex flex-col gap-[16px] flex-1 overflow-y-auto min-h-0 pr-[4px] -mr-[4px]">
             {/* Tipo da entrega - Dropdown */}
             <div className="flex flex-col gap-[8px] w-full shrink-0">
               <p className="font-semibold text-[14px] text-[#161a36]">
                 Tipo da entrega
               </p>
-              <div
-                className="bg-white border border-[#161a36] border-solid flex h-[45px] items-center justify-between px-[16px] py-[12px] relative rounded-[5px] w-full cursor-pointer"
-                onClick={() => !isUploading && setIsDeliveryTypeDropdownOpen(!isDeliveryTypeDropdownOpen)}
-              >
-                <span className={`text-[14px] ${selectedOption ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}>
-                  {selectedOption?.label || 'Selecione o tipo da entrega'}
-                </span>
-                <div className="flex items-center justify-center w-[24px] h-[24px]">
+              <div className="relative w-full">
+                <select
+                  value={deliveryType}
+                  disabled={isUploading}
+                  onChange={(e) => {
+                    setDeliveryType(e.target.value)
+                    // Clear all conditional fields when changing type
+                    setMotivo('')
+                    setNumeroNfd('')
+                    setCaixasDevolvidas('')
+                    setValorDevolucao('')
+                    setNfdFile(null)
+                    setTodasNotasAbortadas(false)
+                  }}
+                  className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] cursor-pointer disabled:bg-gray-100 ${deliveryType ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}
+                >
+                  <option value="" disabled>Selecione o tipo da entrega</option>
+                  {DELIVERY_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value} className="text-[#2a2a2a]">
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute right-[16px] top-1/2 -translate-y-1/2 flex items-center justify-center">
                   <DropdownIcon />
                 </div>
-
-                {/* Dropdown options */}
-                {isDeliveryTypeDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#161a36] rounded-[5px] z-[200] max-h-[150px] overflow-auto">
-                    {DELIVERY_TYPE_OPTIONS.map((option) => (
-                      <div
-                        key={option.value}
-                        className="flex items-center px-[16px] py-[12px] hover:bg-[#f0f0f0] cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeliveryType(option.value)
-                          setIsDeliveryTypeDropdownOpen(false)
-                          // Clear all conditional fields when changing type
-                          setMotivo('')
-                          setNumeroNfd('')
-                          setCaixasDevolvidas('')
-                          setValorDevolucao('')
-                          setNfdFile(null)
-                          setTodasNotasAbortadas(false)
-                        }}
-                      >
-                        <span className="text-[14px] text-[#2a2a2a]">
-                          {option.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -735,51 +732,27 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
                   <p className="font-semibold text-[14px] text-[#161a36]">
                     Motivo
                   </p>
-                  <div
-                    className="bg-white border border-[#161a36] border-solid flex h-[45px] items-center justify-between px-[16px] py-[12px] relative rounded-[5px] w-full cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!isUploading) setIsMotivoDropdownOpen(!isMotivoDropdownOpen)
-                    }}
-                  >
-                    <span className={`text-[14px] ${selectedMotivo ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}>
-                      {selectedMotivo?.reason || 'Selecione o motivo'}
-                    </span>
-                    <div className="flex items-center justify-center w-[24px] h-[24px]">
+                  <div className="relative w-full">
+                    <select
+                      value={motivo}
+                      disabled={isUploading}
+                      onChange={(e) => setMotivo(e.target.value)}
+                      className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] cursor-pointer disabled:bg-gray-100 ${motivo ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}
+                    >
+                      <option value="" disabled>Selecione o motivo</option>
+                      {getMotivoGroups().map((group) => (
+                        <optgroup key={group.category_id} label={group.category_name}>
+                          {group.reasons.map((option) => (
+                            <option key={option.id} value={String(option.id)} className="text-[#2a2a2a]">
+                              {option.reason}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute right-[16px] top-1/2 -translate-y-1/2 flex items-center justify-center">
                       <DropdownIcon />
                     </div>
-
-                    {/* Dropdown options - agrupados por categoria */}
-                    {isMotivoDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#161a36] rounded-[5px] z-[200] max-h-[250px] overflow-auto">
-                        {getMotivoGroups().map((group) => (
-                          <div key={group.category_id}>
-                            {/* Nome do grupo - não clicável */}
-                            <div className="px-[16px] py-[8px] bg-[#f5f5f5] border-b border-[#e0e0e0]">
-                              <span className="text-[12px] font-bold text-[#161a36] uppercase">
-                                {group.category_name}
-                              </span>
-                            </div>
-                            {/* Itens do grupo */}
-                            {group.reasons.map((option) => (
-                              <div
-                                key={option.id}
-                                className="flex items-center px-[16px] py-[12px] hover:bg-[#f0f0f0] cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setMotivo(option.id)
-                                  setIsMotivoDropdownOpen(false)
-                                }}
-                              >
-                                <span className="text-[14px] text-[#2a2a2a]">
-                                  {option.reason}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -838,53 +811,27 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
                   <p className="font-semibold text-[14px] text-[#161a36]">
                     Motivo
                   </p>
-                  <div
-                    className="bg-white border border-[#161a36] border-solid flex h-[45px] items-center justify-between px-[16px] py-[12px] relative rounded-[5px] w-full cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!isUploading) {
-                        setIsMotivoDropdownOpen(!isMotivoDropdownOpen)
-                      }
-                    }}
-                  >
-                    <span className={`text-[14px] ${selectedMotivo ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}>
-                      {selectedMotivo?.reason || 'Selecione o motivo'}
-                    </span>
-                    <div className="flex items-center justify-center w-[24px] h-[24px]">
+                  <div className="relative w-full">
+                    <select
+                      value={motivo}
+                      disabled={isUploading}
+                      onChange={(e) => setMotivo(e.target.value)}
+                      className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] cursor-pointer disabled:bg-gray-100 ${motivo ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}
+                    >
+                      <option value="" disabled>Selecione o motivo</option>
+                      {getMotivoGroups().map((group) => (
+                        <optgroup key={group.category_id} label={group.category_name}>
+                          {group.reasons.map((option) => (
+                            <option key={option.id} value={String(option.id)} className="text-[#2a2a2a]">
+                              {option.reason}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute right-[16px] top-1/2 -translate-y-1/2 flex items-center justify-center">
                       <DropdownIcon />
                     </div>
-
-                    {/* Dropdown options - agrupados por categoria */}
-                    {isMotivoDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#161a36] rounded-[5px] z-[200] max-h-[250px] overflow-auto">
-                        {getMotivoGroups().map((group) => (
-                          <div key={group.category_id}>
-                            {/* Nome do grupo - não clicável */}
-                            <div className="px-[16px] py-[8px] bg-[#f5f5f5] border-b border-[#e0e0e0]">
-                              <span className="text-[12px] font-bold text-[#161a36] uppercase">
-                                {group.category_name}
-                              </span>
-                            </div>
-                            {/* Itens do grupo */}
-                            {group.reasons.map((option) => (
-                              <div
-                                key={option.id}
-                                className="flex items-center px-[16px] py-[12px] hover:bg-[#f0f0f0] cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setMotivo(option.id)
-                                  setIsMotivoDropdownOpen(false)
-                                }}
-                              >
-                                <span className="text-[14px] text-[#2a2a2a]">
-                                  {option.reason}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               </>
@@ -898,51 +845,27 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
                   <p className="font-semibold text-[14px] text-[#161a36]">
                     Motivo
                   </p>
-                  <div
-                    className="bg-white border border-[#161a36] border-solid flex h-[45px] items-center justify-between px-[16px] py-[12px] relative rounded-[5px] w-full cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (!isUploading) setIsMotivoDropdownOpen(!isMotivoDropdownOpen)
-                    }}
-                  >
-                    <span className={`text-[14px] ${selectedMotivo ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}>
-                      {selectedMotivo?.reason || 'Selecione o motivo'}
-                    </span>
-                    <div className="flex items-center justify-center w-[24px] h-[24px]">
+                  <div className="relative w-full">
+                    <select
+                      value={motivo}
+                      disabled={isUploading}
+                      onChange={(e) => setMotivo(e.target.value)}
+                      className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] cursor-pointer disabled:bg-gray-100 ${motivo ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}
+                    >
+                      <option value="" disabled>Selecione o motivo</option>
+                      {getMotivoGroups().map((group) => (
+                        <optgroup key={group.category_id} label={group.category_name}>
+                          {group.reasons.map((option) => (
+                            <option key={option.id} value={String(option.id)} className="text-[#2a2a2a]">
+                              {option.reason}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute right-[16px] top-1/2 -translate-y-1/2 flex items-center justify-center">
                       <DropdownIcon />
                     </div>
-
-                    {/* Dropdown options - agrupados por categoria */}
-                    {isMotivoDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#161a36] rounded-[5px] z-[200] max-h-[250px] overflow-auto">
-                        {getMotivoGroups().map((group) => (
-                          <div key={group.category_id}>
-                            {/* Nome do grupo - não clicável */}
-                            <div className="px-[16px] py-[8px] bg-[#f5f5f5] border-b border-[#e0e0e0]">
-                              <span className="text-[12px] font-bold text-[#161a36] uppercase">
-                                {group.category_name}
-                              </span>
-                            </div>
-                            {/* Itens do grupo */}
-                            {group.reasons.map((option) => (
-                              <div
-                                key={option.id}
-                                className="flex items-center px-[16px] py-[12px] hover:bg-[#f0f0f0] cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setMotivo(option.id)
-                                  setIsMotivoDropdownOpen(false)
-                                }}
-                              >
-                                <span className="text-[14px] text-[#2a2a2a]">
-                                  {option.reason}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -968,8 +891,8 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
             )}
           </div>
 
-          {/* Footer - Buttons */}
-          <div className="flex gap-[16px] h-[40px] items-end justify-center w-full shrink-0">
+          {/* Footer - Buttons (fixo no rodapé) */}
+          <div className="flex gap-[16px] h-[45px] items-stretch justify-center w-full shrink-0 pt-[12px] border-t border-[#e0e0e0]">
             {/* Voltar Button */}
             <div
               className="bg-white border border-[#e67c26] border-solid flex flex-[1_0_0] h-full items-center justify-center px-[8px] py-[2px] rounded-[4px] cursor-pointer"

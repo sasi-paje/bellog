@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AppIcon } from '../../../shared/components'
+import { formatWeight } from '../../../shared/utils/format'
 import { NoteItem } from '../types/assign-notes.types'
 
 interface NotesListProps {
@@ -95,7 +96,7 @@ const NoteCard = ({ note, onDragStart, onSelectNote, onViewNote }: NoteCardProps
       {/* Coluna direita: Peso + Caixas */}
       <div className="flex flex-col gap-[2px] shrink-0 items-end">
         <span className="font-semibold text-[12px] text-[#2a2a2a] whitespace-nowrap">
-          {note.weight} KG
+          {formatWeight(note.weight)}
         </span>
         {caixas > 0 ? (
           <span className="font-medium text-[10px] text-[#919191] whitespace-nowrap">

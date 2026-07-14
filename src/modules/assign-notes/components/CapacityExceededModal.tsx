@@ -1,4 +1,5 @@
 import { AppIcon } from '../../../shared/components'
+import { formatWeight } from '../../../shared/utils/format'
 
 interface CapacityExceededModalProps {
   isOpen: boolean
@@ -12,7 +13,7 @@ interface CapacityExceededModalProps {
 const PRIMARY_DARK = '#0f3255'
 const ORANGE_PRIMARY = '#e67c26'
 
-const fmt = (n: number) => `${Math.round(n * 10) / 10} kg`
+const fmt = (n: number) => formatWeight(n)
 
 export const CapacityExceededModal = ({
   isOpen,

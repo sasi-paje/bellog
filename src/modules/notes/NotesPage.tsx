@@ -54,6 +54,10 @@ export const NotesPage = ({
 
   const [isExportSelectionMode, setIsExportSelectionMode] = useState(false)
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set())
+  // Seleção de todos os registros dos filtros (todas as páginas)
+  const [selectAllAcrossPages, setSelectAllAcrossPages] = useState(false)
+  const [allFilteredNotes, setAllFilteredNotes] = useState<InvoiceListItem[]>([])
+  const [selectingAll, setSelectingAll] = useState(false)
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [selectedNote, setSelectedNote] = useState<InvoiceListItem | null>(null)
@@ -110,6 +114,14 @@ export const NotesPage = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, showInactive, appliedFilters, page])
 
+  // Reseta a seleção quando os filtros/busca mudam (não ao paginar), pois o
+  // conjunto de registros muda. Trocar de página mantém a seleção.
+  useEffect(() => {
+    setSelectedNoteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setAllFilteredNotes([])
+  }, [searchTerm, showInactive, appliedFilters])
+
   useEffect(() => {
     Promise.all([
       companyService.listDeliveryLocations(),
@@ -140,6 +152,8 @@ export const NotesPage = ({
   }
 
   const handleSelectNote = (id: string, selected: boolean) => {
+    // Qualquer alteração individual desfaz o estado "todos os filtros"
+    setSelectAllAcrossPages(false)
     setSelectedNoteIds((prev) => {
       const next = new Set(prev)
       if (selected) next.add(id)
@@ -148,12 +162,33 @@ export const NotesPage = ({
     })
   }
 
+  // Checkbox do cabeçalho: seleciona apenas os registros da página atual
   const handleSelectAllNotes = (selected: boolean) => {
+    setSelectAllAcrossPages(false)
     setSelectedNoteIds(selected ? new Set(invoices.map((n) => String(n.id))) : new Set())
+  }
+
+  // Seleciona todos os registros retornados pelos filtros (todas as páginas)
+  const handleSelectAllAcrossPages = async () => {
+    setSelectingAll(true)
+    try {
+      const result = await fiscalInvoiceService.list({ ...buildFetchParams(), page: 1, limit: total || 10000 })
+      setAllFilteredNotes(result.data)
+      setSelectedNoteIds(new Set(result.data.map((n) => String(n.id))))
+      setSelectAllAcrossPages(true)
+      showSuccess(`Todos os ${result.data.length} registros encontrados foram selecionados.`)
+    } catch (err) {
+      console.error('[NotesPage] Erro ao selecionar todos os registros:', err)
+      showError('Não foi possível selecionar todos os registros. Tente novamente.')
+    } finally {
+      setSelectingAll(false)
+    }
   }
 
   const handleClearSelection = () => {
     setSelectedNoteIds(new Set())
+    setSelectAllAcrossPages(false)
+    setAllFilteredNotes([])
     setIsExportSelectionMode(false)
   }
 
@@ -348,13 +383,43 @@ export const NotesPage = ({
               >
                 <AppIcon name="delete_forever" size={20} color="#C7392C" />
                 <span className="font-bold text-[13px]" style={{ fontFamily: 'Inter, sans-serif', color: '#C7392C' }}>
-                  Cancelar Seleção
+                  Cancelar Exportação
                 </span>
               </button>
             )}
           </div>
           <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
+
+        {/* Banner de seleção entre páginas (estilo Gmail) */}
+        {isExportSelectionMode && (() => {
+          const currentPageCount = invoices.length
+          const allCurrentSelected = currentPageCount > 0 && invoices.every((n) => selectedNoteIds.has(String(n.id)))
+          const hasMore = total > currentPageCount
+
+          // Quando todos os registros dos filtros já estão selecionados, a faixa
+          // some — o botão "Cancelar Seleção" (ao lado do toggle) já cobre isso.
+          if (allCurrentSelected && hasMore && !selectAllAcrossPages) {
+            return (
+              <div className="flex items-center justify-center gap-3 shrink-0 w-full bg-[#eef3fc] border border-[#4077d9]/40 rounded-[6px] px-4 py-2">
+                <span className="text-[13px] text-[#2a2a2a]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  Todos os <strong>{currentPageCount}</strong> registros desta página foram selecionados.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSelectAllAcrossPages}
+                  disabled={selectingAll}
+                  className="text-[13px] font-bold text-[#4077d9] underline disabled:opacity-50"
+                  style={{ fontFamily: 'Inter, sans-serif' }}
+                >
+                  {selectingAll ? 'Selecionando...' : `Deseja selecionar todos os ${total} registros encontrados?`}
+                </button>
+              </div>
+            )
+          }
+
+          return null
+        })()}
 
         <div className="flex-1 min-h-0 overflow-auto rounded-md border border-[#E5E7EB]">
           <NotesTable
@@ -452,13 +517,22 @@ export const NotesPage = ({
       <ExportNotesModal
         isOpen={isExportModalOpen}
         onClose={() => {
+          // Voltar: apenas fecha o modal, mantendo a seleção e o modo de exportação
+          setIsExportModalOpen(false)
+        }}
+        onExported={() => {
+          // Exportou com sucesso: encerra o fluxo de exportação
           setIsExportModalOpen(false)
           setIsExportSelectionMode(false)
           setSelectedNoteIds(new Set())
+          setSelectAllAcrossPages(false)
+          setAllFilteredNotes([])
         }}
         notes={
           isExportSelectionMode
-            ? invoices.filter((n) => selectedNoteIds.has(String(n.id)))
+            ? (selectAllAcrossPages
+                ? allFilteredNotes
+                : invoices.filter((n) => selectedNoteIds.has(String(n.id))))
             : invoices
         }
       />

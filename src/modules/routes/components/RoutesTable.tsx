@@ -1,4 +1,5 @@
 import { SharedTable, TableColumn, AppIcon } from '../../../shared/components'
+import { formatWeight, formatPercent } from '../../../shared/utils/format'
 
 // Accept both mock type and real type
 export interface RouteData {
@@ -174,22 +175,20 @@ const renderDataSaida = (row: RouteData) => renderText(formatDate(row.departure_
 
 const renderCargaMaxima = (row: RouteData) => {
   const max = row.vehicle_max_capacity || row.max_capacity || row.cargaMaxima
-  return renderText(max ? `${max.toLocaleString('pt-BR')}` : '-', 'kg')
+  return renderText(max ? formatWeight(max) : '-')
 }
 
 const renderCargaReal = (row: RouteData) => {
   const real = row.current_load || row.cargaUtilizada
-  if (real === undefined || real === 0) return renderText('-', 'kg')
-  const formatted = real.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return renderText(formatted, 'kg')
+  if (real === undefined || real === 0) return renderText('-')
+  return renderText(formatWeight(real))
 }
 
 const renderUtilizacao = (row: RouteData) => {
   const max = row.vehicle_max_capacity || row.max_capacity || row.cargaMaxima
   const real = row.current_load || row.cargaUtilizada
-  if (!max || real === undefined || real === 0) return renderText('-', '%')
-  const pct = Math.round((real / max) * 100)
-  return renderText(`${pct}`, '%')
+  if (!max || real === undefined || real === 0) return renderText('-')
+  return renderText(formatPercent((real / max) * 100))
 }
 
 const routeColumns: TableColumn<RouteData>[] = [

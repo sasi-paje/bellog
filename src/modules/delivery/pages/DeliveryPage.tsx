@@ -514,6 +514,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
     <MobilePageShell>
       <MobileCardLayout
         title="Formulário de entrega"
+        onClose={onBack}
         footer={
           <button
             type="button"
@@ -555,7 +556,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
         {/* Local da entrega */}
         <div className="flex flex-col gap-[8px] w-full shrink-0">
           <p className="font-semibold leading-[normal] text-[14px] text-[#161a36]">
-            Local da entrega
+            Local da entrega <span className="text-[#eb5757]" aria-hidden="true">*</span>
           </p>
 
           {isLoadingDestinations ? (
@@ -569,6 +570,9 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
           ) : (
             <div className="relative w-full">
               <select
+                required
+                aria-required="true"
+                aria-label="Local da entrega"
                 value={localEntrega ? String(localEntrega.id) : ''}
                 onChange={(e) => {
                   const dest = destinations.find((d) => String(d.id) === e.target.value) || null
@@ -589,6 +593,12 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
                 </svg>
               </div>
             </div>
+          )}
+
+          {!isLoadingDestinations && destinations.length > 0 && !localEntrega && (
+            <p className="text-[12px] text-[#919191]">
+              Selecione um local para continuar.
+            </p>
           )}
         </div>
 

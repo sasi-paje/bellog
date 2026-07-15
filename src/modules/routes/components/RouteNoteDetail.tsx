@@ -847,16 +847,27 @@ export const RouteNoteDetail = ({ nota, routeCode, routeId, onBack, onDesassocia
               />
             )}
 
-            {/* Bloco Canhoto */}
-            <AttachmentBlock
-              key={`canhoto-${canhotoFiles.length}`}
-              label="Canhoto"
-              files={canhotoFiles}
-              onEdit={() => handleOpenAttachmentModal('canhoto')}
-              onView={handleViewFile}
-              onDownload={handleDownloadFile}
-              onDelete={(file, index) => handleDeleteFile(file, index, 'canhoto')}
-            />
+            {/* Bloco Canhoto - só mostra em Entrega Total ou Entrega Parcial */}
+            {(deliveryTypeValue?.toLowerCase().includes('total') ||
+              deliveryTypeValue?.toLowerCase().includes('parcial')) && (
+              <AttachmentBlock
+                key={`canhoto-${canhotoFiles.length}`}
+                label="Canhoto"
+                files={canhotoFiles}
+                onEdit={() => handleOpenAttachmentModal('canhoto')}
+                onView={handleViewFile}
+                onDownload={handleDownloadFile}
+                onDelete={(file, index) => handleDeleteFile(file, index, 'canhoto')}
+              />
+            )}
+
+            {/* Sem anexos aplicáveis (ex.: Entrega Negada/Abortada) */}
+            {!deliveryTypeValue?.toLowerCase().includes('parcial') &&
+              !deliveryTypeValue?.toLowerCase().includes('total') && (
+                <p className="text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT25 }}>
+                  Nenhum anexo para este tipo de entrega.
+                </p>
+              )}
           </div>
         )}
       </div>

@@ -690,6 +690,29 @@ export const RoutesPage = ({
     }
   }, [activeTab, selectedRouteId, getInvoicesByRouteId, fetchHistory])
 
+  // Atualiza o Histórico automaticamente enquanto o modal está aberto nessa aba,
+  // sem exigir refresh manual (ex.: quando a entrega é finalizada no mobile).
+  // Refetch periódico + ao focar/reexibir a janela. Silencioso: não dispara o
+  // spinner de carregamento (não mexe em isHistoryLoading) para evitar flicker.
+  useEffect(() => {
+    if (!selectedRouteId || activeTab !== 'historico') return
+
+    const silentRefresh = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchHistory(selectedRouteId)
+    }
+
+    const intervalId = window.setInterval(silentRefresh, 10000)
+    window.addEventListener('focus', silentRefresh)
+    document.addEventListener('visibilitychange', silentRefresh)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', silentRefresh)
+      document.removeEventListener('visibilitychange', silentRefresh)
+    }
+  }, [selectedRouteId, activeTab, fetchHistory])
+
   // Handler para clique em item do histórico
   const handleHistoryItemClick = (item: HistoricoItem) => {
     if (item.hasDetail && item.detail) {

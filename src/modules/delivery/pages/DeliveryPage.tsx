@@ -509,6 +509,13 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
     )
   }
 
+  // Trava a troca do "Local da entrega" quando pelo menos uma nota já tem tipo
+  // de entrega registrado (temporário nesta sessão ou já salvo). Mudar de local
+  // descartaria o progresso — o usuário deve preencher as notas e finalizar.
+  const hasRegisteredDelivery = fiscalNotes.some(
+    (n) => n.tempDeliveryData !== undefined || n.has_canhoto
+  )
+
   return (
     <MobilePageShell>
       <MobileCardLayout
@@ -571,12 +578,13 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
                 required
                 aria-required="true"
                 aria-label="Local da entrega"
+                disabled={hasRegisteredDelivery}
                 value={localEntrega ? String(localEntrega.id) : ''}
                 onChange={(e) => {
                   const dest = destinations.find((d) => String(d.id) === e.target.value) || null
                   setLocalEntrega(dest)
                 }}
-                className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] cursor-pointer ${localEntrega ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'}`}
+                className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] ${localEntrega ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'} ${hasRegisteredDelivery ? 'cursor-not-allowed bg-[#f5f5f5] opacity-70' : 'cursor-pointer'}`}
               >
                 <option value="" disabled>Selecione o local da entrega</option>
                 {destinations.map((dest) => (
@@ -596,6 +604,12 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
           {!isLoadingDestinations && destinations.length > 0 && !localEntrega && (
             <p className="text-[12px] text-[#919191]">
               Selecione um local para continuar.
+            </p>
+          )}
+
+          {hasRegisteredDelivery && (
+            <p className="text-[12px] text-[#e67c26]">
+              Preencha as notas e finalize a entrega antes de alterar o local.
             </p>
           )}
         </div>

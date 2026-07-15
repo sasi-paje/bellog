@@ -208,7 +208,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
             // Mapear id_delivery_type para string (se existir)
             let deliveryTypeStr: string | undefined
             if (result?.id_delivery_type) {
-              deliveryTypeStr = deliveryService.mapDeliveryTypeIdToString(Number(result.id_delivery_type))
+              deliveryTypeStr = await deliveryService.mapDeliveryTypeIdToString(Number(result.id_delivery_type))
             }
 
             return {
@@ -350,7 +350,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
             if (savedResult) {
               let deliveryTypeStr: string | undefined
               if (savedResult.id_delivery_type) {
-                deliveryTypeStr = deliveryService.mapDeliveryTypeIdToString(Number(savedResult.id_delivery_type))
+                deliveryTypeStr = await deliveryService.mapDeliveryTypeIdToString(Number(savedResult.id_delivery_type))
               }
               return {
                 ...note,

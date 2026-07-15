@@ -14,7 +14,6 @@ import {
   DeliveryResultInput,
   DeliveryResultData,
   NoteWithDeliveryResult,
-  DELIVERY_TYPE_MAP,
 } from '../domain/entities/DeliveryEntities'
 
 const isTestEnv = () => IS_TEST
@@ -40,6 +39,61 @@ const safeParseInt = (value: string | number | null | undefined, fallback: numbe
   if (value === null || value === undefined) return fallback
   const parsed = parseInt(String(value), 10)
   return isNaN(parsed) ? fallback : parsed
+}
+
+/**
+ * Mapeamento estável entre o valor da UI e o `code` de ref_delivery_reason_type.
+ * NUNCA usar id fixo: os ids variam por ambiente (ver [[project_database]]).
+ * A tradução id <-> valor é sempre resolvida dinamicamente pelo `code`.
+ */
+const DELIVERY_VALUE_TO_CODE: Record<string, string> = {
+  entrega_total: 'delivery_total',
+  entrega_parcial: 'partial_return',
+  entrega_negada: 'delivery_denied',
+  entrega_abortada: 'delivery_aborted',
+}
+const DELIVERY_CODE_TO_VALUE: Record<string, string> = Object.fromEntries(
+  Object.entries(DELIVERY_VALUE_TO_CODE).map(([value, code]) => [code, value])
+)
+
+type DeliveryTypeMaps = {
+  idToValue: Record<number, string>
+  valueToId: Record<string, number>
+}
+let _deliveryTypeMapsCache: DeliveryTypeMaps | null = null
+
+/**
+ * Carrega (com cache) os mapas id<->valor a partir de ref_delivery_reason_type,
+ * resolvendo pelo `code` no ambiente atual (is_test). Fonte única de verdade
+ * para o tipo de entrega, garantindo que o que o mobile grava é o mesmo que a
+ * tela exibe. Só cacheia em caso de sucesso.
+ */
+async function loadDeliveryTypeMaps(): Promise<DeliveryTypeMaps> {
+  if (_deliveryTypeMapsCache) return _deliveryTypeMapsCache
+
+  const { data, error } = await supabase
+    .from('ref_delivery_reason_type')
+    .select('id, code')
+    .eq('is_active', true)
+    .eq('is_test', IS_TEST)
+
+  if (error || !data || data.length === 0) {
+    console.error('[deliveryService] loadDeliveryTypeMaps falhou', error)
+    return { idToValue: {}, valueToId: {} }
+  }
+
+  const idToValue: Record<number, string> = {}
+  const valueToId: Record<string, number> = {}
+  for (const row of data) {
+    const value = DELIVERY_CODE_TO_VALUE[row.code as string]
+    if (value) {
+      idToValue[Number(row.id)] = value
+      valueToId[value] = Number(row.id)
+    }
+  }
+
+  _deliveryTypeMapsCache = { idToValue, valueToId }
+  return _deliveryTypeMapsCache
 }
 
 export const deliveryService = {
@@ -386,26 +440,8 @@ export const deliveryService = {
    * O valor da UI ('entrega_total'...) é mapeado para o code do banco.
    */
   async getDeliveryTypeId(optionValue: string): Promise<number | null> {
-    const VALUE_TO_CODE: Record<string, string> = {
-      entrega_total: 'delivery_total',
-      entrega_parcial: 'partial_return',
-      entrega_negada: 'delivery_denied',
-      entrega_abortada: 'delivery_aborted',
-    }
-    const code = VALUE_TO_CODE[optionValue]
-    if (!code) return null
-
-    const { data, error } = await supabase
-      .from('ref_delivery_reason_type')
-      .select('id')
-      .eq('code', code)
-      .maybeSingle()
-
-    if (error || !data?.id) {
-      console.error('[deliveryService] getDeliveryTypeId falhou para', optionValue, error)
-      return null
-    }
-    return Number(data.id)
+    const maps = await loadDeliveryTypeMaps()
+    return maps.valueToId[optionValue] ?? null
   },
 
   /**
@@ -517,11 +553,15 @@ export const deliveryService = {
   },
 
   /**
-   * Mapear delivery_type_id para string
+   * Mapear delivery_type_id -> valor da UI ('entrega_total'...), resolvido
+   * dinamicamente pelo `code` no banco (nunca por id fixo). Retorna '' quando
+   * o id não corresponde a nenhum tipo conhecido, evitando default incorreto.
    */
-  mapDeliveryTypeIdToString(deliveryTypeId: number | string): string {
+  async mapDeliveryTypeIdToString(deliveryTypeId: number | string): Promise<string> {
     const id = typeof deliveryTypeId === 'string' ? parseInt(deliveryTypeId, 10) : deliveryTypeId
-    return DELIVERY_TYPE_MAP[id] || 'entrega_total'
+    if (!id || isNaN(id)) return ''
+    const maps = await loadDeliveryTypeMaps()
+    return maps.idToValue[id] || ''
   },
 
   /**
@@ -676,6 +716,9 @@ export const deliveryService = {
         }
       }
 
+      // Pré-carrega o mapa de tipos uma vez (cacheado) para evitar N queries
+      const typeMaps = await loadDeliveryTypeMaps()
+
       return deliveries.map(delivery => {
         const invoice = invoices.find(i => i.id === delivery.id_fiscal_invoice)
         const supplierIdStr = toStringId(invoice?.id_supplier_company)
@@ -694,7 +737,7 @@ export const deliveryService = {
           gross_weight: invoice?.gross_weight ?? null,
           net_weight: invoice?.net_weight ?? null,
           deliveryResult: delivery as DeliveryResultData,
-          deliveryTypeLabel: this.mapDeliveryTypeIdToString(delivery.id_delivery_type),
+          deliveryTypeLabel: typeMaps.idToValue[Number(delivery.id_delivery_type)] || '',
         }
       })
     } catch (err) {
@@ -706,4 +749,3 @@ export const deliveryService = {
 
 // Re-export types
 export type { DeliveryResultInput, NoteWithDeliveryResult }
-export { DELIVERY_TYPE_MAP } from '../domain/entities/DeliveryEntities'

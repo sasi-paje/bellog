@@ -69,7 +69,7 @@ const filterRoutes = (routes: MyRouteListItem[], filters: RouteFilters) => {
   })
 }
 
-export const MyRoutesPage: React.FC<MyRoutesPageProps> = ({ onBack, initialRouteId, onArrivalClient, driverId }) => {
+export const MyRoutesPage: React.FC<MyRoutesPageProps> = ({ initialRouteId, onArrivalClient, driverId }) => {
   const [showOnlyInProgress, setShowOnlyInProgress] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [filters, setFilters] = useState<RouteFilters>(emptyFilters)
@@ -364,20 +364,6 @@ export const MyRoutesPage: React.FC<MyRoutesPageProps> = ({ onBack, initialRoute
                   </section>
                 )}
               </div>
-            </div>
-
-            {/* Footer — Voltar */}
-            <div
-              className="shrink-0 px-4 pt-6"
-              style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
-            >
-              <button
-                type="button"
-                onClick={onBack}
-                className="flex h-[45px] w-full items-center justify-center rounded-[4px] border border-[#4077d9] bg-white"
-              >
-                <span className="whitespace-nowrap text-center text-[14px] font-bold text-[#4077d9]">Voltar</span>
-              </button>
             </div>
           </>
         )}

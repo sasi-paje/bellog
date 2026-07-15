@@ -147,6 +147,8 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
   const [isConfirmingNote, setIsConfirmingNote] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // Exibe o aviso de "local travado" apenas quando o usuário tenta interagir
+  const [showLockMessage, setShowLockMessage] = useState(false)
   // Estado para tela final de sucesso
   const [isFinished, setIsFinished] = useState(false)
   const [finishMessage, setFinishMessage] = useState<{ main: string; subtitle?: string } | null>(null)
@@ -190,6 +192,8 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
 
   // Buscar notas fiscais quando selecionar uma empresa
   useEffect(() => {
+    // Novo local escolhido: esconde novamente o aviso de "local travado"
+    setShowLockMessage(false)
     const fetchFiscalNotes = async () => {
       if (!localEntrega) {
         setFiscalNotes([])
@@ -598,6 +602,16 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
                   <path d="M1 1L7 7L13 1" stroke="#161a36" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
+
+              {/* Select travado: o <select> disabled não dispara clique, então
+                  este overlay captura a interação e revela o aviso sob demanda */}
+              {hasRegisteredDelivery && (
+                <div
+                  className="absolute inset-0 z-10 cursor-not-allowed"
+                  onClick={() => setShowLockMessage(true)}
+                  aria-hidden="true"
+                />
+              )}
             </div>
           )}
 
@@ -607,7 +621,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
             </p>
           )}
 
-          {hasRegisteredDelivery && (
+          {hasRegisteredDelivery && showLockMessage && (
             <p className="text-[12px] text-[#e67c26]">
               Preencha as notas e finalize a entrega antes de alterar o local.
             </p>

@@ -365,14 +365,18 @@ export const RouteNoteDetail = ({ nota, routeCode, routeId, onBack, onDesassocia
           .eq('id_route', routeId)
           .eq('id_fiscal_invoice', nota.id)
           .eq('is_active', true)
+          .eq('is_test', isTest)
           .maybeSingle()
 
         console.log('[RouteNoteDetail] checkDeliveryType:', { routeId, notaId: nota.id, delivery })
 
-        // Buscar o nome do tipo de entrega a partir do id
+        // Buscar o nome do tipo de entrega a partir do id na tabela correta
+        // (ref_delivery_reason_type). Antes usava 'cat_delivery_type', que não
+        // existe — por isso o tipo nunca resolvia e o bloco NFD (só exibido em
+        // "parcial") não aparecia.
         if (delivery && delivery.id_delivery_type) {
           const { data: deliveryTypeData } = await supabase
-            .from('cat_delivery_type')
+            .from('ref_delivery_reason_type')
             .select('name')
             .eq('id', delivery.id_delivery_type)
             .maybeSingle()

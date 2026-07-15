@@ -41,17 +41,10 @@ export const ViewerModal = ({ isOpen, onClose, fileName, fileUrl, fileType }: Vi
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between w-full">
+        <div className="flex items-center w-full">
           <p className="font-bold text-[20px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_LIGHT75 }}>
             Visualizar Arquivo
           </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded hover:bg-gray-100"
-          >
-            <AppIcon name="close" size={24} color={TEXT_LIGHT75} />
-          </button>
         </div>
 
         {/* Divider */}

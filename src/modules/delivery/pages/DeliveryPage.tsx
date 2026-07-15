@@ -53,7 +53,6 @@ const LoadingSpinner = () => (
 )
 
 export const DeliveryPage: React.FC<DeliveryPageProps> = ({
-  onBack,
   onFinish,
   routeId,
 }) => {
@@ -514,7 +513,6 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
     <MobilePageShell>
       <MobileCardLayout
         title="Formulário de entrega"
-        onClose={onBack}
         footer={
           <button
             type="button"

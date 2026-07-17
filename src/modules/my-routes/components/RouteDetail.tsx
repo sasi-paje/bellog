@@ -16,6 +16,8 @@ interface RouteDetailProps {
   onCompleteRoute?: () => void
   onArrivalClient?: () => void
   isLoading?: boolean
+  /** Já existe outra rota do motorista em andamento (só uma por vez). */
+  hasRouteInProgress?: boolean
 }
 
 type TabType = 'data' | 'anexos'
@@ -41,6 +43,7 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
   onCompleteRoute,
   onArrivalClient,
   isLoading = false,
+  hasRouteInProgress = false,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('data')
   const [selectedNote, setSelectedNote] = useState<ReturnType<typeof useRouteNotes>['notes'][0] | null>(null)
@@ -53,6 +56,8 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
   const deliveryStatusName = route.delivery_status?.name
   const canStart = route.status === 'available' || deliveryStatusName === 'Pendente'
   const isInProgress = route.status === 'in_progress' || deliveryStatusName === 'Em Andamento'
+  // Só uma rota em andamento por vez: bloqueia iniciar esta se já há outra.
+  const startBlockedByOther = hasRouteInProgress && !isInProgress
 
   useEffect(() => {
     if (activeTab === 'anexos' && route.id) {
@@ -237,6 +242,8 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
           canStart={canStart}
           isInProgress={isInProgress}
           isLoading={isLoading || isCompleting}
+          startDisabled={startBlockedByOther}
+          startDisabledReason="Finalize a rota em andamento antes de iniciar outra."
           onBack={onBack}
           onStartRoute={onStartRoute}
           onCompleteRoute={handleCompleteRoute}

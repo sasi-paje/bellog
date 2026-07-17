@@ -513,11 +513,13 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
     )
   }
 
-  // Trava a troca do "Local da entrega" quando pelo menos uma nota já tem tipo
-  // de entrega registrado (temporário nesta sessão ou já salvo). Mudar de local
-  // descartaria o progresso — o usuário deve preencher as notas e finalizar.
-  const hasRegisteredDelivery = fiscalNotes.some(
-    (n) => n.tempDeliveryData !== undefined || n.has_canhoto
+  // Trava a troca do "Local da entrega" APENAS quando há pré-preenchimento
+  // pendente (tempDeliveryData) nesta sessão — nesse caso o usuário precisa
+  // finalizar todas as notas daquele local antes de trocar (senão perde o
+  // progresso). Se as notas já estão registradas no banco (has_canhoto) e não
+  // há pré-preenchimento pendente, o local fica liberado para trocar.
+  const hasPendingPrefill = fiscalNotes.some(
+    (n) => n.tempDeliveryData !== undefined
   )
 
   return (
@@ -582,13 +584,13 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
                 required
                 aria-required="true"
                 aria-label="Local da entrega"
-                disabled={hasRegisteredDelivery}
+                disabled={hasPendingPrefill}
                 value={localEntrega ? String(localEntrega.id) : ''}
                 onChange={(e) => {
                   const dest = destinations.find((d) => String(d.id) === e.target.value) || null
                   setLocalEntrega(dest)
                 }}
-                className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] ${localEntrega ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'} ${hasRegisteredDelivery ? 'cursor-not-allowed bg-[#f5f5f5] opacity-70' : 'cursor-pointer'}`}
+                className={`appearance-none bg-white border border-[#161a36] border-solid h-[45px] px-[16px] pr-[44px] rounded-[5px] w-full text-[14px] ${localEntrega ? 'text-[#2a2a2a]' : 'text-[#bdbdbd]'} ${hasPendingPrefill ? 'cursor-not-allowed bg-[#f5f5f5] opacity-70' : 'cursor-pointer'}`}
               >
                 <option value="" disabled>Selecione o local da entrega</option>
                 {destinations.map((dest) => (
@@ -605,7 +607,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
 
               {/* Select travado: o <select> disabled não dispara clique, então
                   este overlay captura a interação e revela o aviso sob demanda */}
-              {hasRegisteredDelivery && (
+              {hasPendingPrefill && (
                 <div
                   className="absolute inset-0 z-10 cursor-not-allowed"
                   onClick={() => setShowLockMessage(true)}
@@ -621,7 +623,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
             </p>
           )}
 
-          {hasRegisteredDelivery && showLockMessage && (
+          {hasPendingPrefill && showLockMessage && (
             <p className="text-[12px] text-[#e67c26]">
               Preencha as notas e finalize a entrega antes de alterar o local.
             </p>

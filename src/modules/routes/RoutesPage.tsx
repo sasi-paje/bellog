@@ -384,6 +384,12 @@ export const RoutesPage = ({
   const currentDeliveryStatus = refDeliveryStatuses.find((s) => s.name === formData?.statusEntrega)
   const canEditAssembly = currentDeliveryStatus?.allows_route_edition === true
 
+  // Edição da rota no Web é administrativa: fica liberada, EXCETO quando a rota
+  // está finalizada (todas as notas já foram entregues). A montagem de notas
+  // (desassociar) continua governada por canEditAssembly acima.
+  const isRouteFinalized = !!formData?.statusEntrega?.toLowerCase().includes('finaliz')
+  const canEditRoute = !isRouteFinalized
+
   const handleCloseDrawerOnly = () => {
     setIsDrawerOpen(false)
     setSelectedRouteId(null)
@@ -584,6 +590,13 @@ export const RoutesPage = ({
 
   const handleSaveEdit = async () => {
     if (!selectedRouteId || !formData) return
+
+    // Edição administrativa (Web): liberada, exceto quando a rota está
+    // finalizada — todas as notas já foram entregues.
+    if (!canEditRoute) {
+      showError('Rota finalizada: todas as notas já foram entregues. Não é possível editar.')
+      return
+    }
 
     setIsSavingEdit(true)
     try {
@@ -936,15 +949,19 @@ export const RoutesPage = ({
           }`}
         >
           <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canInativar ? 'white' : '#666' }}>
-            {canInativar ? 'Inativar' : 'Bloqueado'}
+            Inativar
           </span>
         </button>
         <button
           type="button"
           onClick={handleEditClick}
-          className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] bg-[#e67c26] w-[150px]"
+          disabled={!canEditRoute}
+          title={canEditRoute ? undefined : 'Rota finalizada: todas as notas já foram entregues. A edição não é permitida.'}
+          className={`flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] ${
+            canEditRoute ? 'bg-[#e67c26]' : 'bg-gray-300 cursor-not-allowed'
+          }`}
         >
-          <span className="font-bold text-[14px] text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canEditRoute ? 'white' : '#666' }}>
             Editar
           </span>
         </button>

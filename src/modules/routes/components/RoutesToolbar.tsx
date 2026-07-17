@@ -90,10 +90,11 @@ export const RoutesToolbar = ({
       try {
         const data = await routeService.getReferenceData()
         const drivers = await routeService.getDrivers()
+        const areas = await routeService.getRouteAreaOptions()
         setRefData({
           statuses: data.statuses || [],
           deliveryStatuses: data.deliveryStatuses || [],
-          areas: data.routeAreas || [],
+          areas: areas || [],
           vehicles: data.vehicles || [],
           drivers: drivers || [],
         })

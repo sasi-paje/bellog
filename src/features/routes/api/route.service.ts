@@ -747,6 +747,32 @@ export const routeService = {
     }
   },
 
+  // Áreas de rota para filtros: além da tabela mestre (hoje vazia), inclui as
+  // áreas realmente usadas em trx_route.area (o campo é texto livre no form).
+  // Retorna objetos { description } deduplicados e ordenados.
+  async getRouteAreaOptions(): Promise<{ description: string }[]> {
+    const isTest = IS_TEST
+
+    const [master, routes] = await Promise.all([
+      supabase.from('master_route_area').select('description').eq('is_test', isTest).eq('is_active', true),
+      supabase.from('trx_route').select('area').eq('is_test', isTest).eq('is_active', true).not('area', 'is', null),
+    ])
+
+    const set = new Set<string>()
+    ;(master.data || []).forEach((a: { description?: string | null }) => {
+      const d = (a.description || '').trim()
+      if (d) set.add(d)
+    })
+    ;(routes.data || []).forEach((r: { area?: string | null }) => {
+      const d = (r.area || '').trim()
+      if (d) set.add(d)
+    })
+
+    return Array.from(set)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map((description) => ({ description }))
+  },
+
   async getDrivers(): Promise<MasterPersonDriver[]> {
     const isTest = IS_TEST
 

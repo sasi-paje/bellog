@@ -34,7 +34,9 @@ const AssignedNoteItem = ({
   const normalizedNoteId = String(note.id)
   const fornecedor = note.fornecedor || note.supplier_name
   const cliente = note.customer_name
-  const destino = note.destination_name
+  // customer_name e destination_name são preenchidos com a mesma empresa; usa um
+  // valor único e só exibe "Cliente" quando difere, para não duplicar o destino.
+  const destino = note.destination_name || note.customer_name
 
   return (
     <div className="bg-white border border-[#bdbdbd] flex gap-[8px] items-center pl-[8px] pr-[12px] py-[8px] rounded-[6px] w-full">
@@ -69,8 +71,8 @@ const AssignedNoteItem = ({
           </span>
         )}
 
-        {/* Cliente */}
-        {cliente && (
+        {/* Cliente — só quando difere do destino (evita duplicar) */}
+        {cliente && cliente !== destino && (
           <span className="font-medium text-[10px] text-[#919191] whitespace-nowrap truncate max-w-full">
             {cliente}
           </span>

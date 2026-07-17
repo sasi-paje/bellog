@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { storageService } from '../../../features/storage'
 import { deliveryService } from '../services/delivery.service'
 import type { DeliveryReason, DeliveryResultInput } from '../services/delivery.service'
+import { FiscalNoteFormSchema } from '../domain/validators/DeliveryFormSchema'
 
 // Mask functions
 const maskNumber = (value: string): string => {
@@ -18,6 +19,15 @@ const maskCurrency = (value: string): string => {
   if (!digits) return ''
   const floatValue = parseInt(digits, 10) / 100
   return floatValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+// Converte o valor mascarado ("R$ 1.234,56") para número (1234.56) ou null.
+// parseFloat direto na string mascarada retorna NaN — por isso este parser.
+const parseCurrencyToNumber = (value: string): number | null => {
+  if (!value) return null
+  const cleaned = value.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.')
+  const num = parseFloat(cleaned)
+  return isNaN(num) ? null : num
 }
 
 // Tipos
@@ -424,9 +434,27 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
       const idInvoiceNum = typeof note.id === 'string' ? parseInt(note.id, 10) : note.id
       const idReasonNum = motivo ? parseInt(motivo, 10) : null
       const returnedBoxNum = caixasDevolvidas ? parseInt(caixasDevolvidas, 10) : null
-      const returnedAmtNum = valorDevolucao ? parseFloat(valorDevolucao) : null
+      const returnedAmtNum = parseCurrencyToNumber(valorDevolucao)
 
-      // Montar payload
+      // Entrega Parcial: valida motivo, NFD, caixas (>=0) e valor (>=0) antes de salvar
+      if (isEntregaParcial) {
+        const validation = FiscalNoteFormSchema.safeParse({
+          delivery_type: deliveryType,
+          receipt_image_path: canhotoPath,
+          nfd_image_path: nfdPath,
+          id_reason: motivo || null,
+          nfd_number: numeroNfd || null,
+          returned_box_quantity: caixasDevolvidas || null,
+          returned_amount: valorDevolucao || null,
+        })
+        if (!validation.success) {
+          setError(validation.error.issues[0]?.message || 'Dados da entrega parcial inválidos.')
+          setIsUploading(false)
+          return
+        }
+      }
+
+      // Montar payload — caixas/valor como número válido ou null (nunca "null"/NaN)
       const deliveryData: DeliveryResultInput = {
         id_fiscal_invoice: idInvoiceNum,
         id_route: idRouteNum,
@@ -436,8 +464,8 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
         nfd_image_path: nfdPath,
         id_reason: idReasonNum,
         nfd_number: isEntregaParcial ? numeroNfd || null : null,
-        returned_box_quantity: isEntregaParcial ? String(returnedBoxNum) : null,
-        returned_amount: isEntregaParcial ? String(returnedAmtNum) : null,
+        returned_box_quantity: isEntregaParcial && returnedBoxNum != null && Number.isFinite(returnedBoxNum) ? String(returnedBoxNum) : null,
+        returned_amount: isEntregaParcial && returnedAmtNum != null ? String(returnedAmtNum) : null,
       }
 
       // Se "todas as notas abortadas" está marcado E é entrega abortada, aplicar a TODAS as notas da lista

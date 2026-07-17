@@ -195,16 +195,29 @@ export const vehicleService = {
   async toggleActive(id: string): Promise<VehicleListItem> {
     const isTest = IS_TEST
 
-    const { data: vehicle, error: fetchError } = await supabase
+    const { data: current, error: fetchError } = await supabase
       .from('master_fleet_vehicle')
       .select('is_active')
       .eq('id', id)
+      .eq('is_test', isTest)
       .single()
 
     if (fetchError) throw new Error(fetchError.message)
+    if (!current) throw new Error('Veículo não encontrado')
+
+    // update() não mapeia is_active — alterna direto aqui (soft-delete)
+    const { data: vehicle, error } = await supabase
+      .from('master_fleet_vehicle')
+      .update({ is_active: !current.is_active, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('is_test', isTest)
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
     if (!vehicle) throw new Error('Veículo não encontrado')
 
-    return this.update(id, { is_active: !vehicle.is_active } as any)
+    return mapVehicle(vehicle)
   },
 
   async canInactivateVehicle(id: string): Promise<{ canInactivate: boolean; reason?: string }> {

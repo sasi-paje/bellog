@@ -585,6 +585,14 @@ export const RoutesPage = ({
   const handleSaveEdit = async () => {
     if (!selectedRouteId || !formData) return
 
+    // Fail-closed: a rota só pode ser editada enquanto o status de entrega
+    // permite alteração (ref_route_delivery_status.allows_route_edition). Isso
+    // impede trocar/reverter o status de uma rota já em andamento/finalizada.
+    if (!canEditAssembly) {
+      showError('Esta rota não pode ser editada no status atual. A edição só é permitida enquanto o status de entrega permite alteração.')
+      return
+    }
+
     setIsSavingEdit(true)
     try {
       // Check if NUMBER was changed
@@ -942,9 +950,13 @@ export const RoutesPage = ({
         <button
           type="button"
           onClick={handleEditClick}
-          className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] bg-[#e67c26] w-[150px]"
+          disabled={!canEditAssembly}
+          title={canEditAssembly ? undefined : 'Rota em andamento ou finalizada. A edição não é permitida.'}
+          className={`flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] ${
+            canEditAssembly ? 'bg-[#e67c26]' : 'bg-gray-300 cursor-not-allowed'
+          }`}
         >
-          <span className="font-bold text-[14px] text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canEditAssembly ? 'white' : '#666' }}>
             Editar
           </span>
         </button>

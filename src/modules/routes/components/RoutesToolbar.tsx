@@ -41,6 +41,8 @@ interface RoutesToolbarProps {
   initialFilters?: FilterData
   isSelectionMode?: boolean
   selectedCount?: number
+  pageSize?: number
+  onPageSizeChange?: (size: number) => void
 }
 
 const PRIMARY_DARK = '#0f3255'
@@ -58,6 +60,8 @@ export const RoutesToolbar = ({
   initialFilters,
   isSelectionMode = false,
   selectedCount = 0,
+  pageSize,
+  onPageSizeChange,
 }: RoutesToolbarProps) => {
   const [searchValue, setSearchValue] = useState(initialSearch)
   const [showFilters, setShowFilters] = useState(false)
@@ -185,6 +189,11 @@ export const RoutesToolbar = ({
         filters={[
           { isActive: showFilters, onClick: () => setShowFilters(!showFilters) },
         ]}
+        pageSize={
+          pageSize != null && onPageSizeChange
+            ? { value: pageSize, options: [20, 50, 100], onChange: onPageSizeChange }
+            : undefined
+        }
         actions={[
           ...(isSelectionMode && onExportSelected
             ? [{

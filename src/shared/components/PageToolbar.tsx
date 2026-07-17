@@ -17,6 +17,13 @@ export interface PageToolbarProps {
     onClick: () => void
   }>
 
+  /** Seletor "Registros por página" ao lado dos filtros */
+  pageSize?: {
+    value: number
+    options?: number[]
+    onChange: (value: number) => void
+  }
+
   /** Action buttons (multiple) */
   actions?: Array<{
     label: string
@@ -42,6 +49,7 @@ export const PageToolbar = ({
   actions = [],
   back,
   loading = false,
+  pageSize,
 }: PageToolbarProps) => {
   const hasSearch = search?.onSearch !== undefined
 
@@ -70,6 +78,31 @@ export const PageToolbar = ({
             onClick={filter.onClick}
           />
         ))}
+        {pageSize && (
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] text-[#6b7280] whitespace-nowrap">Registros por página</span>
+            <div className="flex items-center gap-1">
+              {(pageSize.options ?? [20, 50, 100]).map((opt) => {
+                const active = pageSize.value === opt
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => pageSize.onChange(opt)}
+                    aria-pressed={active}
+                    className={`min-w-[36px] h-[32px] px-2 rounded-[5px] text-[13px] font-semibold border transition-colors ${
+                      active
+                        ? 'bg-[#e67c26] border-[#e67c26] text-white'
+                        : 'bg-white border-[#bdbdbd] text-[#2a2a2a] hover:border-[#e67c26]'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right: Actions */}

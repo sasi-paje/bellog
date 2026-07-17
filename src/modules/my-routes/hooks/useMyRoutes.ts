@@ -178,6 +178,14 @@ export const useMyRoutes = (driverId?: string | null): UseMyRoutesResult => {
   const startRoute = useCallback(async (routeId: string) => {
     if (!routeId) return
 
+    // Regra: o motorista só pode ter uma rota em andamento por vez.
+    // Bloqueio imediato quando já existe rota em andamento (o serviço revalida).
+    if (routesInProgress.length > 0) {
+      setConfirmStartData(null)
+      setError('Você já possui uma rota em andamento. Finalize-a antes de iniciar outra.')
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
@@ -199,7 +207,7 @@ export const useMyRoutes = (driverId?: string | null): UseMyRoutesResult => {
     } finally {
       setIsLoading(false)
     }
-  }, [fetchRoutes])
+  }, [fetchRoutes, routesInProgress])
 
   const completeRoute = useCallback(async (routeId: string) => {
     if (!routeId) return

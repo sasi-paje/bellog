@@ -589,6 +589,54 @@ export const myRoutesService = {
 
     const emAndamento = await getDeliveryStatusByName('Em Andamento')
 
+    // Regra: o motorista só pode ter UMA rota em andamento por vez.
+    // Descobre o motorista da rota e verifica se já existe outra rota dele
+    // em andamento. Fail-closed: erro na verificação impede iniciar.
+    const { data: route, error: routeError } = await supabase
+      .from('trx_route')
+      .select('id, id_driver')
+      .eq('id', toQueryId(routeId))
+      .eq('is_test', isTest)
+      .maybeSingle<{ id: string | number; id_driver: string | number | null }>()
+
+    if (routeError) {
+      throw new MyRoutesServiceError(
+        routeError.message,
+        'NETWORK_ERROR',
+        { originalError: routeError, routeId }
+      )
+    }
+    if (!route) {
+      throw new MyRoutesServiceError('Rota nao encontrada', 'NOT_FOUND', { routeId })
+    }
+
+    if (route.id_driver !== null && route.id_driver !== undefined) {
+      const { data: emAndamentoRoutes, error: checkError } = await supabase
+        .from('trx_route')
+        .select('id, route_code')
+        .eq('id_driver', route.id_driver)
+        .eq('id_route_delivery_status', emAndamento.id)
+        .eq('is_active', true)
+        .eq('is_test', isTest)
+        .neq('id', toQueryId(routeId))
+        .limit(1)
+
+      if (checkError) {
+        throw new MyRoutesServiceError(
+          checkError.message,
+          'NETWORK_ERROR',
+          { originalError: checkError, routeId }
+        )
+      }
+      if (emAndamentoRoutes && emAndamentoRoutes.length > 0) {
+        throw new MyRoutesServiceError(
+          'Você já possui uma rota em andamento. Finalize-a antes de iniciar outra.',
+          'VALIDATION_ERROR',
+          { routeId }
+        )
+      }
+    }
+
     const { error } = await supabase
       .from('trx_route')
       .update({

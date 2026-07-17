@@ -172,6 +172,7 @@ export const MyRoutesPage: React.FC<MyRoutesPageProps> = ({ initialRouteId, onAr
               onCompleteRoute={() => openCompleteConfirm(selectedRoute)}
               onArrivalClient={() => onArrivalClient?.(selectedRoute.id)}
               isLoading={isLoading}
+              hasRouteInProgress={routesInProgress.length > 0}
             />
           ) : (
             // Loading / erro — mesma estrutura de abas, sem header

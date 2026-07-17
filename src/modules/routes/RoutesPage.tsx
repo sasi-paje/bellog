@@ -944,7 +944,7 @@ export const RoutesPage = ({
           }`}
         >
           <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canInativar ? 'white' : '#666' }}>
-            {canInativar ? 'Inativar' : 'Bloqueado'}
+            Inativar
           </span>
         </button>
         <button

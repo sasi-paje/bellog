@@ -384,6 +384,12 @@ export const RoutesPage = ({
   const currentDeliveryStatus = refDeliveryStatuses.find((s) => s.name === formData?.statusEntrega)
   const canEditAssembly = currentDeliveryStatus?.allows_route_edition === true
 
+  // Edição da rota no Web é administrativa: fica liberada, EXCETO quando a rota
+  // está finalizada (todas as notas já foram entregues). A montagem de notas
+  // (desassociar) continua governada por canEditAssembly acima.
+  const isRouteFinalized = !!formData?.statusEntrega?.toLowerCase().includes('finaliz')
+  const canEditRoute = !isRouteFinalized
+
   const handleCloseDrawerOnly = () => {
     setIsDrawerOpen(false)
     setSelectedRouteId(null)
@@ -585,11 +591,10 @@ export const RoutesPage = ({
   const handleSaveEdit = async () => {
     if (!selectedRouteId || !formData) return
 
-    // Fail-closed: a rota só pode ser editada enquanto o status de entrega
-    // permite alteração (ref_route_delivery_status.allows_route_edition). Isso
-    // impede trocar/reverter o status de uma rota já em andamento/finalizada.
-    if (!canEditAssembly) {
-      showError('Esta rota não pode ser editada no status atual. A edição só é permitida enquanto o status de entrega permite alteração.')
+    // Edição administrativa (Web): liberada, exceto quando a rota está
+    // finalizada — todas as notas já foram entregues.
+    if (!canEditRoute) {
+      showError('Rota finalizada: todas as notas já foram entregues. Não é possível editar.')
       return
     }
 
@@ -950,13 +955,13 @@ export const RoutesPage = ({
         <button
           type="button"
           onClick={handleEditClick}
-          disabled={!canEditAssembly}
-          title={canEditAssembly ? undefined : 'Rota em andamento ou finalizada. A edição não é permitida.'}
+          disabled={!canEditRoute}
+          title={canEditRoute ? undefined : 'Rota finalizada: todas as notas já foram entregues. A edição não é permitida.'}
           className={`flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] ${
-            canEditAssembly ? 'bg-[#e67c26]' : 'bg-gray-300 cursor-not-allowed'
+            canEditRoute ? 'bg-[#e67c26]' : 'bg-gray-300 cursor-not-allowed'
           }`}
         >
-          <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canEditAssembly ? 'white' : '#666' }}>
+          <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canEditRoute ? 'white' : '#666' }}>
             Editar
           </span>
         </button>

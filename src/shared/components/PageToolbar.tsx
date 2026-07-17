@@ -79,9 +79,9 @@ export const PageToolbar = ({
           />
         ))}
         {pageSize && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-[13px] text-[#6b7280] whitespace-nowrap">Registros por página</span>
-            <div className="flex items-center gap-1">
+            <div className="inline-flex items-center gap-1 rounded-[8px] bg-[#f0f0f0] p-1">
               {(pageSize.options ?? [20, 50, 100]).map((opt) => {
                 const active = pageSize.value === opt
                 return (
@@ -90,10 +90,10 @@ export const PageToolbar = ({
                     type="button"
                     onClick={() => pageSize.onChange(opt)}
                     aria-pressed={active}
-                    className={`min-w-[36px] h-[32px] px-2 rounded-[5px] text-[13px] font-semibold border transition-colors ${
+                    className={`min-w-[40px] h-[30px] px-3 rounded-[6px] text-[13px] font-semibold transition-colors ${
                       active
-                        ? 'bg-[#e67c26] border-[#e67c26] text-white'
-                        : 'bg-white border-[#bdbdbd] text-[#2a2a2a] hover:border-[#e67c26]'
+                        ? 'bg-white text-[#2a2a2a] shadow-sm'
+                        : 'bg-transparent text-[#919191] hover:text-[#2a2a2a]'
                     }`}
                   >
                     {opt}

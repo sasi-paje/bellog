@@ -192,7 +192,9 @@ export const routeService = {
       query = query.ilike('area', `%${area}%`)
     }
     if (responsavel) {
-      query = query.eq('responsible', responsavel)
+      // Filtra pela FK real da rota (id_route_responsible). A coluna de texto
+      // "responsible" não existe em trx_route — o valor do filtro é o id.
+      query = query.eq('id_route_responsible', responsavel)
     }
     if (idRouteStatus.length > 0) {
       query = query.in('id_route_status', idRouteStatus)

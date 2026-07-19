@@ -1,7 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { AppIcon } from './AppIcon'
 import { UserMenu } from './UserMenu'
-import { WhatsNewPanel } from './WhatsNewPanel'
+import { WhatsNewPanel, WHATS_NEW } from './WhatsNewPanel'
+
+// Chave do localStorage com a última novidade vista pelo usuário (por dispositivo)
+const WHATS_NEW_SEEN_KEY = 'bellog_whatsnew_seen'
+const LATEST_WHATS_NEW_ID = WHATS_NEW[0]?.id ?? ''
 
 export interface PageHeaderProps {
   title: string
@@ -26,6 +30,43 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 }) => {
   const ariaLabel = isSidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'
   const [newsOpen, setNewsOpen] = useState(false)
+  const [hasUnread, setHasUnread] = useState(false)
+
+  // Ao carregar: se a novidade mais recente ainda não foi vista neste
+  // dispositivo, marca como não lida e abre o painel automaticamente para
+  // informar o usuário sobre o que mudou após o deploy.
+  useEffect(() => {
+    if (!LATEST_WHATS_NEW_ID) return
+    let seen: string | null = null
+    try {
+      seen = localStorage.getItem(WHATS_NEW_SEEN_KEY)
+    } catch {
+      /* localStorage indisponível — ignora */
+    }
+    if (seen !== LATEST_WHATS_NEW_ID) {
+      setHasUnread(true)
+      setNewsOpen(true)
+    }
+  }, [])
+
+  const markWhatsNewSeen = () => {
+    try {
+      localStorage.setItem(WHATS_NEW_SEEN_KEY, LATEST_WHATS_NEW_ID)
+    } catch {
+      /* ignora */
+    }
+    setHasUnread(false)
+  }
+
+  const openNews = () => {
+    setNewsOpen(true)
+    markWhatsNewSeen()
+  }
+
+  const closeNews = () => {
+    setNewsOpen(false)
+    markWhatsNewSeen()
+  }
 
   return (
     <div className="flex w-full min-h-[78px] items-center justify-between px-6 py-3 bg-[#ffffff]">
@@ -68,14 +109,22 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       <div className="flex items-center gap-8">
         <button
           type="button"
-          onClick={() => setNewsOpen(true)}
-          className="inline-flex items-center gap-2 text-[#4a90e2] transition-colors hover:text-[#357abd]"
+          onClick={openNews}
+          className="relative inline-flex items-center gap-2 text-[#4a90e2] transition-colors hover:text-[#357abd]"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 16v-4" />
-            <path d="M12 8h.01" />
-          </svg>
+          <span className="relative inline-flex">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4" />
+              <path d="M12 8h.01" />
+            </svg>
+            {hasUnread && (
+              <span
+                className="absolute -right-[3px] -top-[3px] h-[8px] w-[8px] rounded-full bg-[#e8791a] ring-2 ring-white"
+                aria-hidden="true"
+              />
+            )}
+          </span>
           <span className="text-[14px] font-medium">O que há de novo?</span>
         </button>
 
@@ -87,7 +136,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         />
       </div>
 
-      <WhatsNewPanel isOpen={newsOpen} onClose={() => setNewsOpen(false)} />
+      <WhatsNewPanel isOpen={newsOpen} onClose={closeNews} />
     </div>
   )
 }

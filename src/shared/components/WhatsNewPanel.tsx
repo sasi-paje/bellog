@@ -14,6 +14,13 @@ export interface WhatsNewItem {
  */
 export const WHATS_NEW: WhatsNewItem[] = [
   {
+    id: '2026-07-19-central-novidades',
+    tag: 'Novo',
+    date: '19/07/2026',
+    title: 'Central de novidades',
+    body: 'Sempre que uma nova funcionalidade ou correção for publicada, você será avisado por aqui automaticamente.',
+  },
+  {
     id: '2026-07-15-filtro-avancado',
     tag: 'Novo',
     date: '15/07/2026',

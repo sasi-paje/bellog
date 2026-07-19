@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { AppIcon } from './AppIcon'
 import { UserMenu } from './UserMenu'
+import { WhatsNewPanel } from './WhatsNewPanel'
 
 export interface PageHeaderProps {
   title: string
@@ -24,6 +25,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   onLogout,
 }) => {
   const ariaLabel = isSidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'
+  const [newsOpen, setNewsOpen] = useState(false)
 
   return (
     <div className="flex w-full min-h-[78px] items-center justify-between px-6 py-3 bg-[#ffffff]">
@@ -62,13 +64,30 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {/* Central area - flexible */}
       <div className="flex-1" />
 
-      {/* Right: User Menu */}
-      <UserMenu
-        userName={userName}
-        userEmail={userEmail}
-        userRole={userRole}
-        onLogout={onLogout}
-      />
+      {/* Right: "O que há de novo?" + User Menu */}
+      <div className="flex items-center gap-8">
+        <button
+          type="button"
+          onClick={() => setNewsOpen(true)}
+          className="inline-flex items-center gap-2 text-[#4a90e2] transition-colors hover:text-[#357abd]"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+          <span className="text-[14px] font-medium">O que há de novo?</span>
+        </button>
+
+        <UserMenu
+          userName={userName}
+          userEmail={userEmail}
+          userRole={userRole}
+          onLogout={onLogout}
+        />
+      </div>
+
+      <WhatsNewPanel isOpen={newsOpen} onClose={() => setNewsOpen(false)} />
     </div>
   )
 }

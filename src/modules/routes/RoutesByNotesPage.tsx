@@ -105,7 +105,8 @@ export const RoutesByNotesPage = ({
   const { invoices, total, loading, fetchInvoices } = useFiscalInvoices()
   const { showSuccess, showError, toasts, removeToast } = useToast()
   const [currentPage, setCurrentPage] = useState(1)
-  const LIMIT = 50
+  const [pageSize, setPageSize] = useState(20)
+  const LIMIT = pageSize
   const totalPages = Math.ceil(total / LIMIT) || 1
 
   // Export states
@@ -119,7 +120,8 @@ export const RoutesByNotesPage = ({
 
   useEffect(() => {
     fetchInvoices({ page: currentPage, limit: LIMIT, onlyWithRoute: true })
-  }, [currentPage])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pageSize])
 
   // Transformar dados das notas para o formato da tabela
   const notesData: NoteByRouteData[] = invoices.map(mapInvoiceToNote)
@@ -199,6 +201,11 @@ export const RoutesByNotesPage = ({
           onExportSelected={handleExportSelected}
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedNoteIds.size}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setCurrentPage(1)
+          }}
         />
 
         {/* Cancel Selection + Pagination row */}

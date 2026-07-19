@@ -22,6 +22,8 @@ interface RoutesByNotesToolbarProps {
   onExportSelected?: () => void
   isSelectionMode?: boolean
   selectedCount?: number
+  pageSize?: number
+  onPageSizeChange?: (size: number) => void
 }
 
 export const RoutesByNotesToolbar = ({
@@ -29,11 +31,18 @@ export const RoutesByNotesToolbar = ({
   onExportSelected,
   isSelectionMode = false,
   selectedCount = 0,
+  pageSize,
+  onPageSizeChange,
 }: RoutesByNotesToolbarProps) => {
   return (
     <PageToolbar
       search={undefined}
       filters={[]}
+      pageSize={
+        pageSize != null && onPageSizeChange
+          ? { value: pageSize, options: [20, 50, 100], onChange: onPageSizeChange }
+          : undefined
+      }
       actions={[
         ...(isSelectionMode && onExportSelected
           ? [{

@@ -41,6 +41,8 @@ interface RoutesToolbarProps {
   initialFilters?: FilterData
   isSelectionMode?: boolean
   selectedCount?: number
+  pageSize?: number
+  onPageSizeChange?: (size: number) => void
 }
 
 const PRIMARY_DARK = '#0f3255'
@@ -58,6 +60,8 @@ export const RoutesToolbar = ({
   initialFilters,
   isSelectionMode = false,
   selectedCount = 0,
+  pageSize,
+  onPageSizeChange,
 }: RoutesToolbarProps) => {
   const [searchValue, setSearchValue] = useState(initialSearch)
   const [showFilters, setShowFilters] = useState(false)
@@ -83,6 +87,7 @@ export const RoutesToolbar = ({
     areas: [],
     vehicles: [],
     drivers: [],
+    responsibles: [],
   })
 
   useEffect(() => {
@@ -90,12 +95,15 @@ export const RoutesToolbar = ({
       try {
         const data = await routeService.getReferenceData()
         const drivers = await routeService.getDrivers()
+        const areas = await routeService.getRouteAreaOptions()
+        const responsibles = await routeService.getRouteResponsibles()
         setRefData({
           statuses: data.statuses || [],
           deliveryStatuses: data.deliveryStatuses || [],
-          areas: data.routeAreas || [],
+          areas: areas || [],
           vehicles: data.vehicles || [],
           drivers: drivers || [],
+          responsibles: responsibles || [],
         })
       } catch (err) {
         console.error('[RoutesToolbar] Error loading ref data:', err)
@@ -181,6 +189,11 @@ export const RoutesToolbar = ({
         filters={[
           { isActive: showFilters, onClick: () => setShowFilters(!showFilters) },
         ]}
+        pageSize={
+          pageSize != null && onPageSizeChange
+            ? { value: pageSize, options: [20, 50, 100], onChange: onPageSizeChange }
+            : undefined
+        }
         actions={[
           ...(isSelectionMode && onExportSelected
             ? [{
@@ -340,7 +353,7 @@ export const RoutesToolbar = ({
                 <FormDropdown
                   label="Responsável"
                   value={filters.responsavel}
-                  options={[{ value: '', label: 'Todos' }, ...refData.drivers.map((d: any) => ({ value: d.name, label: d.name }))]}
+                  options={[{ value: '', label: 'Todos' }, ...refData.responsibles.map((r: any) => ({ value: String(r.id), label: r.name }))]}
                   onChange={(value) => handleStringChange('responsavel', value)}
                 />
               </div>

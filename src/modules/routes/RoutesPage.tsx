@@ -276,8 +276,8 @@ export const RoutesPage = ({
     setGlobalRefreshCallback(wrapper)
     return () => setGlobalRefreshCallback(() => {})
   }, [])
-  const LIMIT = 50
-  const totalPages = Math.ceil(total / LIMIT) || 1
+  const [pageSize, setPageSize] = useState(20)
+  const totalPages = Math.ceil(total / pageSize) || 1
 
   // Recarrega a lista respeitando busca, toggle de inativos, página e
   // os filtros aplicados no toolbar. Sem filtro aplicado, usa o dia atual
@@ -295,7 +295,7 @@ export const RoutesPage = ({
       search: searchTerm || undefined,
       isActive: showInactive ? undefined : true,
       page: currentPage,
-      limit: LIMIT,
+      limit: pageSize,
       dataInicio: f ? (f.dataInicio || undefined) : todayStr,
       dataFim: f ? (f.dataFim || undefined) : todayStr,
       status: f?.status?.map((s) => s.value),
@@ -318,7 +318,7 @@ export const RoutesPage = ({
   useEffect(() => {
     reloadRoutes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, showInactive, currentPage, appliedFilters, fetchRoutes])
+  }, [searchTerm, showInactive, currentPage, pageSize, appliedFilters, fetchRoutes])
 
   // Reseta a seleção quando filtros/busca mudam (não ao paginar)
   useEffect(() => {
@@ -992,6 +992,11 @@ export const RoutesPage = ({
           onExportSelected={handleExportSelected}
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedRouteIds.size}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setCurrentPage(1)
+          }}
           onFilter={(filters) => {
             // Persiste os filtros e volta à página 1. O fetch é feito
             // pelo useEffect (reloadRoutes), evitando que buscas paralelas

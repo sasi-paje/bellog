@@ -881,7 +881,7 @@ const handleSaveNewRoute = useCallback(async (force = false) => {
       <PageHeader title="Atribuir Notas" userName={userName} userRole={userRole} userEmail={userEmail} onLogout={onLogout} />
 
       {/* Toolbar: data (esq) + filtros avançados (dir) */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#828282]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#e0e0e0]">
         {/* Esquerda — campo de data + filtro de placas */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">

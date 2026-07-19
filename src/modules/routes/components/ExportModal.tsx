@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppIcon, Toast, MultiSelectDropdown } from '../../../shared/components'
 import { fiscalInvoiceService } from '../../../features/notes'
+import { formatPercent } from '../../../shared/utils/format'
 
 interface RouteData {
   id: string
@@ -168,13 +169,15 @@ export const ExportModal = ({ isOpen, onClose, onExported, routes, title = 'Sele
           case 'destinations':
             return note?.destination_name || ''
           case 'vehicle_max_capacity':
-            return route.vehicle_max_capacity ? `${route.vehicle_max_capacity} kg` : ''
+            // Número (sem "kg") para a planilha tratar como valor; o separador
+            // decimal vira vírgula na conversão da linha (pt-BR).
+            return route.vehicle_max_capacity ? route.vehicle_max_capacity.toFixed(1) : ''
           case 'current_load':
-            return route.current_load ? `${route.current_load} kg` : ''
+            return route.current_load ? route.current_load.toFixed(1) : ''
           case 'utilizacao':
+            // Mesma fórmula/formatação da tabela (formatPercent, 1 casa decimal)
             if (route.vehicle_max_capacity && route.current_load) {
-              const pct = Math.round((route.current_load / route.vehicle_max_capacity) * 100)
-              return `${pct}%`
+              return formatPercent((route.current_load / route.vehicle_max_capacity) * 100)
             }
             return ''
           case 'delivery_status_description':

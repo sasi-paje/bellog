@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { AppIcon } from './AppIcon'
 import { UserMenu } from './UserMenu'
 import { WhatsNewPanel, WHATS_NEW } from './WhatsNewPanel'
+import { whatsNewService } from '../../features/whats-new/api/whats-new.service'
 
-// Chave do localStorage com a última novidade vista pelo usuário (por dispositivo)
+// Fallback local (quando não há email de usuário para persistir no banco)
 const WHATS_NEW_SEEN_KEY = 'bellog_whatsnew_seen'
 const LATEST_WHATS_NEW_ID = WHATS_NEW[0]?.id ?? ''
 
@@ -32,24 +33,44 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   const [newsOpen, setNewsOpen] = useState(false)
   const [hasUnread, setHasUnread] = useState(false)
 
-  // Ao carregar: se a novidade mais recente ainda não foi vista neste
-  // dispositivo, marca como não lida e abre o painel automaticamente para
-  // informar o usuário sobre o que mudou após o deploy.
+  // Ao carregar: se a novidade mais recente ainda não foi vista por este
+  // usuário, marca como não lida e abre o painel automaticamente para informar
+  // o que mudou após o deploy. O "visto" é por usuário (email+is_test) no banco,
+  // com fallback para localStorage quando não há email.
   useEffect(() => {
     if (!LATEST_WHATS_NEW_ID) return
-    let seen: string | null = null
-    try {
-      seen = localStorage.getItem(WHATS_NEW_SEEN_KEY)
-    } catch {
-      /* localStorage indisponível — ignora */
+    let cancelled = false
+
+    const check = async () => {
+      const seenDb = userEmail ? await whatsNewService.getSeenId(userEmail) : null
+      let seenLocal: string | null = null
+      try {
+        seenLocal = localStorage.getItem(WHATS_NEW_SEEN_KEY)
+      } catch {
+        /* ignora */
+      }
+      if (cancelled) return
+      // Visto se o banco (por usuário) OU o localStorage (fallback) já registrou
+      // a novidade mais recente. Torna robusto caso a coluna ainda não exista.
+      const alreadySeen =
+        seenDb === LATEST_WHATS_NEW_ID || seenLocal === LATEST_WHATS_NEW_ID
+      if (!alreadySeen) {
+        setHasUnread(true)
+        setNewsOpen(true)
+      }
     }
-    if (seen !== LATEST_WHATS_NEW_ID) {
-      setHasUnread(true)
-      setNewsOpen(true)
+
+    check()
+    return () => {
+      cancelled = true
     }
-  }, [])
+  }, [userEmail])
 
   const markWhatsNewSeen = () => {
+    // Persiste por usuário (banco) e também localmente (fallback/otimista)
+    if (userEmail) {
+      void whatsNewService.setSeenId(userEmail, LATEST_WHATS_NEW_ID)
+    }
     try {
       localStorage.setItem(WHATS_NEW_SEEN_KEY, LATEST_WHATS_NEW_ID)
     } catch {

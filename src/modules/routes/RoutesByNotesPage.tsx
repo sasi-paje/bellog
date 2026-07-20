@@ -128,7 +128,8 @@ export const RoutesByNotesPage = ({
   const [allFilteredNotes, setAllFilteredNotes] = useState<NoteByRouteData[]>([])
   const [selectingAll, setSelectingAll] = useState(false)
 
-  // Filtros + exibir inativos
+  // Busca + Filtros + exibir inativos
+  const [searchTerm, setSearchTerm] = useState('')
   const [appliedFilters, setAppliedFilters] = useState<RbnFilterValues>(EMPTY_RBN_FILTERS)
   const [showInactive, setShowInactive] = useState(false)
 
@@ -136,6 +137,7 @@ export const RoutesByNotesPage = ({
   const buildFilterParams = () => ({
     onlyWithRoute: true,
     showInactive,
+    search: searchTerm.trim() || undefined,
     routeCode: appliedFilters.routeCode.trim() || undefined,
     deliveryStatus: appliedFilters.deliveryStatus.length ? appliedFilters.deliveryStatus.map((o) => o.value) : undefined,
     motorista: appliedFilters.motorista.length ? appliedFilters.motorista.map((o) => o.value) : undefined,
@@ -147,7 +149,7 @@ export const RoutesByNotesPage = ({
   useEffect(() => {
     fetchInvoices({ ...buildFilterParams(), page: currentPage, limit: LIMIT })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize, appliedFilters, showInactive])
+  }, [currentPage, pageSize, appliedFilters, showInactive, searchTerm])
 
   // Transformar dados das notas para o formato da tabela
   const notesData: NoteByRouteData[] = invoices.map(mapInvoiceToNote)
@@ -228,6 +230,11 @@ export const RoutesByNotesPage = ({
           onExportSelected={handleExportSelected}
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedNoteIds.size}
+          searchValue={searchTerm}
+          onSearch={(term) => {
+            setSearchTerm(term)
+            setCurrentPage(1)
+          }}
           pageSize={pageSize}
           onPageSizeChange={(size) => {
             setPageSize(size)

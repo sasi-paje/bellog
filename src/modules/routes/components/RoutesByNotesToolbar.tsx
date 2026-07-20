@@ -60,6 +60,8 @@ interface RoutesByNotesToolbarProps {
   appliedFilters?: RbnFilterValues
   onApplyFilters?: (f: RbnFilterValues) => void
   onClearFilters?: () => void
+  searchValue?: string
+  onSearch?: (term: string) => void
 }
 
 export const RoutesByNotesToolbar = ({
@@ -72,6 +74,8 @@ export const RoutesByNotesToolbar = ({
   appliedFilters = EMPTY_RBN_FILTERS,
   onApplyFilters,
   onClearFilters,
+  searchValue = '',
+  onSearch,
 }: RoutesByNotesToolbarProps) => {
   const [showFilters, setShowFilters] = useState(false)
   const [pending, setPending] = useState<RbnFilterValues>(appliedFilters)
@@ -124,7 +128,13 @@ export const RoutesByNotesToolbar = ({
   return (
     <div className="relative">
       <PageToolbar
-        search={undefined}
+        search={{
+          placeholder: 'Buscar pelo número da nota',
+          value: searchValue,
+          onChange: (v) => onSearch?.(v),
+          onSearch: (v) => onSearch?.(v),
+          width: '360px',
+        }}
         filters={[{ isActive: showFilters || isRbnFilterActive(appliedFilters), onClick: () => setShowFilters((v) => !v) }]}
         pageSize={
           pageSize != null && onPageSizeChange

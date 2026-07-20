@@ -336,7 +336,7 @@ export const AdminApp: React.FC = () => {
         accepting={acceptingTerms}
         onAccept={handleAcceptTerms}
         onDecline={handleDeclineTerms}
-        onClose={() => setNeedsTerms(false)}
+        onClose={handleDeclineTerms}
       />
     </PermissionsProvider>
   )

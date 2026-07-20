@@ -7,7 +7,7 @@ interface TermsAcceptanceModalProps {
   accepting?: boolean
   onAccept: () => void
   onDecline: () => void
-  /** Fechar (X) — apenas dispensa o modal; reaparece no próximo acesso. */
+  /** Fechar (X). Em aceite obrigatório, o app trata como recusa (logout). */
   onClose: () => void
 }
 

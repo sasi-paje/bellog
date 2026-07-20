@@ -32,19 +32,8 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ isOpen, title, u
 
       <div className="relative flex h-[90vh] w-full max-w-[900px] flex-col overflow-hidden rounded-[8px] bg-white shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#e0e0e0] px-5 py-3">
+        <div className="flex items-center border-b border-[#e0e0e0] px-5 py-3">
           <h2 className="text-[16px] font-bold text-[#0f3255]">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-gray-100"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2a2a2a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
-          </button>
         </div>
 
         {/* PDF */}

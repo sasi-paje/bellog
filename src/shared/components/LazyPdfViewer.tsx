@@ -2,7 +2,7 @@ import React, { Suspense } from 'react'
 
 // Carrega o pdf.js sob demanda (só quando um modal de PDF abre), mantendo o
 // bundle inicial (login) leve.
-const PdfCanvasViewer = React.lazy(() => import('./PdfCanvasViewer'))
+const PdfFullViewer = React.lazy(() => import('./PdfFullViewer'))
 
 interface LazyPdfViewerProps {
   url: string
@@ -19,7 +19,7 @@ export const LazyPdfViewer: React.FC<LazyPdfViewerProps> = ({ url, className }) 
       </div>
     }
   >
-    <PdfCanvasViewer url={url} className={className} />
+    <PdfFullViewer url={url} className={className} />
   </Suspense>
 )
 

@@ -857,6 +857,7 @@ const handleSaveNewRoute = useCallback(async (force = false) => {
     <div className="flex flex-col h-full w-full bg-white">
       <PageHeader
         title="Atribuir Notas"
+        page="assign-notes"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}

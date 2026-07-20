@@ -186,6 +186,7 @@ export const RoutesByNotesPage = ({
     <>
       <PageHeader
         title="Notas por Rota"
+        page="routes-by-notes"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}

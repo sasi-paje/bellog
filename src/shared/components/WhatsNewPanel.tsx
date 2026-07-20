@@ -6,11 +6,15 @@ export interface WhatsNewItem {
   date: string
   title: string
   body: string
+  /** Telas em que a novidade aparece. 'all' (ou omitido) = todas as telas. */
+  pages?: string[]
 }
 
 /**
  * Novidades exibidas no painel "O que há de novo?".
  * Mais recentes no topo. Edite esta lista a cada release.
+ * `pages`: chaves de tela (routes, notes, routes-by-notes, assign-notes, users,
+ * vehicles, settings...). Use ['all'] ou omita para aparecer em todas.
  */
 export const WHATS_NEW: WhatsNewItem[] = [
   {
@@ -19,6 +23,7 @@ export const WHATS_NEW: WhatsNewItem[] = [
     date: '19/07/2026',
     title: 'Central de novidades',
     body: 'Sempre que uma nova funcionalidade ou correção for publicada, você será avisado por aqui automaticamente.',
+    pages: ['all'],
   },
   {
     id: '2026-07-15-filtro-avancado',
@@ -26,13 +31,15 @@ export const WHATS_NEW: WhatsNewItem[] = [
     date: '15/07/2026',
     title: 'Filtro avançado de rotas',
     body: 'Agora é possível combinar múltiplos critérios — área, motorista e status de entrega — em uma única busca.',
+    pages: ['routes'],
   },
   {
     id: '2026-07-02-registros-por-pagina',
     tag: 'Melhoria',
     date: '02/07/2026',
     title: 'Registros por página',
-    body: 'Escolha exibir 20, 50 ou 100 rotas por página diretamente na barra de ferramentas.',
+    body: 'Escolha exibir 20, 50 ou 100 registros por página diretamente na barra de ferramentas.',
+    pages: ['routes', 'notes', 'routes-by-notes'],
   },
   {
     id: '2026-06-24-rotas-inativas',
@@ -40,6 +47,7 @@ export const WHATS_NEW: WhatsNewItem[] = [
     date: '24/06/2026',
     title: 'Exibir rotas inativas',
     body: 'Um novo controle permite alternar a visibilidade de rotas desativadas na listagem.',
+    pages: ['routes'],
   },
   {
     id: '2026-06-10-export-pdf',
@@ -47,12 +55,26 @@ export const WHATS_NEW: WhatsNewItem[] = [
     date: '10/06/2026',
     title: 'Exportação para PDF',
     body: 'Corrigido o corte de colunas ao exportar a listagem de rotas em modo paisagem.',
+    pages: ['routes'],
   },
 ]
+
+/** true se a novidade deve aparecer na tela informada. */
+export function whatsNewMatchesPage(item: WhatsNewItem, page?: string): boolean {
+  if (!item.pages || item.pages.includes('all')) return true
+  return page != null && item.pages.includes(page)
+}
+
+/** Novidades visíveis para a tela (mais recentes primeiro). */
+export function visibleWhatsNew(page?: string): WhatsNewItem[] {
+  return WHATS_NEW.filter((i) => whatsNewMatchesPage(i, page))
+}
 
 interface WhatsNewPanelProps {
   isOpen: boolean
   onClose: () => void
+  /** Tela atual — filtra as novidades para mostrar só as dela (+ globais). */
+  page?: string
   items?: WhatsNewItem[]
 }
 
@@ -64,7 +86,8 @@ const InfoIcon = ({ size = 22, color = '#e8791a' }: { size?: number; color?: str
   </svg>
 )
 
-export const WhatsNewPanel: React.FC<WhatsNewPanelProps> = ({ isOpen, onClose, items = WHATS_NEW }) => {
+export const WhatsNewPanel: React.FC<WhatsNewPanelProps> = ({ isOpen, onClose, page, items }) => {
+  const list = items ?? visibleWhatsNew(page)
   // Fecha com ESC e trava o scroll do body enquanto aberto
   useEffect(() => {
     if (!isOpen) return
@@ -122,10 +145,10 @@ export const WhatsNewPanel: React.FC<WhatsNewPanelProps> = ({ isOpen, onClose, i
 
         {/* Lista de novidades */}
         <div className="flex-1 overflow-y-auto px-[26px] pb-[26px] pt-[8px]">
-          {items.length === 0 ? (
+          {list.length === 0 ? (
             <p className="pt-6 text-[13px] text-[#6b7080]">Nenhuma novidade por enquanto.</p>
           ) : (
-            items.map((item) => (
+            list.map((item) => (
               <div key={item.id} className="border-b border-[#eef0f5] py-[20px] last:border-b-0">
                 <div className="mb-[8px] flex items-center gap-[10px]">
                   <span className="inline-flex items-center rounded-full bg-[#fdece0] px-[10px] py-[3px] text-[12px] font-bold text-[#c9661a]">

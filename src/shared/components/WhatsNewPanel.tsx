@@ -8,6 +8,8 @@ export interface WhatsNewItem {
   body: string
   /** Telas em que a novidade aparece. 'all' (ou omitido) = todas as telas. */
   pages?: string[]
+  /** Data de publicação em ISO (YYYY-MM-DD). Usada para a janela de exibição. */
+  publishedAt?: string
 }
 
 /**

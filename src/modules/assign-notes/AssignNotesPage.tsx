@@ -4,7 +4,7 @@
 // Arquivo: src/modules/assign-notes/AssignNotesPage.tsx
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { AppIcon, Drawer, UserMenu } from '../../shared/components'
+import { AppIcon, Drawer, PageHeader } from '../../shared/components'
 import { NotesList } from './components/NotesList'
 import { RoutesGrid } from './components/RoutesGrid'
 import { ConfirmRemoveModal } from './components/ConfirmRemoveModal'
@@ -58,31 +58,6 @@ function parseBrazilianDecimal(value: string | number | null | undefined): numbe
 // COMPONENTES AUXILIARES
 // =====================================================
 
-function PageHeader({ title, userName = 'Leon', userRole = 'Usuário', userEmail, onLogout }: {
-  title: string
-  userName?: string
-  userRole?: string
-  userEmail?: string
-  onLogout?: () => void
-}) {
-  return (
-    <div className="flex h-[78px] items-center justify-between p-3 shrink-0 w-full">
-      <div className="flex gap-2 items-center w-[675px]">
-        <div className="w-6 h-6">
-          <AppIcon name="left_panel_close" size={24} />
-        </div>
-        <h1 className="font-bold text-[24px] text-[#0f3255]">{title}</h1>
-      </div>
-      <UserMenu
-        userName={userName}
-        userEmail={userEmail}
-        userRole={userRole}
-        onLogout={onLogout}
-      />
-    </div>
-  )
-}
-
 // =====================================================
 // INTERFACE DO COMPONENTE
 // =====================================================
@@ -92,13 +67,15 @@ interface AssignNotesPageProps {
   userRole?: string
   onLogout?: () => void
   userEmail?: string
+  isSidebarOpen?: boolean
+  onToggleSidebar?: () => void
 }
 
 // =====================================================
 // COMPONENTE PRINCIPAL
 // =====================================================
 
-export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLogout, userEmail }: AssignNotesPageProps) {
+export function AssignNotesPage({ userName = 'Leon', userRole = 'Usuário', onLogout, userEmail, isSidebarOpen = true, onToggleSidebar }: AssignNotesPageProps) {
   // ---------- ESTADO ----------
   const [routes, setRoutes] = useState<RouteListItem[]>([])
   const [routeNotes, setRouteNotes] = useState<Record<string, AssignedNote[]>>({})
@@ -878,7 +855,15 @@ const handleSaveNewRoute = useCallback(async (force = false) => {
 
   return (
     <div className="flex flex-col h-full w-full bg-white">
-      <PageHeader title="Atribuir Notas" userName={userName} userRole={userRole} userEmail={userEmail} onLogout={onLogout} />
+      <PageHeader
+        title="Atribuir Notas"
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={onToggleSidebar || (() => {})}
+        userName={userName}
+        userRole={userRole}
+        userEmail={userEmail}
+        onLogout={onLogout}
+      />
 
       {/* Toolbar: data (esq) + filtros avançados (dir) */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#e0e0e0]">

@@ -1,12 +1,30 @@
 import React, { useState, useEffect } from 'react'
 import { AppIcon } from './AppIcon'
 import { UserMenu } from './UserMenu'
-import { WhatsNewPanel, WHATS_NEW } from './WhatsNewPanel'
+import { WhatsNewPanel, visibleWhatsNew } from './WhatsNewPanel'
 import { whatsNewService } from '../../features/whats-new/api/whats-new.service'
 
-// Fallback local (quando não há email de usuário para persistir no banco)
+// Fallback local (quando não há email): mapa JSON { tela: idVisto }
 const WHATS_NEW_SEEN_KEY = 'bellog_whatsnew_seen'
-const LATEST_WHATS_NEW_ID = WHATS_NEW[0]?.id ?? ''
+
+const readLocalSeen = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(WHATS_NEW_SEEN_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {}
+  } catch {
+    return {}
+  }
+}
+
+const writeLocalSeen = (map: Record<string, string>) => {
+  try {
+    localStorage.setItem(WHATS_NEW_SEEN_KEY, JSON.stringify(map))
+  } catch {
+    /* ignora */
+  }
+}
 
 export interface PageHeaderProps {
   title: string
@@ -17,6 +35,8 @@ export interface PageHeaderProps {
   userEmail?: string
   userRole?: string
   onLogout?: () => void
+  /** Chave da tela — filtra as novidades para mostrar só as dela. */
+  page?: string
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
@@ -28,35 +48,36 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   userEmail,
   userRole = 'Usuário',
   onLogout,
+  page,
 }) => {
   const ariaLabel = isSidebarOpen ? 'Recolher sidebar' : 'Expandir sidebar'
   const [newsOpen, setNewsOpen] = useState(false)
   const [hasUnread, setHasUnread] = useState(false)
 
-  // Ao carregar: se a novidade mais recente ainda não foi vista por este
-  // usuário, marca como não lida e abre o painel automaticamente para informar
-  // o que mudou após o deploy. O "visto" é por usuário (email+is_test) no banco,
-  // com fallback para localStorage quando não há email.
+  // Novidades desta tela (mais recente primeiro) e a chave de "visto" por tela.
+  const pageKey = page || 'global'
+  const latestVisibleId = visibleWhatsNew(page)[0]?.id ?? ''
+
+  // Ao carregar/trocar de tela: se a novidade mais recente DESTA tela ainda não
+  // foi vista, marca como não lida e abre o painel automaticamente. "Visto" é por
+  // usuário (banco) e por tela, com fallback para localStorage.
   useEffect(() => {
-    if (!LATEST_WHATS_NEW_ID) return
+    if (!latestVisibleId) {
+      setHasUnread(false)
+      return
+    }
     let cancelled = false
 
     const check = async () => {
-      const seenDb = userEmail ? await whatsNewService.getSeenId(userEmail) : null
-      let seenLocal: string | null = null
-      try {
-        seenLocal = localStorage.getItem(WHATS_NEW_SEEN_KEY)
-      } catch {
-        /* ignora */
-      }
+      const seenDb = userEmail ? (await whatsNewService.getSeenMap(userEmail))[pageKey] : undefined
+      const seenLocal = readLocalSeen()[pageKey]
       if (cancelled) return
-      // Visto se o banco (por usuário) OU o localStorage (fallback) já registrou
-      // a novidade mais recente. Torna robusto caso a coluna ainda não exista.
-      const alreadySeen =
-        seenDb === LATEST_WHATS_NEW_ID || seenLocal === LATEST_WHATS_NEW_ID
+      const alreadySeen = seenDb === latestVisibleId || seenLocal === latestVisibleId
       if (!alreadySeen) {
         setHasUnread(true)
         setNewsOpen(true)
+      } else {
+        setHasUnread(false)
       }
     }
 
@@ -64,18 +85,17 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
     return () => {
       cancelled = true
     }
-  }, [userEmail])
+  }, [userEmail, pageKey, latestVisibleId])
 
   const markWhatsNewSeen = () => {
-    // Persiste por usuário (banco) e também localmente (fallback/otimista)
+    if (!latestVisibleId) {
+      setHasUnread(false)
+      return
+    }
     if (userEmail) {
-      void whatsNewService.setSeenId(userEmail, LATEST_WHATS_NEW_ID)
+      void whatsNewService.setSeen(userEmail, pageKey, latestVisibleId)
     }
-    try {
-      localStorage.setItem(WHATS_NEW_SEEN_KEY, LATEST_WHATS_NEW_ID)
-    } catch {
-      /* ignora */
-    }
+    writeLocalSeen({ ...readLocalSeen(), [pageKey]: latestVisibleId })
     setHasUnread(false)
   }
 
@@ -157,7 +177,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         />
       </div>
 
-      <WhatsNewPanel isOpen={newsOpen} onClose={closeNews} />
+      <WhatsNewPanel isOpen={newsOpen} onClose={closeNews} page={page} />
     </div>
   )
 }

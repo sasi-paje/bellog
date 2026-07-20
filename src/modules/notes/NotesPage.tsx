@@ -318,6 +318,7 @@ export const NotesPage = ({
     <>
       <PageHeader
         title="Notas"
+        page="notes"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}

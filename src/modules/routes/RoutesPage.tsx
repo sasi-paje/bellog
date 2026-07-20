@@ -974,6 +974,7 @@ export const RoutesPage = ({
       {/* Page Header */}
       <PageHeader
         title="Rotas"
+        page="routes"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}

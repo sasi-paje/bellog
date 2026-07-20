@@ -452,6 +452,7 @@ export const UsersPage = ({
     <>
       <PageHeader
         title="Usuários"
+        page="users"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}

@@ -1,4 +1,5 @@
 import React from 'react'
+import { LazyPdfViewer } from './LazyPdfViewer'
 
 interface TermsAcceptanceModalProps {
   isOpen: boolean
@@ -51,10 +52,8 @@ export const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({
           </button>
         </div>
 
-        {/* PDF — #toolbar=0 oculta a barra do visualizador (imprimir/baixar) */}
-        <div className="flex-1 bg-[#525659]">
-          <iframe src={`${url}#toolbar=0&navpanes=0`} title="Termo de Uso" className="h-full w-full border-0" />
-        </div>
+        {/* PDF — visualizador só-leitura (sem busca/navegação/imprimir/baixar) */}
+        <LazyPdfViewer url={url} className="flex-1 bg-[#525659]" />
 
         {/* Rodapé: Não Aceita / Aceita */}
         <div className="flex items-center justify-end gap-3 border-t border-[#e0e0e0] px-5 py-3">

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { LazyPdfViewer } from './LazyPdfViewer'
 
 interface PdfViewerModalProps {
   isOpen: boolean
@@ -36,10 +37,8 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ isOpen, title, u
           <h2 className="text-[16px] font-bold text-[#0f3255]">{title}</h2>
         </div>
 
-        {/* PDF — #toolbar=0 oculta a barra do visualizador (imprimir/baixar) */}
-        <div className="flex-1 bg-[#525659]">
-          <iframe src={`${url}#toolbar=0&navpanes=0`} title={title} className="h-full w-full border-0" />
-        </div>
+        {/* PDF — visualizador só-leitura (sem busca/navegação/imprimir/baixar) */}
+        <LazyPdfViewer url={url} className="flex-1 bg-[#525659]" />
 
         {/* Footer */}
         <div className="flex items-center justify-end border-t border-[#e0e0e0] px-5 py-3">

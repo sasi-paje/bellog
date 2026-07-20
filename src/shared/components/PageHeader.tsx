@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { AppIcon } from './AppIcon'
 import { UserMenu } from './UserMenu'
-import { WhatsNewPanel, visibleWhatsNew } from './WhatsNewPanel'
+import { WhatsNewPanel } from './WhatsNewPanel'
 import { whatsNewService } from '../../features/whats-new/api/whats-new.service'
+import { useWhatsNew } from '../../hooks/useWhatsNew'
 
 // Fallback local (quando não há email): mapa JSON { tela: idVisto }
 const WHATS_NEW_SEEN_KEY = 'bellog_whatsnew_seen'
@@ -56,7 +57,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
 
   // Novidades desta tela (mais recente primeiro) e a chave de "visto" por tela.
   const pageKey = page || 'global'
-  const latestVisibleId = visibleWhatsNew(page)[0]?.id ?? ''
+  const whatsNewItems = useWhatsNew(page)
+  const latestVisibleId = whatsNewItems[0]?.id ?? ''
 
   // Ao carregar/trocar de tela: se a novidade mais recente DESTA tela ainda não
   // foi vista, marca como não lida e abre o painel automaticamente. "Visto" é por
@@ -177,7 +179,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
         />
       </div>
 
-      <WhatsNewPanel isOpen={newsOpen} onClose={closeNews} page={page} />
+      <WhatsNewPanel isOpen={newsOpen} onClose={closeNews} page={page} items={whatsNewItems} />
     </div>
   )
 }

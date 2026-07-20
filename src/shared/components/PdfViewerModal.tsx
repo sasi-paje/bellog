@@ -36,9 +36,9 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ isOpen, title, u
           <h2 className="text-[16px] font-bold text-[#0f3255]">{title}</h2>
         </div>
 
-        {/* PDF */}
+        {/* PDF — #toolbar=0 oculta a barra do visualizador (imprimir/baixar) */}
         <div className="flex-1 bg-[#525659]">
-          <iframe src={url} title={title} className="h-full w-full border-0" />
+          <iframe src={`${url}#toolbar=0&navpanes=0`} title={title} className="h-full w-full border-0" />
         </div>
 
         {/* Footer */}

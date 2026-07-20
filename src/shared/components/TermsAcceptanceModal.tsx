@@ -51,9 +51,9 @@ export const TermsAcceptanceModal: React.FC<TermsAcceptanceModalProps> = ({
           </button>
         </div>
 
-        {/* PDF */}
+        {/* PDF — #toolbar=0 oculta a barra do visualizador (imprimir/baixar) */}
         <div className="flex-1 bg-[#525659]">
-          <iframe src={url} title="Termo de Uso" className="h-full w-full border-0" />
+          <iframe src={`${url}#toolbar=0&navpanes=0`} title="Termo de Uso" className="h-full w-full border-0" />
         </div>
 
         {/* Rodapé: Não Aceita / Aceita */}

@@ -14,6 +14,12 @@ export { UserMenu } from './UserMenu'
 export { PageHeader } from './PageHeader'
 export type { PageHeaderProps } from './PageHeader'
 
+export { WhatsNewPanel, WHATS_NEW } from './WhatsNewPanel'
+export type { WhatsNewItem } from './WhatsNewPanel'
+
+export { PdfViewerModal } from './PdfViewerModal'
+export { TermsAcceptanceModal } from './TermsAcceptanceModal'
+
 export { PrimaryButton } from './PrimaryButton'
 export { SecondaryButton } from './SecondaryButton'
 export { Toggle } from './Toggle'

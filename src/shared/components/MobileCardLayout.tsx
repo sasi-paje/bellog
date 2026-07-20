@@ -12,12 +12,19 @@ const HomeArrow = () => (
   </svg>
 )
 
+const CloseX = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="#2a2a2a" />
+  </svg>
+)
+
 interface MobileCardLayoutProps {
   title: string
   children: React.ReactNode
   footer?: React.ReactNode
   onBack?: () => void
   onHome?: () => void
+  onClose?: () => void
   fullHeight?: boolean
 }
 
@@ -27,6 +34,7 @@ export function MobileCardLayout({
   footer,
   onBack,
   onHome,
+  onClose,
   fullHeight = false,
 }: MobileCardLayoutProps) {
   return (
@@ -34,7 +42,7 @@ export function MobileCardLayout({
       className={`w-full ${fullHeight ? 'h-[calc(100dvh-32px)]' : 'min-h-[calc(100dvh-32px)]'} rounded-2xl bg-white shadow-md px-4 pt-4 flex flex-col`}
       style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
     >
-      {(onBack || onHome) && (
+      {(onBack || onHome || onClose) && (
         <div className="flex items-center justify-between mb-2">
           <button
             type="button"
@@ -44,14 +52,28 @@ export function MobileCardLayout({
           >
             <BackArrow />
           </button>
-          <button
-            type="button"
-            onClick={onHome}
-            className={`flex h-8 w-8 items-center justify-center${!onHome ? ' invisible' : ''}`}
-            aria-label="Início"
-          >
-            <HomeArrow />
-          </button>
+          <div className="flex items-center gap-1">
+            {onHome && (
+              <button
+                type="button"
+                onClick={onHome}
+                className="flex h-8 w-8 items-center justify-center"
+                aria-label="Início"
+              >
+                <HomeArrow />
+              </button>
+            )}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-8 w-8 items-center justify-center rounded hover:bg-gray-100"
+                aria-label="Fechar"
+              >
+                <CloseX />
+              </button>
+            )}
+          </div>
         </div>
       )}
       <h1 className="text-[20px] font-bold text-[#001B44] mb-4">{title}</h1>

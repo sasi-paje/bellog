@@ -71,7 +71,15 @@ export const CreateNoteModal = ({
     }
   }, [isOpen])
 
+  // Fornecedor e Destino são obrigatórios — sem eles o card da nota fica sem
+  // essas informações em Atribuir Notas.
+  const isValid =
+    formData.invoice_number.trim() !== '' &&
+    formData.id_customer_company != null &&
+    formData.id_supplier_company != null
+
   const handleSubmit = () => {
+    if (!isValid) return
     onSave?.(formData)
   }
 
@@ -90,7 +98,7 @@ export const CreateNoteModal = ({
       onConfirm={handleSubmit}
       confirmLabel={loading ? 'Criando...' : 'Criar'}
       backLabel="Voltar"
-      confirmDisabled={loading}
+      confirmDisabled={loading || !isValid}
     >
       <div className="flex flex-col gap-[16px] w-full">
         <div className="flex flex-col gap-[16px]">
@@ -133,7 +141,7 @@ export const CreateNoteModal = ({
           <div className="flex gap-4">
             <div className="flex-1 flex flex-col gap-[8px]">
               <label className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
-                Local da entrega
+                Local da entrega <span className="text-[#eb5757]">*</span>
               </label>
               <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
                 <select
@@ -156,7 +164,7 @@ export const CreateNoteModal = ({
             </div>
             <div className="flex-1 flex flex-col gap-[8px]">
               <label className="font-semibold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: TEXT_COLOR }}>
-                Fornecedor
+                Fornecedor <span className="text-[#eb5757]">*</span>
               </label>
               <div className="h-[45px] flex items-center px-4 py-3 rounded-[5px] border border-[#0f3255] bg-white w-full">
                 <select

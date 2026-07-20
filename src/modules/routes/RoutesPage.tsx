@@ -276,8 +276,8 @@ export const RoutesPage = ({
     setGlobalRefreshCallback(wrapper)
     return () => setGlobalRefreshCallback(() => {})
   }, [])
-  const LIMIT = 50
-  const totalPages = Math.ceil(total / LIMIT) || 1
+  const [pageSize, setPageSize] = useState(20)
+  const totalPages = Math.ceil(total / pageSize) || 1
 
   // Recarrega a lista respeitando busca, toggle de inativos, página e
   // os filtros aplicados no toolbar. Sem filtro aplicado, usa o dia atual
@@ -295,7 +295,7 @@ export const RoutesPage = ({
       search: searchTerm || undefined,
       isActive: showInactive ? undefined : true,
       page: currentPage,
-      limit: LIMIT,
+      limit: pageSize,
       dataInicio: f ? (f.dataInicio || undefined) : todayStr,
       dataFim: f ? (f.dataFim || undefined) : todayStr,
       status: f?.status?.map((s) => s.value),
@@ -318,7 +318,7 @@ export const RoutesPage = ({
   useEffect(() => {
     reloadRoutes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, showInactive, currentPage, appliedFilters, fetchRoutes])
+  }, [searchTerm, showInactive, currentPage, pageSize, appliedFilters, fetchRoutes])
 
   // Reseta a seleção quando filtros/busca mudam (não ao paginar)
   useEffect(() => {
@@ -383,6 +383,12 @@ export const RoutesPage = ({
   // Fail-closed: só libera quando o campo é explicitamente true.
   const currentDeliveryStatus = refDeliveryStatuses.find((s) => s.name === formData?.statusEntrega)
   const canEditAssembly = currentDeliveryStatus?.allows_route_edition === true
+
+  // Edição da rota no Web é administrativa: fica liberada, EXCETO quando a rota
+  // está finalizada (todas as notas já foram entregues). A montagem de notas
+  // (desassociar) continua governada por canEditAssembly acima.
+  const isRouteFinalized = !!formData?.statusEntrega?.toLowerCase().includes('finaliz')
+  const canEditRoute = !isRouteFinalized
 
   const handleCloseDrawerOnly = () => {
     setIsDrawerOpen(false)
@@ -585,6 +591,13 @@ export const RoutesPage = ({
   const handleSaveEdit = async () => {
     if (!selectedRouteId || !formData) return
 
+    // Edição administrativa (Web): liberada, exceto quando a rota está
+    // finalizada — todas as notas já foram entregues.
+    if (!canEditRoute) {
+      showError('Rota finalizada: todas as notas já foram entregues. Não é possível editar.')
+      return
+    }
+
     setIsSavingEdit(true)
     try {
       // Check if NUMBER was changed
@@ -689,6 +702,29 @@ export const RoutesPage = ({
       })
     }
   }, [activeTab, selectedRouteId, getInvoicesByRouteId, fetchHistory])
+
+  // Atualiza o Histórico automaticamente enquanto o modal está aberto nessa aba,
+  // sem exigir refresh manual (ex.: quando a entrega é finalizada no mobile).
+  // Refetch periódico + ao focar/reexibir a janela. Silencioso: não dispara o
+  // spinner de carregamento (não mexe em isHistoryLoading) para evitar flicker.
+  useEffect(() => {
+    if (!selectedRouteId || activeTab !== 'historico') return
+
+    const silentRefresh = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchHistory(selectedRouteId)
+    }
+
+    const intervalId = window.setInterval(silentRefresh, 10000)
+    window.addEventListener('focus', silentRefresh)
+    document.addEventListener('visibilitychange', silentRefresh)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', silentRefresh)
+      document.removeEventListener('visibilitychange', silentRefresh)
+    }
+  }, [selectedRouteId, activeTab, fetchHistory])
 
   // Handler para clique em item do histórico
   const handleHistoryItemClick = (item: HistoricoItem) => {
@@ -913,15 +949,19 @@ export const RoutesPage = ({
           }`}
         >
           <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canInativar ? 'white' : '#666' }}>
-            {canInativar ? 'Inativar' : 'Bloqueado'}
+            Inativar
           </span>
         </button>
         <button
           type="button"
           onClick={handleEditClick}
-          className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] bg-[#e67c26] w-[150px]"
+          disabled={!canEditRoute}
+          title={canEditRoute ? undefined : 'Rota finalizada: todas as notas já foram entregues. A edição não é permitida.'}
+          className={`flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] ${
+            canEditRoute ? 'bg-[#e67c26]' : 'bg-gray-300 cursor-not-allowed'
+          }`}
         >
-          <span className="font-bold text-[14px] text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canEditRoute ? 'white' : '#666' }}>
             Editar
           </span>
         </button>
@@ -934,6 +974,7 @@ export const RoutesPage = ({
       {/* Page Header */}
       <PageHeader
         title="Rotas"
+        page="routes"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}
@@ -952,6 +993,11 @@ export const RoutesPage = ({
           onExportSelected={handleExportSelected}
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedRouteIds.size}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setCurrentPage(1)
+          }}
           onFilter={(filters) => {
             // Persiste os filtros e volta à página 1. O fetch é feito
             // pelo useEffect (reloadRoutes), evitando que buscas paralelas

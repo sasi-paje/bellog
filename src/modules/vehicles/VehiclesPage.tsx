@@ -155,6 +155,7 @@ export const VehiclesPage = ({
     <div className="flex flex-col flex-1 min-h-0">
       <PageHeader
         title="Veículos"
+        page="vehicles"
         breadcrumb="Configurações"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}

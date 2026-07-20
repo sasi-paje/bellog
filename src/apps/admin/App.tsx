@@ -26,6 +26,9 @@ import { AssignNotesPage } from '../../modules/assign-notes'
 import { VehiclesPage } from '../../modules/vehicles'
 import { UsersPage } from '../../modules/users'
 import { supabase } from '../../lib/supabase'
+import { PermissionsProvider, PageGuard, PAGE_CODE_BY_ROUTE } from '../../features/permissions'
+import { termsService } from '../../features/terms/api/terms.service'
+import { TermsAcceptanceModal } from '../../shared/components'
 
 type AppPage =
   | 'settings-home'
@@ -71,6 +74,8 @@ export const AdminApp: React.FC = () => {
   } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showFirstAccess, setShowFirstAccess] = useState(false)
+  const [needsTerms, setNeedsTerms] = useState(false)
+  const [acceptingTerms, setAcceptingTerms] = useState(false)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [isAuthCallback, setIsAuthCallback] = useState(false)
 
@@ -169,6 +174,40 @@ export const AdminApp: React.FC = () => {
     }
     setShowForgotPassword(false)
     setUser(null)
+  }
+
+  // Após login (fora do primeiro acesso/reset): se o usuário ainda não aceitou o
+  // Termo de Uso, exibe o modal de aceite.
+  useEffect(() => {
+    if (!user?.email || showFirstAccess || showForgotPassword) {
+      setNeedsTerms(false)
+      return
+    }
+    let cancelled = false
+    termsService.getAcceptedAt(user.email).then((at) => {
+      if (!cancelled) setNeedsTerms(at === null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user, showFirstAccess, showForgotPassword])
+
+  const handleAcceptTerms = async () => {
+    if (!user?.email) return
+    setAcceptingTerms(true)
+    try {
+      await termsService.accept(user.email)
+    } catch {
+      /* não trava o usuário; reaparece no próximo acesso se não persistir */
+    } finally {
+      setAcceptingTerms(false)
+      setNeedsTerms(false)
+    }
+  }
+
+  const handleDeclineTerms = async () => {
+    setNeedsTerms(false)
+    await handleLogout()
   }
 
   const handleForgotPasswordCancel = () => {
@@ -285,9 +324,21 @@ export const AdminApp: React.FC = () => {
   }
 
   return (
-    <MainLayout currentPage={currentPage} onNavigate={handleNavigation}>
-      {renderPage()}
-    </MainLayout>
+    <PermissionsProvider email={user.email}>
+      <MainLayout currentPage={currentPage} onNavigate={handleNavigation}>
+        <PageGuard pageCode={PAGE_CODE_BY_ROUTE[currentPage]}>
+          {renderPage()}
+        </PageGuard>
+      </MainLayout>
+
+      <TermsAcceptanceModal
+        isOpen={needsTerms}
+        accepting={acceptingTerms}
+        onAccept={handleAcceptTerms}
+        onDecline={handleDeclineTerms}
+        onClose={handleDeclineTerms}
+      />
+    </PermissionsProvider>
   )
 }
 

@@ -17,6 +17,7 @@ interface RoutesByNotesPageProps {
 
 // Cores exatas do Figma
 const TEXT_LIGHT75 = '#2a2a2a'
+const TEXT_LIGHT50 = '#4c4c4c'
 const TEXT_LIGHT25 = '#919191'
 const BORDER_HEADER = '#7d9dd3'
 const BORDER_ROW = '#828282'
@@ -33,13 +34,22 @@ const formatValue = (value?: number): string => {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-// Helper para estilo do status
+// Estilo do Status de Entrega (padrão do sistema): Finalizada = cor mais forte,
+// Em Andamento = média, Pendente = fraca. Sempre em negrito.
 const getStatusStyle = (status: string | undefined): React.CSSProperties => {
-  if (!status) return { color: TEXT_LIGHT25 }
+  const base: React.CSSProperties = { fontFamily: 'Inter, sans-serif', fontWeight: 700 }
+  if (!status) return { ...base, color: TEXT_LIGHT25 }
   const normalized = status.toLowerCase().trim()
-  if (normalized.includes('entregue') || normalized.includes('concluído')) return { color: TEXT_LIGHT75 }
-  if (normalized.includes('parcial')) return { color: '#e67c26' }
-  return { color: TEXT_LIGHT25 }
+  if (normalized.includes('finaliz') || normalized.includes('concluíd') || normalized.includes('entregue')) {
+    return { ...base, color: TEXT_LIGHT75 }
+  }
+  if (normalized.includes('andamento') || normalized.includes('aberta')) {
+    return { ...base, color: TEXT_LIGHT50 }
+  }
+  if (normalized.includes('pendente')) {
+    return { ...base, color: TEXT_LIGHT25 }
+  }
+  return { ...base, color: TEXT_LIGHT50 }
 }
 
 const renderStatus = (status: string | undefined) => (
@@ -105,7 +115,8 @@ export const RoutesByNotesPage = ({
   const { invoices, total, loading, fetchInvoices } = useFiscalInvoices()
   const { showSuccess, showError, toasts, removeToast } = useToast()
   const [currentPage, setCurrentPage] = useState(1)
-  const LIMIT = 50
+  const [pageSize, setPageSize] = useState(20)
+  const LIMIT = pageSize
   const totalPages = Math.ceil(total / LIMIT) || 1
 
   // Export states
@@ -119,7 +130,8 @@ export const RoutesByNotesPage = ({
 
   useEffect(() => {
     fetchInvoices({ page: currentPage, limit: LIMIT, onlyWithRoute: true })
-  }, [currentPage])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pageSize])
 
   // Transformar dados das notas para o formato da tabela
   const notesData: NoteByRouteData[] = invoices.map(mapInvoiceToNote)
@@ -184,6 +196,7 @@ export const RoutesByNotesPage = ({
     <>
       <PageHeader
         title="Notas por Rota"
+        page="routes-by-notes"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}
@@ -199,6 +212,11 @@ export const RoutesByNotesPage = ({
           onExportSelected={handleExportSelected}
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedNoteIds.size}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setCurrentPage(1)
+          }}
         />
 
         {/* Cancel Selection + Pagination row */}

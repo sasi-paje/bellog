@@ -37,7 +37,8 @@ export const NotesPage = ({
   const [searchTerm, setSearchTerm] = useState('')
   const [appliedFilters, setAppliedFilters] = useState<NotesFilterValues>(emptyNotesFilter())
   const [page, setPage] = useState(1)
-  const limit = 20
+  const [pageSize, setPageSize] = useState(20)
+  const limit = pageSize
 
   type ImportStep = 'metadata' | 'upload'
 
@@ -112,7 +113,7 @@ export const NotesPage = ({
   useEffect(() => {
     fetchInvoices(buildFetchParams())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, showInactive, appliedFilters, page])
+  }, [searchTerm, showInactive, appliedFilters, page, pageSize])
 
   // Reseta a seleção quando os filtros/busca mudam (não ao paginar), pois o
   // conjunto de registros muda. Trocar de página mantém a seleção.
@@ -317,6 +318,7 @@ export const NotesPage = ({
     <>
       <PageHeader
         title="Notas"
+        page="notes"
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar || (() => {})}
         userName={userName}
@@ -363,6 +365,11 @@ export const NotesPage = ({
           loading={creating}
           isSelectionMode={isExportSelectionMode}
           selectedCount={selectedNoteIds.size}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(1)
+          }}
         />
 
         <div className="flex items-center justify-between shrink-0 w-full">

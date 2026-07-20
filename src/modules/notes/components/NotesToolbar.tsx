@@ -55,6 +55,8 @@ interface NotesToolbarProps {
   loading?: boolean
   isSelectionMode?: boolean
   selectedCount?: number
+  pageSize?: number
+  onPageSizeChange?: (size: number) => void
 }
 
 // ── Estilos ───────────────────────────────────────────────────────────────────
@@ -99,6 +101,8 @@ export const NotesToolbar = ({
   loading = false,
   isSelectionMode = false,
   selectedCount = 0,
+  pageSize,
+  onPageSizeChange,
 }: NotesToolbarProps) => {
   const [isOpen, setIsOpen] = useState(false)
   const [pending, setPending] = useState<NotesFilterValues>(appliedFilters ?? emptyNotesFilter())
@@ -189,6 +193,11 @@ export const NotesToolbar = ({
           width: '360px',
         }}
         filters={[{ isActive: active, onClick: () => setIsOpen(p => !p) }]}
+        pageSize={
+          pageSize != null && onPageSizeChange
+            ? { value: pageSize, options: [20, 50, 100], onChange: onPageSizeChange }
+            : undefined
+        }
         actions={[
           ...(onImport
             ? [{ label: 'Importar', icon: 'download' as const, variant: 'default' as const, onClick: onImport, disabled: isSelectionMode || loading }]

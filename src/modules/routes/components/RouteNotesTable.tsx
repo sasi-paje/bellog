@@ -119,8 +119,9 @@ const formatMotivo = (data: InvoiceData): string => {
   const status = data.status
   const normalizedStatus = normalizeStatus(status)
   if (!status || normalizedStatus === '' || normalizedStatus === 'aguardando') return 'Aguardando'
-  if (isEntregaTotal(status) || isEntregaParcial(status)) return '-'
-  if (isEntregaAbortada(status) || isEntregaNegada(status)) return data.motivo || '-'
+  // Entrega Total não tem motivo; Parcial, Negada e Abortada têm.
+  if (isEntregaTotal(status)) return '-'
+  if (isEntregaParcial(status) || isEntregaAbortada(status) || isEntregaNegada(status)) return data.motivo || '-'
   return '-'
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { PageHeader, Pagination, SharedTable, TableColumn, AppIcon, useToast, ToastContainer } from '../../shared/components'
-import { RoutesByNotesToolbar, NoteByRouteData } from './components/RoutesByNotesToolbar'
+import { PageHeader, Pagination, SharedTable, TableColumn, AppIcon, Toggle, useToast, ToastContainer } from '../../shared/components'
+import { RoutesByNotesToolbar, NoteByRouteData, RbnFilterValues, EMPTY_RBN_FILTERS } from './components/RoutesByNotesToolbar'
 import { ExportRoutesByNotesModal } from './components/ExportRoutesByNotesModal'
 import { useFiscalInvoices } from '../../hooks/useFiscalInvoices'
 import { fiscalInvoiceService } from '../../features/notes'
@@ -128,10 +128,26 @@ export const RoutesByNotesPage = ({
   const [allFilteredNotes, setAllFilteredNotes] = useState<NoteByRouteData[]>([])
   const [selectingAll, setSelectingAll] = useState(false)
 
+  // Filtros + exibir inativos
+  const [appliedFilters, setAppliedFilters] = useState<RbnFilterValues>(EMPTY_RBN_FILTERS)
+  const [showInactive, setShowInactive] = useState(false)
+
+  // Parâmetros de filtro (sem page/limit) para list()/fetch
+  const buildFilterParams = () => ({
+    onlyWithRoute: true,
+    showInactive,
+    routeCode: appliedFilters.routeCode.trim() || undefined,
+    deliveryStatus: appliedFilters.deliveryStatus.length ? appliedFilters.deliveryStatus.map((o) => o.value) : undefined,
+    motorista: appliedFilters.motorista.length ? appliedFilters.motorista.map((o) => o.value) : undefined,
+    veiculo: appliedFilters.veiculo.length ? appliedFilters.veiculo.map((o) => o.value) : undefined,
+    supplierIds: appliedFilters.fornecedor.length ? appliedFilters.fornecedor.map((o) => o.value) : undefined,
+    destinationIds: appliedFilters.destino.length ? appliedFilters.destino.map((o) => o.value) : undefined,
+  })
+
   useEffect(() => {
-    fetchInvoices({ page: currentPage, limit: LIMIT, onlyWithRoute: true })
+    fetchInvoices({ ...buildFilterParams(), page: currentPage, limit: LIMIT })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize])
+  }, [currentPage, pageSize, appliedFilters, showInactive])
 
   // Transformar dados das notas para o formato da tabela
   const notesData: NoteByRouteData[] = invoices.map(mapInvoiceToNote)
@@ -160,7 +176,7 @@ export const RoutesByNotesPage = ({
   const handleSelectAllAcrossPages = async () => {
     setSelectingAll(true)
     try {
-      const result = await fiscalInvoiceService.list({ page: 1, limit: total || 10000, onlyWithRoute: true })
+      const result = await fiscalInvoiceService.list({ ...buildFilterParams(), page: 1, limit: total || 10000 })
       const mapped = result.data.map(mapInvoiceToNote)
       setAllFilteredNotes(mapped)
       setSelectedNoteIds(new Set(mapped.map(n => String(n.id))))
@@ -217,12 +233,29 @@ export const RoutesByNotesPage = ({
             setPageSize(size)
             setCurrentPage(1)
           }}
+          appliedFilters={appliedFilters}
+          onApplyFilters={(f) => {
+            setAppliedFilters(f)
+            setCurrentPage(1)
+          }}
+          onClearFilters={() => {
+            setAppliedFilters(EMPTY_RBN_FILTERS)
+            setCurrentPage(1)
+          }}
         />
 
-        {/* Cancel Selection + Pagination row */}
+        {/* Exibir inativos + Cancelar Exportação + Pagination row */}
         <div className="flex items-center justify-between">
-          {isExportSelectionMode ? (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <Toggle
+              label="Exibir inativos"
+              checked={showInactive}
+              onChange={(checked) => {
+                setShowInactive(checked)
+                setCurrentPage(1)
+              }}
+            />
+            {isExportSelectionMode && (
               <button
                 type="button"
                 onClick={handleClearSelection}
@@ -233,8 +266,8 @@ export const RoutesByNotesPage = ({
                   Cancelar Exportação
                 </span>
               </button>
-            </div>
-          ) : <div />}
+            )}
+          </div>
 
           {/* Pagination - always on right */}
           <div className="flex items-center">

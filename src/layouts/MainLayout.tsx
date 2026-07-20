@@ -7,6 +7,7 @@ import React, {
 } from 'react'
 import { AppSidebar } from './Sidebar'
 import { AppIcon } from '../shared/components'
+import { usePermissions, PAGE_CODE_BY_SIDEBAR } from '../features/permissions'
 
 // brand
 import bellogLogo from '../shared/icons/brand/bellog-logo.svg'
@@ -33,6 +34,7 @@ export const MainLayout = ({
   onNavigate,
 }: MainLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const { can } = usePermissions()
 
   const handleToggleSidebar = () => {
     setIsSidebarOpen((prev) => !prev)
@@ -128,8 +130,8 @@ export const MainLayout = ({
           />
         }
         dashboardItem={dashboardItem}
-        menuItems={menuItems}
-        footerItems={footerItems}
+        menuItems={menuItems.filter((i) => can(PAGE_CODE_BY_SIDEBAR[i.id], 'view'))}
+        footerItems={footerItems.filter((i) => can(PAGE_CODE_BY_SIDEBAR[i.id], 'view'))}
         version="v.2.01"
         copyright="Copyright © 2025 SASI LTDA"
         poweredBy="Powered by SASI"

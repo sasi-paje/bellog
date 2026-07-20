@@ -26,6 +26,7 @@ import { AssignNotesPage } from '../../modules/assign-notes'
 import { VehiclesPage } from '../../modules/vehicles'
 import { UsersPage } from '../../modules/users'
 import { supabase } from '../../lib/supabase'
+import { PermissionsProvider, PageGuard, PAGE_CODE_BY_ROUTE } from '../../features/permissions'
 
 type AppPage =
   | 'settings-home'
@@ -285,9 +286,13 @@ export const AdminApp: React.FC = () => {
   }
 
   return (
-    <MainLayout currentPage={currentPage} onNavigate={handleNavigation}>
-      {renderPage()}
-    </MainLayout>
+    <PermissionsProvider email={user.email}>
+      <MainLayout currentPage={currentPage} onNavigate={handleNavigation}>
+        <PageGuard pageCode={PAGE_CODE_BY_ROUTE[currentPage]}>
+          {renderPage()}
+        </PageGuard>
+      </MainLayout>
+    </PermissionsProvider>
   )
 }
 

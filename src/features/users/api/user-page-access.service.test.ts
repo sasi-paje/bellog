@@ -29,14 +29,15 @@ describe('saveUserPageAccessFromRole', () => {
     vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: null } as any)
 
     await saveUserPageAccessFromRole({
-      userId: 'user-uuid-123',
+      userId: '27',
       roleId: 5,
       pageIds: [1, 2, 3],
       isTest: false,
     })
 
+    // p_user_id é bigint no banco → o serviço converte para número
     expect(supabase.rpc).toHaveBeenCalledWith('save_user_page_access_from_role', {
-      p_user_id: 'user-uuid-123',
+      p_user_id: 27,
       p_role_id: 5,
       p_page_ids: [1, 2, 3],
       p_is_test: false,

@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react'
-import { AppIcon } from '../../shared/components'
+import { AppIcon, PdfViewerModal } from '../../shared/components'
 import bellogLogoLogin from '../../shared/icons/brand/bellog-logo-login.png'
 import { LoginIllustration } from '../../shared/icons'
 import { supabase, IS_TEST } from '../../lib/supabase'
@@ -24,6 +24,7 @@ export const LoginPage = ({ onLogin, onForgotPassword }: LoginPageProps) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [pdfModal, setPdfModal] = useState<{ title: string; url: string } | null>(null)
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -233,9 +234,7 @@ export const LoginPage = ({ onLogin, onForgotPassword }: LoginPageProps) => {
             <button
               type="button"
               className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] border-0"
-              onClick={() => {
-                alert('Termos de Uso - Funcionalidade em desenvolvimento')
-              }}
+              onClick={() => setPdfModal({ title: 'Termos de Uso', url: '/termos-de-uso.pdf' })}
             >
               <span
                 className="font-bold text-[14px]"
@@ -247,9 +246,7 @@ export const LoginPage = ({ onLogin, onForgotPassword }: LoginPageProps) => {
             <button
               type="button"
               className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] border-0"
-              onClick={() => {
-                alert('Política de Privacidade - Funcionalidade em desenvolvimento')
-              }}
+              onClick={() => setPdfModal({ title: 'Política de Privacidade', url: '/politica-de-privacidade.pdf' })}
             >
               <span
                 className="font-bold text-[14px]"
@@ -284,6 +281,13 @@ export const LoginPage = ({ onLogin, onForgotPassword }: LoginPageProps) => {
           className="relative z-10 w-[400px] h-auto"
         />
       </div>
+
+      <PdfViewerModal
+        isOpen={pdfModal !== null}
+        title={pdfModal?.title || ''}
+        url={pdfModal?.url || ''}
+        onClose={() => setPdfModal(null)}
+      />
     </div>
   )
 }

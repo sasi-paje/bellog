@@ -657,19 +657,27 @@ export const myRoutesService = {
 
   async completeRoute(routeId: string): Promise<void> {
     const isTest = getIsTest()
+    const now = new Date().toISOString()
 
-    const { error: rpcError } = await supabase.rpc('complete_route', {
-      p_route_id: toQueryId(routeId),
-      p_user_id: null,
-      p_is_test: isTest,
-    })
+    // A RPC complete_route buscava code='completed' (inexistente em
+    // ref_route_delivery_status) e quebrava. Mesma abordagem do startRoute:
+    // muda o status de entrega direto para "Finalizada" (por nome).
+    const finalizada = await getDeliveryStatusByName('Finalizada')
 
-    if (rpcError) {
-      console.error('[completeRoute] RPC error:', rpcError)
+    const { error } = await supabase
+      .from('trx_route')
+      .update({
+        ends_at: now,
+        id_route_delivery_status: finalizada.id,
+      })
+      .eq('id', toQueryId(routeId))
+      .eq('is_test', isTest)
+
+    if (error) {
       throw new MyRoutesServiceError(
-        rpcError.message,
-        'RPC_ERROR',
-        { originalError: rpcError, routeId }
+        error.message,
+        'NETWORK_ERROR',
+        { originalError: error, routeId }
       )
     }
   },

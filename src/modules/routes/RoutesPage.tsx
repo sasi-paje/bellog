@@ -10,6 +10,7 @@ import { OccurrenceDetailModal } from './components/OccurrenceDetailModal'
 import { ExportModal } from './components/ExportModal'
 import { InactivateConfirmModal } from '../settings/components/InactivateConfirmModal'
 import { DisassociateNoteModal } from './components/DisassociateNoteModal'
+import { CancelRouteModal } from './components/CancelRouteModal'
 import { useRoutes } from '../../hooks/useRoutes'
 import { useFiscalInvoices } from '../../hooks/useFiscalInvoices'
 import { useRouteHistory } from '../../hooks/useRouteHistory'
@@ -223,6 +224,10 @@ export const RoutesPage = ({
   const [isDisassociateOpen, setIsDisassociateOpen] = useState(false)
   const [isDisassociating, setIsDisassociating] = useState(false)
 
+  // Estado para modal de cancelamento de rota (rota em andamento)
+  const [isCancelRouteOpen, setIsCancelRouteOpen] = useState(false)
+  const [isCancellingRoute, setIsCancellingRoute] = useState(false)
+
   // Loading ao salvar a edição da rota
   const [isSavingEdit, setIsSavingEdit] = useState(false)
 
@@ -378,6 +383,10 @@ export const RoutesPage = ({
   const canInativar = !formData?.statusEntrega?.toLowerCase().includes('andamento') &&
                      !formData?.statusEntrega?.toLowerCase().includes('finalizada')
 
+  // Rota em andamento: não pode ser inativada nem editada na montagem; a forma
+  // correta de interromper é "Cancelar Rota" (com motivo).
+  const isRouteInProgress = !!formData?.statusEntrega?.toLowerCase().includes('andamento')
+
   // Regra de montagem: a nota só pode ser desassociada se o status de entrega
   // atual da rota permite edição (ref_route_delivery_status.allows_route_edition).
   // Fail-closed: só libera quando o campo é explicitamente true.
@@ -434,6 +443,30 @@ export const RoutesPage = ({
       showError(err instanceof Error ? err.message : `Erro ao ${activating ? 'ativar' : 'inativar'} rota`)
     } finally {
       setIsProcessingAction(false)
+    }
+  }
+
+  // Abre o modal de cancelamento de rota (rota em andamento)
+  const handleCancelarRota = () => {
+    if (!selectedRouteId || !isRouteInProgress) return
+    setIsCancelRouteOpen(true)
+  }
+
+  // Executa o cancelamento após confirmação (motivo obrigatório)
+  const handleConfirmCancelRoute = async (reasonId: string, note?: string) => {
+    if (!selectedRouteId) return
+    setIsCancellingRoute(true)
+    try {
+      await routeService.cancelRoute(selectedRouteId, reasonId, note)
+      setIsCancelRouteOpen(false)
+      showSuccess('Rota cancelada com sucesso')
+      handleCloseDrawerOnly()
+      reloadRoutes()
+    } catch (err) {
+      console.error('Error cancelling route:', err)
+      showError(err instanceof Error ? err.message : 'Erro ao cancelar rota')
+    } finally {
+      setIsCancellingRoute(false)
     }
   }
 
@@ -536,6 +569,26 @@ export const RoutesPage = ({
     } catch (err) {
       console.error('Error disassociating note:', err)
       showError(err instanceof Error ? err.message : 'Erro ao desassociar nota')
+    } finally {
+      setIsDisassociating(false)
+    }
+  }
+
+  // Remove a última nota E inativa a rota (opção oferecida quando é a última
+  // nota). A rota nunca é inativada automaticamente — é uma escolha explícita.
+  const handleConfirmDisassociateAndInactivate = async () => {
+    if (!selectedRouteId || !selectedNote?.id) return
+    setIsDisassociating(true)
+    try {
+      await routeService.disassociateInvoice(selectedRouteId, String(selectedNote.id))
+      await routeService.setActive(selectedRouteId, false)
+      setIsDisassociateOpen(false)
+      showSuccess('Nota removida e rota inativada com sucesso')
+      handleCloseDrawerOnly()
+      reloadRoutes()
+    } catch (err) {
+      console.error('Error disassociating note and inactivating route:', err)
+      showError(err instanceof Error ? err.message : 'Erro ao remover nota e inativar rota')
     } finally {
       setIsDisassociating(false)
     }
@@ -940,18 +993,33 @@ export const RoutesPage = ({
 
     return (
       <>
-        <button
-          type="button"
-          onClick={handleInativar}
-          disabled={!canInativar}
-          className={`flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] ${
-            canInativar ? 'bg-[#eb5757]' : 'bg-gray-300 cursor-not-allowed'
-          }`}
-        >
-          <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canInativar ? 'white' : '#666' }}>
-            Inativar
-          </span>
-        </button>
+        {isRouteInProgress ? (
+          // Rota em andamento não pode ser inativada: a ação correta é Cancelar
+          // Rota (com motivo). O bloqueio de inativação também existe no banco.
+          <button
+            type="button"
+            onClick={handleCancelarRota}
+            className="flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] bg-[#eb5757]"
+          >
+            <span className="font-bold text-[14px] text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Cancelar Rota
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleInativar}
+            disabled={!canInativar}
+            title={canInativar ? undefined : 'Uma rota em andamento não pode ser inativada. Finalize ou cancele a operação antes de continuar.'}
+            className={`flex items-center justify-center h-[45px] px-[8px] py-[2px] rounded-[4px] w-[150px] ${
+              canInativar ? 'bg-[#eb5757]' : 'bg-gray-300 cursor-not-allowed'
+            }`}
+          >
+            <span className="font-bold text-[14px]" style={{ fontFamily: 'Inter, sans-serif', color: canInativar ? 'white' : '#666' }}>
+              Inativar
+            </span>
+          </button>
+        )}
         <button
           type="button"
           onClick={handleEditClick}
@@ -1209,6 +1277,17 @@ export const RoutesPage = ({
         onConfirm={handleConfirmDisassociate}
         isLoading={isDisassociating}
         invoiceNumber={selectedNote?.invoice_number || ''}
+        routeCode={formData?.numeroRota || ''}
+        isLastNote={routeInvoices.length <= 1}
+        onRemoveAndInactivate={handleConfirmDisassociateAndInactivate}
+      />
+
+      {/* Modal de cancelamento de rota (rota em andamento) */}
+      <CancelRouteModal
+        isOpen={isCancelRouteOpen}
+        onClose={() => setIsCancelRouteOpen(false)}
+        onConfirm={handleConfirmCancelRoute}
+        isLoading={isCancellingRoute}
         routeCode={formData?.numeroRota || ''}
       />
 

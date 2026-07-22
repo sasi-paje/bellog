@@ -257,6 +257,27 @@ export const useMyRoutes = (driverId?: string | null): UseMyRoutesResult => {
     fetchRoutes()
   }, [fetchRoutes])
 
+  // Sem realtime no mobile: ao voltar o foco para o app, atualiza a lista e,
+  // se houver um detalhe aberto, recarrega-o — reflete mudanças feitas no web
+  // (ex.: notas adicionadas/removidas, rota cancelada) sem exigir reabrir.
+  useEffect(() => {
+    const refresh = () => {
+      void fetchRoutes()
+      if (selectedRouteId) {
+        void openRouteDetail(selectedRouteId)
+      }
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [fetchRoutes, openRouteDetail, selectedRouteId])
+
   return {
     activeTab,
     setActiveTab,

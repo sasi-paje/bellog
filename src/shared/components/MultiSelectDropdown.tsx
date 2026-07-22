@@ -72,7 +72,7 @@ export const MultiSelectDropdown = ({
           onClick={() => setIsOpen(!isOpen)}
           data-name="Input"
         >
-          <div className="flex flex-[1_0_0] items-center gap-[8px] flex-wrap">
+          <div className="flex flex-[1_0_0] items-center gap-[8px] flex-wrap max-h-[72px] overflow-y-auto">
             {selectedOptions.length === 0 ? (
               <span
                 className="font-normal text-[14px]"

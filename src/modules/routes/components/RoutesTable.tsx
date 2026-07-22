@@ -32,6 +32,7 @@ export interface RouteData {
   delivery_status_description?: string
   is_active?: boolean
   destinations?: string[]
+  notes_count?: number
 }
 
 
@@ -97,6 +98,26 @@ const renderStatusEntrega = (row: RouteData) => {
   }
 
   const status = row.delivery_status_description || row.statusEntrega || ''
+
+  // Rota ativa sem notas: identifica claramente como "Rota sem notas" — não
+  // pode ser iniciada pelo motorista até receber ao menos uma nota. Só faz
+  // sentido em rota ainda "Pendente" (não em finalizada/cancelada, que podem
+  // ter liberado as notas ao encerrar).
+  const normalizedStatus = status.toLowerCase().trim()
+  const isPendingLike = normalizedStatus === '' || normalizedStatus === 'pendente' || normalizedStatus === 'aberta'
+  if (row.notes_count === 0 && isPendingLike) {
+    return (
+      <span className="flex flex-col gap-[2px] whitespace-nowrap">
+        <span style={getStatusStyle(status)}>{status || '-'}</span>
+        <span
+          className="inline-flex w-fit items-center rounded-[4px] px-[6px] py-[1px] text-[11px] font-bold"
+          style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#FBE9E7', color: '#C0392B' }}
+        >
+          Rota sem notas
+        </span>
+      </span>
+    )
+  }
 
   // Texto puro, sem badge, com estilo correto
   return (

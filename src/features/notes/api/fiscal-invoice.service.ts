@@ -119,6 +119,11 @@ export const fiscalInvoiceService = {
     supplierGroupIds?: string[]
     supplierIds?: string[]
     onlyWithRoute?: boolean
+    // Filtros de rota (tela Notas por Rota)
+    routeCode?: string
+    deliveryStatus?: string[]
+    motorista?: string[]
+    veiculo?: string[]
     // Filtros avançados da tela Notas
     invoiceNumberStart?: number
     invoiceNumberEnd?: number
@@ -140,15 +145,54 @@ export const fiscalInvoiceService = {
     let invoiceIdsWithRoute: number[] = []
     if (params?.onlyWithRoute) {
       try {
-        const { data: routeInvoicesTest } = await supabase
+        // Filtros do lado da rota (Nº Rota, status entrega, motorista, veículo).
+        // Quando presentes, restringe às rotas correspondentes.
+        const hasRouteFilters = !!(
+          params.routeCode ||
+          (params.deliveryStatus && params.deliveryStatus.length) ||
+          (params.motorista && params.motorista.length) ||
+          (params.veiculo && params.veiculo.length)
+        )
+
+        let routeIdFilter: (number | string)[] | null = null
+        if (hasRouteFilters) {
+          const [dsRes, drvRes, vehRes] = await Promise.all([
+            params.deliveryStatus && params.deliveryStatus.length
+              ? supabase.from('ref_route_delivery_status').select('id').in('name', params.deliveryStatus).eq('is_active', true)
+              : Promise.resolve({ data: [] as { id: number }[] }),
+            params.motorista && params.motorista.length
+              ? supabase.from('master_person_driver').select('id').in('name', params.motorista).eq('is_test', isTest)
+              : Promise.resolve({ data: [] as { id: number }[] }),
+            params.veiculo && params.veiculo.length
+              ? supabase.from('master_fleet_vehicle').select('id').in('plate', params.veiculo).eq('is_test', isTest)
+              : Promise.resolve({ data: [] as { id: number }[] }),
+          ])
+
+          let rq = supabase
+            .from('trx_route')
+            .select('id')
+            .eq('is_test', isTest)
+            .eq('is_active', true)
+          if (params.routeCode) rq = rq.ilike('route_code', `%${params.routeCode}%`)
+          if (params.deliveryStatus && params.deliveryStatus.length) rq = rq.in('id_route_delivery_status', (dsRes.data || []).map((r) => r.id))
+          if (params.motorista && params.motorista.length) rq = rq.in('id_driver', (drvRes.data || []).map((r) => r.id))
+          if (params.veiculo && params.veiculo.length) rq = rq.in('id_vehicle', (vehRes.data || []).map((r) => r.id))
+
+          const { data: routes } = await rq
+          routeIdFilter = (routes || []).map((r) => r.id)
+          if (routeIdFilter.length === 0) return { data: [], total: 0 }
+        }
+
+        let riq = supabase
           .from('rel_route_invoice')
           .select('id_fiscal_invoice')
           .eq('is_active', true)
           .eq('is_test', isTest)
+        if (routeIdFilter) riq = riq.in('id_route', routeIdFilter)
 
-        if (routeInvoicesTest && routeInvoicesTest.length > 0) {
-          invoiceIdsWithRoute = routeInvoicesTest.map(r => r.id_fiscal_invoice)
-        }
+        const { data: routeInvoices } = await riq
+        invoiceIdsWithRoute = (routeInvoices || []).map((r) => r.id_fiscal_invoice)
+        if (invoiceIdsWithRoute.length === 0) return { data: [], total: 0 }
       } catch (e) {
         console.log('[fiscalInvoiceService.list] rel_route_invoice exception:', e)
       }

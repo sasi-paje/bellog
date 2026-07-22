@@ -624,11 +624,16 @@ export const deliveryService = {
       const pendingNotes = invoiceIds.filter(id => !resultsMap.has(id)).length
 
       if (pendingNotes > 0) {
+        // Uma nota é considerada "com resultado" quando possui registro em
+        // trx_route_invoice_delivery (entregue, não entregue, recusada,
+        // estabelecimento fechado, etc). Sem registro = sem resultado.
         return {
           canComplete: false,
           pendingNotes,
           totalNotes,
-          message: `${pendingNotes} nota${pendingNotes > 1 ? 's' : ''} aguardando entrega`,
+          message: pendingNotes === 1
+            ? 'Existe 1 nota sem resultado de entrega.'
+            : `Existem ${pendingNotes} notas sem resultado de entrega.`,
         }
       }
 
@@ -636,7 +641,7 @@ export const deliveryService = {
         canComplete: true,
         pendingNotes: 0,
         totalNotes,
-        message: 'Todas as notas foram entregues',
+        message: 'Todas as notas possuem resultado de entrega',
       }
     } catch (err) {
       console.error('[deliveryService] canCompleteRoute exception:', err)

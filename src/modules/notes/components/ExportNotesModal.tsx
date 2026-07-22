@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Toast, MultiSelectDropdown } from '../../../shared/components'
 import { InvoiceListItem } from '../../../features/notes'
+import { formatWeight } from '../../../shared/utils/format'
 
 interface Option {
   value: string
@@ -120,17 +121,16 @@ export const ExportNotesModal = ({ isOpen, onClose, onExported, notes, title = '
               value = note.volume?.toString() || ''
               break
             case 'weight':
-              // Número puro (1 casa). O ';' + conversão de '.'→',' abaixo faz a
-              // planilha (pt-BR) tratar como número, sem a unidade "kg".
-              value = note.weight ? note.weight.toFixed(1) : ''
+              // Peso no padrão do sistema: "X.XXX kg" (ponto de milhar, sem decimais).
+              value = note.weight ? formatWeight(note.weight) : ''
               break
             case 'gross_weight':
-              value = note.gross_weight ? note.gross_weight.toFixed(1) : ''
+              value = note.gross_weight ? formatWeight(note.gross_weight) : ''
               break
             case 'value':
-              // Número puro (2 casas), sem "R$" e sem separador de milhar,
-              // para ser interpretado como número na planilha.
-              value = note.value ? note.value.toFixed(2) : ''
+              // Valor monetário com 2 casas e vírgula decimal, sem "R$", para a
+              // planilha interpretar como número.
+              value = note.value ? note.value.toFixed(2).replace('.', ',') : ''
               break
             case 'status':
               value = getStatusText(note)
@@ -150,11 +150,12 @@ export const ExportNotesModal = ({ isOpen, onClose, onExported, notes, title = '
         return
       }
 
+      // Cada célula já vem no formato final (pt-BR); não fazer replace global de
+      // '.'→',' aqui, pois corromperia o ponto de milhar do peso ("1.077 kg") e
+      // pontos em textos (ex.: "Ltda.").
       const csvContent = '﻿' + [
         headers.join(';'),
-        ...csvRows.map(row =>
-          row.map(cell => cell.replace(/\./g, ',')).join(';')
-        ),
+        ...csvRows.map(row => row.join(';')),
       ].join('\n')
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })

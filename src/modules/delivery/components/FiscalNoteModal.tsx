@@ -560,6 +560,10 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
   const confirmStatus = getConfirmStatus()
   const canConfirm = () => confirmStatus.canConfirm
 
+  // Nota já registrada no banco (entrega finalizada): só visualização — o botão
+  // Confirmar não é exibido para essas notas.
+  const isAlreadyRegistered = !!note?.delivery_result_id || !!note?.has_canhoto
+
   return (
     <>
       {/* Backdrop */}
@@ -931,33 +935,35 @@ export const FiscalNoteModal: React.FC<FiscalNoteModalProps> = ({
               </span>
             </div>
 
-            {/* Confirmar Button */}
-            <div
-              className={`flex flex-[1_0_0] h-full items-center justify-center px-[8px] py-[2px] rounded-[4px] ${
-                canConfirm()
-                  ? 'bg-[#e67c26] cursor-pointer'
-                  : 'bg-[#919191] cursor-not-allowed'
-              }`}
-              onClick={() => {
-                if (!canConfirm()) return
-                if (confirmStatus.showPendingModal) {
-                  setShowPendingAttachmentsModal(true)
-                } else {
-                  handleConfirm()
-                }
-              }}
-            >
-              {isUploading ? (
-                <div className="flex items-center gap-2">
-                  <LoadingSpinner />
-                  <span className="font-bold text-[14px] text-white text-center">Enviando...</span>
-                </div>
-              ) : (
-                <span className={`font-bold text-[14px] text-white text-center`}>
-                  Confirmar
-                </span>
-              )}
-            </div>
+            {/* Confirmar — oculto para notas já registradas no banco (só leitura) */}
+            {!isAlreadyRegistered && (
+              <div
+                className={`flex flex-[1_0_0] h-full items-center justify-center px-[8px] py-[2px] rounded-[4px] ${
+                  canConfirm()
+                    ? 'bg-[#e67c26] cursor-pointer'
+                    : 'bg-[#919191] cursor-not-allowed'
+                }`}
+                onClick={() => {
+                  if (!canConfirm()) return
+                  if (confirmStatus.showPendingModal) {
+                    setShowPendingAttachmentsModal(true)
+                  } else {
+                    handleConfirm()
+                  }
+                }}
+              >
+                {isUploading ? (
+                  <div className="flex items-center gap-2">
+                    <LoadingSpinner />
+                    <span className="font-bold text-[14px] text-white text-center">Enviando...</span>
+                  </div>
+                ) : (
+                  <span className={`font-bold text-[14px] text-white text-center`}>
+                    Confirmar
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

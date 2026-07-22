@@ -39,6 +39,8 @@ export interface RouteListItem {
   assistant: string[]
   destinations: string[]
   is_active: boolean
+  /** Qtd de notas ativas (rel_route_invoice) — 0 = "Rota sem notas". */
+  notes_count: number
 }
 
 export interface CreateRouteDTO {
@@ -285,6 +287,12 @@ export const routeService = {
       })
     })
 
+    // Contagem de notas ativas por rota (para identificar "Rota sem notas").
+    const routeNotesCountMap = new Map<string, number>()
+    routeInvoices?.forEach(ri => {
+      routeNotesCountMap.set(ri.id_route, (routeNotesCountMap.get(ri.id_route) || 0) + 1)
+    })
+
     const driverMap = new Map(drivers?.map(d => [d.id, d.name]) || [])
     // Nome de exibição do destino: trade_name (fantasia) com fallback para
     // legal_name — mesma regra do AssignNotes e do detalhe da nota, para a
@@ -343,6 +351,7 @@ export const routeService = {
         assistant: route.assistant || [],
         destinations: destinationNames,
         is_active: route.is_active,
+        notes_count: routeNotesCountMap.get(route.id) || 0,
       }
     })
 
@@ -723,6 +732,37 @@ export const routeService = {
         'Nenhuma associação foi removida. A nota pode já estar desassociada, não existir neste ambiente, ou você não ter permissão.'
       )
     }
+  },
+
+  // Motivos de cancelamento de rota (ref_route_cancel_reason). Catálogo
+  // editável — nunca usar ID fixo. Filtra por is_active e ambiente (is_test).
+  async getCancelReasons(): Promise<Array<{ id: string; name: string }>> {
+    const isTest = IS_TEST
+    const { data, error } = await supabase
+      .from('ref_route_cancel_reason')
+      .select('id, name, sort_order')
+      .eq('is_active', true)
+      .eq('is_test', isTest)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true })
+
+    if (error) throw new Error(error.message)
+    return (data || []).map((r: { id: number | string; name: string }) => ({ id: String(r.id), name: r.name }))
+  },
+
+  // Cancela uma rota (em andamento) com motivo. Transacional via RPC cancel_route:
+  // status → "Cancelada", libera as notas SEM entrega (voltam a ficar
+  // disponíveis), preserva as entregas já registradas e libera o motorista.
+  async cancelRoute(routeId: string, reasonId: string, note?: string): Promise<void> {
+    const isTest = IS_TEST
+    const { error } = await supabase.rpc('cancel_route', {
+      p_route_id: Number(routeId),
+      p_reason_id: Number(reasonId),
+      p_note: note?.trim() || null,
+      p_is_test: isTest,
+    })
+
+    if (error) throw new Error(error.message)
   },
 
   // Get reference data for dropdowns

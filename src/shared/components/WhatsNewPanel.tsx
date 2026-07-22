@@ -8,15 +8,21 @@ export interface WhatsNewItem {
   body: string
   /** Telas em que a novidade aparece. 'all' (ou omitido) = todas as telas. */
   pages?: string[]
+  /** Data de publicação em ISO (YYYY-MM-DD). Usada para a janela de exibição. */
+  publishedAt?: string
 }
 
 /**
- * Novidades exibidas no painel "O que há de novo?".
- * Mais recentes no topo. Edite esta lista a cada release.
+ * Fallback local do painel "O que há de novo?".
+ *
+ * A fonte oficial das novidades é a tabela `ref_whats_new` (ver
+ * `features/whats-new/api/whats-new-content.service.ts`) — publicar uma novidade
+ * é inserir uma linha lá, sem deploy. Esta lista só é usada se a leitura do banco
+ * falhar (rede/RLS), para o painel nunca ficar vazio por erro de infra.
  * `pages`: chaves de tela (routes, notes, routes-by-notes, assign-notes, users,
  * vehicles, settings...). Use ['all'] ou omita para aparecer em todas.
  */
-export const WHATS_NEW: WhatsNewItem[] = [
+export const WHATS_NEW_FALLBACK: WhatsNewItem[] = [
   {
     id: '2026-07-19-central-novidades',
     tag: 'Novo',
@@ -65,9 +71,9 @@ export function whatsNewMatchesPage(item: WhatsNewItem, page?: string): boolean 
   return page != null && item.pages.includes(page)
 }
 
-/** Novidades visíveis para a tela (mais recentes primeiro). */
-export function visibleWhatsNew(page?: string): WhatsNewItem[] {
-  return WHATS_NEW.filter((i) => whatsNewMatchesPage(i, page))
+/** Filtra a lista informada para a tela (preserva a ordem recebida). */
+export function filterVisible(items: WhatsNewItem[], page?: string): WhatsNewItem[] {
+  return items.filter((i) => whatsNewMatchesPage(i, page))
 }
 
 interface WhatsNewPanelProps {
@@ -87,7 +93,7 @@ const InfoIcon = ({ size = 22, color = '#e8791a' }: { size?: number; color?: str
 )
 
 export const WhatsNewPanel: React.FC<WhatsNewPanelProps> = ({ isOpen, onClose, page, items }) => {
-  const list = items ?? visibleWhatsNew(page)
+  const list = items ?? filterVisible(WHATS_NEW_FALLBACK, page)
   // Fecha com ESC e trava o scroll do body enquanto aberto
   useEffect(() => {
     if (!isOpen) return

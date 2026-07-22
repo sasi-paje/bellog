@@ -127,6 +127,23 @@ function normalizeStatusToken(value?: string | null): string {
     .replace(/^_+|_+$/g, '')
 }
 
+// Status de rota que NÃO devem aparecer para o motorista no app (rota
+// cancelada ou abortada pela operação). Mantemos is_active=true no banco para
+// preservar o histórico e a exibição "Cancelada"/"Abortada" no admin, mas o
+// motorista não deve mais vê-las nem poder agir sobre elas.
+const HIDDEN_MOBILE_STATUS_TOKENS = new Set([
+  'cancelada', 'cancelado', 'cancelled', 'canceled',
+  'abortada', 'abortado', 'aborted',
+])
+
+function isHiddenFromDriver(status?: StatusReference | string | null): boolean {
+  if (!status) return false
+  const candidates = typeof status === 'string'
+    ? [status]
+    : [status.code, status.name, status.description]
+  return candidates.some(c => HIDDEN_MOBILE_STATUS_TOKENS.has(normalizeStatusToken(c)))
+}
+
 function getMobileStatus(status?: StatusReference | string | null): RouteMobileStatus {
   if (!status) return 'available'
 
@@ -348,7 +365,17 @@ export const myRoutesService = {
         destinationCount[routeId] = (destinationCount[routeId] || 0) + 1
       })
 
-      const result: MyRouteListItem[] = routes.map(route => {
+      const result: MyRouteListItem[] = routes
+        // Rota cancelada/abortada não aparece para o motorista (evita que uma
+        // rota cancelada seja tratada como "disponível" pelo fallback do
+        // getMobileStatus e reapareça no app).
+        .filter(route => {
+          const ds = route.id_route_delivery_status
+            ? deliveryStatusMap.get(toStringId(route.id_route_delivery_status)) || null
+            : null
+          return !isHiddenFromDriver(ds)
+        })
+        .map(route => {
         const routeId = toStringId(route.id)
         const deliveryStatus = route.id_route_delivery_status
           ? deliveryStatusMap.get(toStringId(route.id_route_delivery_status)) || null
@@ -610,6 +637,31 @@ export const myRoutesService = {
       throw new MyRoutesServiceError('Rota nao encontrada', 'NOT_FOUND', { routeId })
     }
 
+    // Regra: não é possível iniciar uma rota sem notas. Uma rota vazia geraria
+    // um registro operacional sem sentido e travaria o motorista (não daria para
+    // finalizar). Fail-closed: erro na verificação impede iniciar.
+    const { count: notesCount, error: notesError } = await supabase
+      .from('rel_route_invoice')
+      .select('id', { count: 'exact', head: true })
+      .eq('id_route', toQueryId(routeId))
+      .eq('is_active', true)
+      .eq('is_test', isTest)
+
+    if (notesError) {
+      throw new MyRoutesServiceError(
+        notesError.message,
+        'NETWORK_ERROR',
+        { originalError: notesError, routeId }
+      )
+    }
+    if (!notesCount || notesCount === 0) {
+      throw new MyRoutesServiceError(
+        'Não é possível iniciar esta rota. Adicione pelo menos uma nota antes de iniciar o percurso.',
+        'VALIDATION_ERROR',
+        { routeId }
+      )
+    }
+
     if (route.id_driver !== null && route.id_driver !== undefined) {
       const { data: emAndamentoRoutes, error: checkError } = await supabase
         .from('trx_route')
@@ -657,19 +709,41 @@ export const myRoutesService = {
 
   async completeRoute(routeId: string): Promise<void> {
     const isTest = getIsTest()
+    const now = new Date().toISOString()
 
-    const { error: rpcError } = await supabase.rpc('complete_route', {
-      p_route_id: toQueryId(routeId),
-      p_user_id: null,
-      p_is_test: isTest,
-    })
+    // A RPC complete_route buscava code='completed' (inexistente em
+    // ref_route_delivery_status) e quebrava. Mesma abordagem do startRoute:
+    // muda o status de entrega direto para "Finalizada" (por nome).
+    const finalizada = await getDeliveryStatusByName('Finalizada')
 
-    if (rpcError) {
-      console.error('[completeRoute] RPC error:', rpcError)
+    // Guarda: só finaliza rota ainda ativa. `.eq('is_active', true)` +
+    // `.select('id')` detecta 0 linhas (rota inativada/cancelada pela operação
+    // enquanto a tela do motorista estava aberta) e evita gravar "Finalizada"
+    // numa rota que não está mais disponível.
+    const { data, error } = await supabase
+      .from('trx_route')
+      .update({
+        ends_at: now,
+        id_route_delivery_status: finalizada.id,
+      })
+      .eq('id', toQueryId(routeId))
+      .eq('is_test', isTest)
+      .eq('is_active', true)
+      .select('id')
+
+    if (error) {
       throw new MyRoutesServiceError(
-        rpcError.message,
-        'RPC_ERROR',
-        { originalError: rpcError, routeId }
+        error.message,
+        'NETWORK_ERROR',
+        { originalError: error, routeId }
+      )
+    }
+
+    if (!data || data.length === 0) {
+      throw new MyRoutesServiceError(
+        'Esta rota não está mais disponível. Ela foi cancelada ou inativada pela operação.',
+        'NOT_FOUND',
+        { routeId }
       )
     }
   },

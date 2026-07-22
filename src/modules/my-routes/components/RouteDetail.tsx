@@ -58,6 +58,14 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
   const isInProgress = route.status === 'in_progress' || deliveryStatusName === 'Em Andamento'
   // Só uma rota em andamento por vez: bloqueia iniciar esta se já há outra.
   const startBlockedByOther = hasRouteInProgress && !isInProgress
+  // Rota sem notas não pode ser iniciada (regra também validada no serviço e no
+  // banco). Enquanto as notas carregam, não bloqueia — o serviço revalida.
+  const hasNoNotes = !isLoadingNotes && !notesError && notes.length === 0
+  const startBlockedByNoNotes = canStart && hasNoNotes
+  const startDisabled = startBlockedByOther || startBlockedByNoNotes
+  const startDisabledReason = startBlockedByNoNotes
+    ? 'Adicione pelo menos uma nota antes de iniciar o percurso.'
+    : 'Finalize a rota em andamento antes de iniciar outra.'
 
   useEffect(() => {
     if (activeTab === 'anexos' && route.id) {
@@ -73,9 +81,12 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
       const validation = await deliveryService.canCompleteRoute(String(route.id))
 
       if (!validation.canComplete) {
+        // Usa a mensagem real retornada pela validação (que já considera
+        // notas sem resultado, rota sem notas, erros, etc). Nunca montar aqui
+        // a partir de pendingNotes — gerava o "0 nota aguardando entrega".
         setNotification({
           type: 'warning',
-          message: `Ainda existem ${validation.pendingNotes} nota${validation.pendingNotes > 1 ? 's' : ''} aguardando entrega.`,
+          message: validation.message || 'Não é possível finalizar a rota no momento.',
         })
         setIsCompleting(false)
         return
@@ -153,25 +164,30 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
           className="shrink-0 border-t border-[#eeeeee] bg-white px-[16px] py-3"
           style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}
         >
-          <div className="flex gap-[16px]">
-            <button
-              type="button"
-              onClick={onBack}
-              className="flex-1 h-[45px] border border-[#e67c26] bg-white flex items-center justify-center rounded-[4px] px-[8px] py-[2px]"
-            >
-              <span className="font-bold text-[14px] leading-[20px] text-[#e67c26]">Voltar</span>
-            </button>
-            {onStartRoute && (
+          <div className="flex flex-col gap-2 w-full">
+            <div className="flex gap-[16px]">
               <button
                 type="button"
-                onClick={onStartRoute}
-                disabled={isLoading}
-                className="flex-1 h-[45px] bg-[#e67c26] flex items-center justify-center rounded-[4px] px-[8px] py-[2px] disabled:opacity-50"
+                onClick={onBack}
+                className="flex-1 h-[45px] border border-[#e67c26] bg-white flex items-center justify-center rounded-[4px] px-[8px] py-[2px]"
               >
-                <span className="font-bold text-[14px] leading-[20px] text-white">
-                  {isLoading ? 'Iniciando...' : 'Iniciar Rota'}
-                </span>
+                <span className="font-bold text-[14px] leading-[20px] text-[#e67c26]">Voltar</span>
               </button>
+              {onStartRoute && (
+                <button
+                  type="button"
+                  onClick={onStartRoute}
+                  disabled={isLoading || startDisabled}
+                  className="flex-1 h-[45px] bg-[#e67c26] flex items-center justify-center rounded-[4px] px-[8px] py-[2px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="font-bold text-[14px] leading-[20px] text-white">
+                    {isLoading ? 'Iniciando...' : 'Iniciar Rota'}
+                  </span>
+                </button>
+              )}
+            </div>
+            {onStartRoute && startDisabled && (
+              <p className="text-[12px] text-center text-[#b7950b] leading-snug">{startDisabledReason}</p>
             )}
           </div>
         </footer>
@@ -242,8 +258,8 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
           canStart={canStart}
           isInProgress={isInProgress}
           isLoading={isLoading || isCompleting}
-          startDisabled={startBlockedByOther}
-          startDisabledReason="Finalize a rota em andamento antes de iniciar outra."
+          startDisabled={startDisabled}
+          startDisabledReason={startDisabledReason}
           onBack={onBack}
           onStartRoute={onStartRoute}
           onCompleteRoute={handleCompleteRoute}

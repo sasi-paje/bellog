@@ -136,17 +136,25 @@ export const useMyRoutes = (driverId?: string | null): UseMyRoutesResult => {
       setSelectedRoute(detail)
       setIsDetailOpen(true)
     } catch (err) {
-      const errorMessage = err instanceof MyRoutesServiceError
-        ? err.message
-        : err instanceof Error
+      // Rota não encontrada = foi inativada/cancelada pela operação. Mostra
+      // mensagem clara e atualiza a lista para a rota sumir de "Em Andamento".
+      const isNotFound = err instanceof MyRoutesServiceError && err.code === 'NOT_FOUND'
+      const errorMessage = isNotFound
+        ? 'Esta rota não está mais disponível. Ela foi cancelada ou inativada pela operação. Volte para a lista de rotas ou entre em contato com o responsável.'
+        : err instanceof MyRoutesServiceError
           ? err.message
-          : 'Erro ao carregar detalhes da rota'
+          : err instanceof Error
+            ? err.message
+            : 'Erro ao carregar detalhes da rota'
       setSelectedRoute(null)
       setErrorDetail(errorMessage)
+      if (isNotFound) {
+        void fetchRoutes()
+      }
     } finally {
       setIsLoadingDetail(false)
     }
-  }, [driverId])
+  }, [driverId, fetchRoutes])
 
   const closeRouteDetail = useCallback(() => {
     setIsDetailOpen(false)

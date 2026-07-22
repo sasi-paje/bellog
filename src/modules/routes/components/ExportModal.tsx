@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { AppIcon, Toast, MultiSelectDropdown } from '../../../shared/components'
 import { fiscalInvoiceService } from '../../../features/notes'
-import { formatPercent } from '../../../shared/utils/format'
+import { formatPercent, formatWeight } from '../../../shared/utils/format'
 
 interface RouteData {
   id: string
@@ -169,11 +169,10 @@ export const ExportModal = ({ isOpen, onClose, onExported, routes, title = 'Sele
           case 'destinations':
             return note?.destination_name || ''
           case 'vehicle_max_capacity':
-            // Número (sem "kg") para a planilha tratar como valor; o separador
-            // decimal vira vírgula na conversão da linha (pt-BR).
-            return route.vehicle_max_capacity ? route.vehicle_max_capacity.toFixed(1) : ''
+            // Peso no padrão do sistema: "X.XXX kg" (ponto de milhar, sem decimais).
+            return route.vehicle_max_capacity ? formatWeight(route.vehicle_max_capacity) : ''
           case 'current_load':
-            return route.current_load ? route.current_load.toFixed(1) : ''
+            return route.current_load ? formatWeight(route.current_load) : ''
           case 'utilizacao':
             // Mesma fórmula/formatação da tabela (formatPercent, 1 casa decimal)
             if (route.vehicle_max_capacity && route.current_load) {
@@ -207,11 +206,12 @@ export const ExportModal = ({ isOpen, onClose, onExported, routes, title = 'Sele
         return
       }
 
+      // Cada célula já vem no formato final (pt-BR); não fazer replace global de
+      // '.'→',' aqui, pois corromperia o ponto de milhar do peso ("1.077 kg") e
+      // pontos em textos.
       const csvContent = '﻿' + [
         headers.join(';'),
-        ...csvRows.map(row =>
-          row.map(cell => cell.replace(/\./g, ',')).join(';')
-        ),
+        ...csvRows.map(row => row.join(';')),
       ].join('\n')
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })

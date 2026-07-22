@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Toast, MultiSelectDropdown } from '../../../shared/components'
 import { NoteByRouteData } from './RoutesByNotesToolbar'
+import { formatWeight } from '../../../shared/utils/format'
 
 interface Option {
   value: string
@@ -50,11 +51,6 @@ const formatDate = (dateStr: string | undefined): string => {
   } catch {
     return dateStr
   }
-}
-
-const formatWeight = (weight?: number): string => {
-  if (!weight) return ''
-  return weight.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + ' kg'
 }
 
 export const ExportRoutesByNotesModal = ({ isOpen, onClose, onExported, notes, title = 'Selecionar Colunas para exportar' }: ExportRoutesByNotesModalProps) => {
@@ -132,7 +128,7 @@ export const ExportRoutesByNotesModal = ({ isOpen, onClose, onExported, notes, t
               value = note.driver_name || ''
               break
             case 'gross_weight':
-              value = formatWeight(note.gross_weight)
+              value = note.gross_weight ? formatWeight(note.gross_weight) : ''
               break
             case 'invoice_value':
               value = formatCurrency(note.invoice_value)
@@ -158,11 +154,12 @@ export const ExportRoutesByNotesModal = ({ isOpen, onClose, onExported, notes, t
         return
       }
 
+      // Cada célula já vem no formato final (pt-BR); não fazer replace global de
+      // '.'→',' aqui, pois corromperia o ponto de milhar do peso ("1.077 kg"),
+      // o valor monetário ("R$ 1.234,56") e pontos em textos.
       const csvContent = '﻿' + [
         headers.join(';'),
-        ...csvRows.map(row =>
-          row.map(cell => cell.replace(/\./g, ',')).join(';')
-        ),
+        ...csvRows.map(row => row.join(';')),
       ].join('\n')
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })

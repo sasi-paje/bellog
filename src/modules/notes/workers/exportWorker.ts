@@ -1,3 +1,5 @@
+import { formatWeight } from '../../../shared/utils/format'
+
 interface ExportColumn {
   key: string
   label: string
@@ -27,9 +29,9 @@ function formatCell(invoice: any, column: ExportColumn): string {
       return String(invoice.box_quantity ?? invoice.volume ?? '')
     case 'weight':
     case 'net_weight':
-      return invoice.net_weight ? `${invoice.net_weight.toFixed(1)} kg` : ''
+      return invoice.net_weight ? formatWeight(invoice.net_weight) : ''
     case 'gross_weight':
-      return invoice.gross_weight ? `${invoice.gross_weight.toFixed(1)} kg` : ''
+      return invoice.gross_weight ? formatWeight(invoice.gross_weight) : ''
     case 'value':
     case 'invoice_amount':
       return invoice.invoice_amount ? formatCurrency(invoice.invoice_amount) : ''

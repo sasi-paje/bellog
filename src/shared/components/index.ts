@@ -14,7 +14,7 @@ export { UserMenu } from './UserMenu'
 export { PageHeader } from './PageHeader'
 export type { PageHeaderProps } from './PageHeader'
 
-export { WhatsNewPanel, WHATS_NEW } from './WhatsNewPanel'
+export { WhatsNewPanel, WHATS_NEW_FALLBACK, filterVisible, whatsNewMatchesPage } from './WhatsNewPanel'
 export type { WhatsNewItem } from './WhatsNewPanel'
 
 export { PdfViewerModal } from './PdfViewerModal'

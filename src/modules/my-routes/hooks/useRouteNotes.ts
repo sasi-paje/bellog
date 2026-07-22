@@ -59,6 +59,27 @@ export const useRouteNotes = (routeId: string | null): UseRouteNotesResult => {
     }
   }, [routeId, fetchNotes])
 
+  // O mobile não tem realtime: ao voltar o foco para o app (ex.: o operador
+  // adicionou a nota no web e o motorista retorna ao app), refaz o fetch
+  // ignorando o cache para refletir mudanças de montagem feitas fora do app.
+  useEffect(() => {
+    const refresh = () => {
+      const id = routeIdRef.current
+      if (!id) return
+      cacheRef.current.delete(id)
+      fetchNotes(id, false)
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [fetchNotes])
+
   return { notes, isLoading, error, refetch }
 }
 

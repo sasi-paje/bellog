@@ -187,7 +187,19 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
               )}
             </div>
             {onStartRoute && startDisabled && (
-              <p className="text-[12px] text-center text-[#b7950b] leading-snug">{startDisabledReason}</p>
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[12px] text-center text-[#b7950b] leading-snug">{startDisabledReason}</p>
+                {startBlockedByNoNotes && (
+                  <button
+                    type="button"
+                    onClick={refetch}
+                    disabled={isLoadingNotes}
+                    className="text-[12px] font-bold text-[#e67c26] underline disabled:opacity-50"
+                  >
+                    {isLoadingNotes ? 'Atualizando...' : 'Atualizar'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </footer>

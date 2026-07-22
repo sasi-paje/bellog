@@ -108,6 +108,29 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
     }
   }, [onCompleteRoute, route.id])
 
+  // O botão "Iniciar Rota" fica sempre ativo; a validação acontece no clique,
+  // exibindo um ALERTA que explica o motivo do bloqueio. Só prossegue quando
+  // não há impedimento.
+  const handleStartClick = useCallback(() => {
+    if (startBlockedByOther) {
+      setNotification({
+        type: 'warning',
+        message: 'Você já possui uma rota em andamento. Finalize-a antes de iniciar outra.',
+      })
+      return
+    }
+    if (startBlockedByNoNotes) {
+      setNotification({
+        type: 'warning',
+        message: 'Não é possível iniciar esta rota. Adicione pelo menos uma nota antes de iniciar o percurso.',
+      })
+      // Revalida (ignorando cache) caso a nota tenha sido adicionada no web.
+      refetch()
+      return
+    }
+    onStartRoute?.()
+  }, [startBlockedByOther, startBlockedByNoNotes, onStartRoute, refetch])
+
   const handleNoteClick = useCallback((note: ReturnType<typeof useRouteNotes>['notes'][0]) => {
     setSelectedNote(note)
     setShowNoteModal(true)
@@ -176,8 +199,8 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
               {onStartRoute && (
                 <button
                   type="button"
-                  onClick={onStartRoute}
-                  disabled={isLoading || startDisabled}
+                  onClick={handleStartClick}
+                  disabled={isLoading}
                   className="flex-1 h-[45px] bg-[#e67c26] flex items-center justify-center rounded-[4px] px-[8px] py-[2px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="font-bold text-[14px] leading-[20px] text-white">
@@ -186,21 +209,6 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
                 </button>
               )}
             </div>
-            {onStartRoute && startDisabled && (
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-[12px] text-center text-[#b7950b] leading-snug">{startDisabledReason}</p>
-                {startBlockedByNoNotes && (
-                  <button
-                    type="button"
-                    onClick={refetch}
-                    disabled={isLoadingNotes}
-                    className="text-[12px] font-bold text-[#e67c26] underline disabled:opacity-50"
-                  >
-                    {isLoadingNotes ? 'Atualizando...' : 'Atualizar'}
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </footer>
 

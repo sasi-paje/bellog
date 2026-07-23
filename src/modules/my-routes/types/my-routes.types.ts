@@ -65,6 +65,14 @@ export interface MyRouteDetail {
 
   destinations: RouteDestination[]
 
+  /**
+   * Quantidade de notas fiscais anexadas à rota (rel_route_invoice, is_active).
+   * Fonte correta para a regra "não iniciar rota sem notas" — não confundir com
+   * resultados de entrega (trx_route_invoice_delivery), que só existem após o
+   * motorista registrar entregas.
+   */
+  notes_count: number
+
   starts_at?: string
   ends_at?: string
   created_at: string

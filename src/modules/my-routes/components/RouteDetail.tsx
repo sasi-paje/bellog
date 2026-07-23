@@ -59,8 +59,11 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
   // Só uma rota em andamento por vez: bloqueia iniciar esta se já há outra.
   const startBlockedByOther = hasRouteInProgress && !isInProgress
   // Rota sem notas não pode ser iniciada (regra também validada no serviço e no
-  // banco). Enquanto as notas carregam, não bloqueia — o serviço revalida.
-  const hasNoNotes = !isLoadingNotes && !notesError && notes.length === 0
+  // banco). Usa a contagem de notas ANEXADAS (rel_route_invoice) vinda do detalhe
+  // — NÃO o hook useRouteNotes, que carrega resultados de entrega
+  // (trx_route_invoice_delivery) e dava falso "sem notas" numa rota ainda não
+  // iniciada (sem entregas registradas). O detalhe é recarregado no foco.
+  const hasNoNotes = (route.notes_count ?? 0) === 0
   const startBlockedByNoNotes = canStart && hasNoNotes
   const startDisabled = startBlockedByOther || startBlockedByNoNotes
   const startDisabledReason = startBlockedByNoNotes
@@ -124,12 +127,10 @@ export const RouteDetail: React.FC<RouteDetailProps> = ({
         type: 'warning',
         message: 'Não é possível iniciar esta rota. Adicione pelo menos uma nota antes de iniciar o percurso.',
       })
-      // Revalida (ignorando cache) caso a nota tenha sido adicionada no web.
-      refetch()
       return
     }
     onStartRoute?.()
-  }, [startBlockedByOther, startBlockedByNoNotes, onStartRoute, refetch])
+  }, [startBlockedByOther, startBlockedByNoNotes, onStartRoute])
 
   const handleNoteClick = useCallback((note: ReturnType<typeof useRouteNotes>['notes'][0]) => {
     setSelectedNote(note)

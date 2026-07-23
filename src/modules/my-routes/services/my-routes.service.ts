@@ -486,10 +486,9 @@ export const myRoutesService = {
         )
       }
 
-      const destinations = await this.getRouteDestinations(
-        (routeInvoicesResult.data || []) as RouteInvoiceRelation[],
-        isTest
-      )
+      const routeInvoices = (routeInvoicesResult.data || []) as RouteInvoiceRelation[]
+
+      const destinations = await this.getRouteDestinations(routeInvoices, isTest)
 
       const statusInfo = toStatusInfo(statusResult.data as StatusReference | null)
       const deliveryStatusInfo = toStatusInfo(deliveryStatusResult.data as StatusReference | null)
@@ -513,6 +512,10 @@ export const myRoutesService = {
           return refName ? [{ id: String(routeData.id_route_responsible || 0), name: refName }] : []
         })(),
         destinations,
+        // Conta as notas anexadas (rel_route_invoice) — mesma fonte do guard de
+        // startRoute. Uma nota pode não gerar destino (empresa nula), por isso
+        // não derivamos de destinations.length.
+        notes_count: routeInvoices.length,
         starts_at: routeData.starts_at || undefined,
         ends_at: routeData.ends_at || undefined,
         created_at: routeData.created_at,

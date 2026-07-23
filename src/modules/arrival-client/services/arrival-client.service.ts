@@ -190,15 +190,23 @@ const mapRouteDestination = (
 })
 
 export const arrivalClientService = {
-  async getDestinations(routeId?: string): Promise<ArrivalClientDestination[]> {
+  async getDestinations(
+    routeId?: string,
+    driverId?: string | number | null
+  ): Promise<ArrivalClientDestination[]> {
     if (routeId) {
-      const route = await myRoutesService.getById(routeId)
+      // Passa o driverId para getById validar que a rota pertence ao motorista
+      // (retorna "Rota nao encontrada" caso não pertença).
+      const route = await myRoutesService.getById(
+        routeId,
+        driverId != null ? String(driverId) : undefined
+      )
       return route.destinations.map(destination =>
         mapRouteDestination(destination, route.id, route.route_code)
       )
     }
 
-    const { destinations } = await deliveryService.getDestinations()
+    const { destinations } = await deliveryService.getDestinations(driverId)
     const map = new Map<string, ArrivalClientDestination>()
     destinations.forEach(destination => {
       const destinationId = `${destination.route_id}-${destination.company_id}`

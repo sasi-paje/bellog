@@ -113,12 +113,12 @@ const MobileAppContent: React.FC = () => {
   }
 
   if (currentPage === 'delivery') {
-    return <DeliveryPage onBack={() => navigateTo('my-routes')} onFinish={(data) => console.log('Delivery:', data)} />
+    return <DeliveryPage driverId={driver.id} onBack={() => navigateTo('my-routes')} onFinish={(data) => console.log('Delivery:', data)} />
   }
 
   if (currentPage === 'arrival-client') {
     const routeId = new URLSearchParams(window.location.search).get('routeId')
-    return <ArrivalClientPage routeId={routeId} onBack={() => navigateTo('my-routes')} />
+    return <ArrivalClientPage routeId={routeId} driverId={driver.id} onBack={() => navigateTo('my-routes')} />
   }
 
   return (

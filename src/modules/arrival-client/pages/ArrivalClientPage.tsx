@@ -9,6 +9,7 @@ import { MobilePageShell, MobileCardLayout } from '../../../shared/components'
 
 interface ArrivalClientPageProps {
   routeId?: string | null
+  driverId?: string | number | null
   onBack?: () => void
 }
 
@@ -60,7 +61,7 @@ const LoadingSpinner = () => (
   </svg>
 )
 
-export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, onBack }) => {
+export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, driverId, onBack }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [destinations, setDestinations] = useState<ArrivalClientDestination[]>([])
   const [selectedDestinationId, setSelectedDestinationId] = useState('')
@@ -83,7 +84,7 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
       setError(null)
 
       try {
-        const result = await arrivalClientService.getDestinations(routeId || undefined)
+        const result = await arrivalClientService.getDestinations(routeId || undefined, driverId ?? undefined)
         if (isMounted) {
           setDestinations(result)
         }
@@ -103,7 +104,7 @@ export const ArrivalClientPage: React.FC<ArrivalClientPageProps> = ({ routeId, o
     return () => {
       isMounted = false
     }
-  }, [routeId])
+  }, [routeId, driverId])
 
   const selectedDestination = useMemo(() => {
     return destinations.find(destination => destination.id === selectedDestinationId) || null

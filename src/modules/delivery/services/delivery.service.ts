@@ -35,6 +35,13 @@ const toStringId = (id: string | number | null | undefined): string => {
   return String(id)
 }
 
+// Converte para o tipo aceito pela query do bigint (número quando puramente
+// numérico, senão string) — mesmo critério de my-routes.service.
+const toQueryId = (id: string | number): string | number => {
+  const str = String(id)
+  return /^\d+$/.test(str) ? Number(str) : str
+}
+
 const safeParseInt = (value: string | number | null | undefined, fallback: number = 0): number => {
   if (value === null || value === undefined) return fallback
   const parsed = parseInt(String(value), 10)
@@ -101,8 +108,15 @@ export const deliveryService = {
    * Listar destinos das rotas em andamento - OTIMIZADO
    * Uma query com JOIN para buscar destinos
    */
-  async getDestinations(): Promise<DeliveryDestinationResult> {
+  async getDestinations(driverId?: string | number | null): Promise<DeliveryDestinationResult> {
     const isTest = isTestEnv()
+
+    // Fail-closed: sem motorista identificado não expõe destinos de nenhuma rota
+    // (evita listar empresas de rotas de outros motoristas).
+    if (driverId === undefined || driverId === null || driverId === '') {
+      console.error('[deliveryService] getDestinations chamado sem driverId')
+      return { destinations: [], total: 0 }
+    }
 
     try {
       const statusData = await this.getRouteStatusId('Em Andamento')
@@ -110,7 +124,7 @@ export const deliveryService = {
         return { destinations: [], total: 0 }
       }
 
-      const routesResult = await this.getRoutesInProgress(statusData.id, isTest)
+      const routesResult = await this.getRoutesInProgress(statusData.id, isTest, driverId)
       if (routesResult.length === 0) {
         return { destinations: [], total: 0 }
       }
@@ -148,13 +162,15 @@ export const deliveryService = {
   },
 
   /**
-   * Buscar rotas em andamento
+   * Buscar rotas em andamento do motorista
+   * Filtra por id_driver para não expor rotas de outros motoristas.
    */
-  async getRoutesInProgress(statusId: number, isTest: boolean) {
+  async getRoutesInProgress(statusId: number, isTest: boolean, driverId: string | number) {
     const { data, error } = await supabase
       .from('trx_route')
       .select('id, route_code')
       .eq('id_route_delivery_status', statusId)
+      .eq('id_driver', toQueryId(driverId))
       .eq('is_test', isTest)
       .eq('is_active', true)
 

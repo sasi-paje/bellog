@@ -13,6 +13,7 @@ interface DeliveryPageProps {
   onBack?: () => void
   onFinish?: (data: DeliveryFormData) => void
   routeId?: string
+  driverId?: string | number | null
 }
 
 export interface DeliveryFormData {
@@ -55,6 +56,7 @@ const LoadingSpinner = () => (
 export const DeliveryPage: React.FC<DeliveryPageProps> = ({
   onFinish,
   routeId,
+  driverId,
 }) => {
   const [localEntrega, setLocalEntrega] = useState<DeliveryDestination | null>(null)
   const [observacoes, setObservacoes] = useState('')
@@ -179,7 +181,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
     const fetchDestinations = async () => {
       setIsLoadingDestinations(true)
       try {
-        const result = await deliveryService.getDestinations()
+        const result = await deliveryService.getDestinations(driverId)
         setDestinations(result.destinations)
       } catch (err) {
         console.error('[DeliveryPage] Error fetching destinations:', err)
@@ -188,7 +190,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({
       }
     }
     fetchDestinations()
-  }, [])
+  }, [driverId])
 
   // Buscar notas fiscais quando selecionar uma empresa
   useEffect(() => {
